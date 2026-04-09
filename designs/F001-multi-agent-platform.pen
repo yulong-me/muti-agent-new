@@ -1,0 +1,941 @@
+{
+  "version": "2.10",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": 0,
+      "y": 0,
+      "name": "Frame",
+      "clip": true,
+      "width": 800,
+      "height": 600,
+      "fill": "#FFFFFF",
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "ZlAL4",
+      "x": 0,
+      "y": 0,
+      "name": "F001 Init Screen",
+      "width": 800,
+      "height": 800,
+      "fill": "#F5F5F7",
+      "layout": "vertical",
+      "gap": 32,
+      "padding": 40,
+      "children": [
+        {
+          "type": "frame",
+          "id": "iM0Ic",
+          "name": "header",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "eh5by",
+              "name": "title",
+              "fill": "#1D1D1F",
+              "content": "AI 智囊团 - 议题设置",
+              "fontFamily": "SF Pro Display",
+              "fontSize": 32,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "VbyI5",
+              "name": "desc",
+              "fill": "#86868B",
+              "content": "设置你想讨论的议题，并为两位专业 Agent 分配领域角色。",
+              "fontFamily": "SF Pro Display",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "lpUkn",
+          "name": "form",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "cornerRadius": 12,
+          "stroke": {
+            "thickness": 1,
+            "fill": "#E5E5EA"
+          },
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 32,
+          "children": [
+            {
+              "type": "frame",
+              "id": "DOFIh",
+              "name": "topicGroup",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "LjX9W",
+                  "name": "topicLabel",
+                  "fill": "#1D1D1F",
+                  "content": "讨论议题",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "Hr6bf",
+                  "name": "topicInput",
+                  "width": "fill_container",
+                  "height": 120,
+                  "fill": "#F5F5F7",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#D2D2D7"
+                  },
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "TSH1K",
+                      "fill": "#86868B",
+                      "content": "例如：为什么秦朝会灭亡？从经济和历史角度分析。",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ETzqd",
+              "name": "agentAGroup",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "p9znS",
+                  "name": "agentALabel",
+                  "fill": "#1D1D1F",
+                  "content": "Agent A 领域角色",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "iYUFd",
+                  "name": "agentADropdown",
+                  "width": "fill_container",
+                  "height": 48,
+                  "fill": "#F5F5F7",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#D2D2D7"
+                  },
+                  "padding": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "rlzDE",
+                      "fill": "#1D1D1F",
+                      "content": "历史专家",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dlNjJ",
+              "name": "agentBGroup",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DDF5T",
+                  "name": "agentBLabel",
+                  "fill": "#1D1D1F",
+                  "content": "Agent B 领域角色",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "Y4wov",
+                  "name": "agentBDropdown",
+                  "width": "fill_container",
+                  "height": 48,
+                  "fill": "#F5F5F7",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#D2D2D7"
+                  },
+                  "padding": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jAgl5",
+                      "fill": "#1D1D1F",
+                      "content": "经济学家",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "cLb3z",
+              "name": "btnGroup",
+              "width": "fill_container",
+              "justifyContent": "end",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Vzna6",
+                  "name": "startBtn",
+                  "height": 48,
+                  "fill": "#0071E3",
+                  "cornerRadius": 8,
+                  "padding": [
+                    0,
+                    24
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gaZvj",
+                      "fill": "#FFFFFF",
+                      "content": "开始讨论",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 16,
+                      "fontWeight": "bold"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "4f1CO",
+      "layoutPosition": "absolute",
+      "x": 900,
+      "y": 0,
+      "name": "F001 Discussion Screen",
+      "width": 1440,
+      "height": 800,
+      "fill": "#F5F5F7",
+      "children": [
+        {
+          "type": "frame",
+          "id": "nQtTY",
+          "name": "sessionList",
+          "width": 260,
+          "height": "fill_container",
+          "fill": "#1D1D1F",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "EeoFv",
+              "fill": "#FFFFFF",
+              "content": "会话列表",
+              "fontFamily": "SF Pro Display",
+              "fontSize": 16,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "K2A3K",
+              "name": "session1",
+              "width": "fill_container",
+              "fill": "#2C2C2E",
+              "cornerRadius": 8,
+              "layout": "vertical",
+              "gap": 4,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "uZYsR",
+                  "fill": "#FFFFFF",
+                  "content": "美国大选局势分析",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "EjJOU",
+                  "fill": "#86868B",
+                  "content": "今天 10:24",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "0NX5C",
+              "name": "session2",
+              "width": "fill_container",
+              "cornerRadius": 8,
+              "layout": "vertical",
+              "gap": 4,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "JaMHZ",
+                  "fill": "#86868B",
+                  "content": "AI 发展趋势探讨",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "8h5Os",
+                  "fill": "#86868B",
+                  "content": "昨天 15:30",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "PwdRq",
+          "name": "mainContent",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "3jzE0",
+              "name": "topbar",
+              "width": "fill_container",
+              "height": 80,
+              "fill": "#FFFFFF",
+              "stroke": {
+                "thickness": {
+                  "bottom": 1
+                },
+                "fill": "#E5E5EA"
+              },
+              "padding": [
+                0,
+                32
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "roIeL",
+                  "name": "steps",
+                  "gap": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "L4uYD",
+                      "fill": "#86868B",
+                      "content": "INIT",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Fw38X",
+                      "fill": "#D2D2D7",
+                      "content": "→",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "IvTSO",
+                      "fill": "#86868B",
+                      "content": "RESEARCH",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "018Ch",
+                      "fill": "#D2D2D7",
+                      "content": "→",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "5PW6P",
+                      "fill": "#2563EB",
+                      "content": "DEBATE",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "4MFVn",
+                      "fill": "#D2D2D7",
+                      "content": "→",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ABVDq",
+                      "fill": "#86868B",
+                      "content": "CONVERGING",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "5UoQV",
+                      "fill": "#D2D2D7",
+                      "content": "→",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Z1gC7",
+                      "fill": "#86868B",
+                      "content": "DONE",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Srg7W",
+              "name": "chatArea",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 24,
+              "padding": 32,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "kl8sb",
+                  "name": "msg1",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "hJrNl",
+                      "fill": "#86868B",
+                      "content": "主持人 Agent",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 12,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pEpHh",
+                      "name": "bubble1",
+                      "fill": "#EFF6FF",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#BFDBFE"
+                      },
+                      "padding": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ekzbm",
+                          "fill": "#1E3A8A",
+                          "textGrowth": "fixed-width",
+                          "width": 600,
+                          "content": "大家好，关于秦朝灭亡的原因，我已经收到了两位专家的独立调查结论。现在我们进入辩论阶段。请 Agent A (历史专家) 先发表看法。",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bN62N",
+                  "name": "msg2",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Tup7d",
+                      "fill": "#86868B",
+                      "content": "Agent A (历史专家)",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 12,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UmPmG",
+                      "name": "bubble2",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#E5E5EA"
+                      },
+                      "padding": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "td3Gw",
+                          "fill": "#1D1D1F",
+                          "textGrowth": "fixed-width",
+                          "width": 600,
+                          "content": "从历史角度看，秦朝的法律过于严苛，即'天下苦秦久矣'。陈胜吴广起义正是因为延误了戍期按律当斩。这反映了法家思想在统一后未能及时调整，导致阶级矛盾激化。",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YHZoX",
+                  "name": "msg3",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "iGVSM",
+                      "fill": "#86868B",
+                      "content": "Agent B (经济学家)",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 12,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vuWkV",
+                      "name": "bubble3",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#E5E5EA"
+                      },
+                      "padding": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bhIuM",
+                          "fill": "#1D1D1F",
+                          "textGrowth": "fixed-width",
+                          "width": 600,
+                          "content": "我同意矛盾激化，但核心是经济崩溃。秦始皇大兴土木（长城、阿房宫），导致沉重的徭役和赋税，直接摧毁了农业生产力。经济基础的崩溃才是根本原因。",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "03Gf9",
+              "name": "actionArea",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "stroke": {
+                "thickness": {
+                  "top": 1
+                },
+                "fill": "#E5E5EA"
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "tc84F",
+                  "name": "actionTitle",
+                  "fill": "#1D1D1F",
+                  "content": "您的指示",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "cnSkf",
+                  "name": "actionButtons",
+                  "width": "fill_container",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ppV76",
+                      "name": "btn1",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "#F5F5F7",
+                      "cornerRadius": 8,
+                      "padding": [
+                        0,
+                        24
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Vv8Eh",
+                          "fill": "#1D1D1F",
+                          "content": "继续辩论",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 14,
+                          "fontWeight": "bold"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NLuKT",
+                      "name": "btn2",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "#F5F5F7",
+                      "cornerRadius": 8,
+                      "padding": [
+                        0,
+                        24
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xzTEY",
+                          "fill": "#1D1D1F",
+                          "content": "退回调查",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 14,
+                          "fontWeight": "bold"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HDq30",
+                      "name": "btn3",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "#0071E3",
+                      "cornerRadius": 8,
+                      "padding": [
+                        0,
+                        24
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mCLmz",
+                          "fill": "#FFFFFF",
+                          "content": "进入收敛",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 14,
+                          "fontWeight": "bold"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "QnTd1",
+          "name": "agentStates",
+          "width": 300,
+          "height": "fill_container",
+          "fill": "#FFFFFF",
+          "stroke": {
+            "thickness": {
+              "left": 1
+            },
+            "fill": "#E5E5EA"
+          },
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "lw25I",
+              "fill": "#1D1D1F",
+              "content": "Agent 状态",
+              "fontFamily": "SF Pro Display",
+              "fontSize": 16,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "M7WiR",
+              "name": "agent1",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Pbukg",
+                  "name": "agent1Header",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PPxfA",
+                      "fill": "#1D1D1F",
+                      "content": "历史专家 (Agent A)",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jGe9m",
+                      "name": "agent1Status",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "PmWUM",
+                          "fill": "#10B981",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "Mfj2o",
+                          "fill": "#10B981",
+                          "content": "思考中...",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AKdkB",
+                  "name": "agent1Task",
+                  "width": "fill_container",
+                  "fill": "#F5F5F7",
+                  "cornerRadius": 8,
+                  "layout": "vertical",
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "GPm8K",
+                      "fill": "#86868B",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "正在查阅 19 世纪工业革命相关文献以提供论点...",
+                      "lineHeight": 1.5,
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "j8rlf",
+              "name": "agent2",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "sZUBk",
+                  "name": "agent2Header",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "2LJ8d",
+                      "fill": "#1D1D1F",
+                      "content": "经济学家 (Agent B)",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "AvAev",
+                      "name": "agent2Status",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "nrL9w",
+                          "fill": "#F59E0B",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "DabEd",
+                          "fill": "#F59E0B",
+                          "content": "等待发言",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "J15cb",
+              "name": "agent3",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "QgkeO",
+                  "name": "agent3Header",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "j6P2b",
+                      "fill": "#1D1D1F",
+                      "content": "主持人 Agent",
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 14,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "WCf2p",
+                      "name": "agent3Status",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "aTl0y",
+                          "fill": "#3B82F6",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "KaPBl",
+                          "fill": "#3B82F6",
+                          "content": "监控中",
+                          "fontFamily": "SF Pro Display",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
