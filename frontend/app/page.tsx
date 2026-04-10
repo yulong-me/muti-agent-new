@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation'
+'use client'
 
-export default function Home() {
-  redirect('/new')
+import RoomView from '@/components/RoomView'
+
+export default function HomePage() {
+  return <RoomView />
 }
