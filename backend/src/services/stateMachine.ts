@@ -4,6 +4,11 @@ import { HOST_PROMPTS } from '../prompts/host.js';
 import { Message, DiscussionState, AgentRole } from '../types.js';
 import { v4 as uuid } from 'uuid';
 
+function telemetry(event: string, meta: Record<string, unknown>) {
+  const ts = new Date().toISOString();
+  console.log(`[${ts}] [TELEMETRY] ${event} ${JSON.stringify(meta)}`);
+}
+
 function addMessage(roomId: string, msg: Omit<Message, 'id' | 'timestamp'>): Message | undefined {
   const room = store.get(roomId);
   if (!room) return undefined;
@@ -23,6 +28,8 @@ function updateAgentStatus(roomId: string, role: AgentRole, status: 'idle' | 'th
 export async function hostReply(roomId: string, state: DiscussionState, context?: string): Promise<string> {
   const room = store.get(roomId);
   if (!room) throw new Error('Room not found');
+
+  telemetry('state:enter', { roomId, state, agent: 'HOST' });
 
   const hostAgent = room.agents.find(a => a.role === 'HOST')!;
 
@@ -52,6 +59,7 @@ export async function hostReply(roomId: string, state: DiscussionState, context?
       const reply = await callAgent({ domainLabel: '主持人', systemPrompt: '专业主持人，引导讨论，收敛结论', userMessage: prompt });
       addMessage(roomId, { agentRole: 'HOST', agentName: '主持人', content: reply, type: 'report' });
       store.update(roomId, { report: reply });
+      telemetry('state:done', { roomId, state: 'DONE', agent: 'HOST', reportLength: reply.length });
       return reply;
   }
 
@@ -59,6 +67,7 @@ export async function hostReply(roomId: string, state: DiscussionState, context?
   const reply = await callAgent({ domainLabel: '主持人', systemPrompt: '专业主持人，引导讨论，收敛结论', userMessage: prompt });
   addMessage(roomId, { agentRole: 'HOST', agentName: '主持人', content: reply, type: 'summary' });
   updateAgentStatus(roomId, 'HOST', 'idle');
+  telemetry('state:exit', { roomId, state, agent: 'HOST', replyLength: reply.length, messageCount: room.messages.length + 1 });
   return reply;
 }
 
@@ -67,6 +76,7 @@ export async function agentInvestigate(roomId: string, role: AgentRole): Promise
   if (!room) throw new Error('Room not found');
   const agent = room.agents.find(a => a.role === role)!;
 
+  telemetry('state:enter', { roomId, state: 'RESEARCH', agent: agent.domainLabel, role });
   updateAgentStatus(roomId, role, 'thinking');
   const findings = await callAgent({
     domainLabel: agent.domainLabel,
@@ -75,5 +85,6 @@ export async function agentInvestigate(roomId: string, role: AgentRole): Promise
   });
   addMessage(roomId, { agentRole: role, agentName: `${agent.domainLabel}（${role === 'SPECIALIST_A' ? 'A' : 'B'}）`, content: findings, type: 'statement' });
   updateAgentStatus(roomId, role, 'done');
+  telemetry('state:exit', { roomId, state: 'RESEARCH', agent: agent.domainLabel, role, findingsLength: findings.length });
   return findings;
 }
