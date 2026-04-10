@@ -70,6 +70,13 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
 
   const currentAgents = activeTab === 'history' ? HISTORY_AGENTS : TECH_AGENTS
 
+  const switchTab = (tab: Domain) => {
+    if (tab !== activeTab) {
+      setSelected([]) // clear when switching domain
+      setActiveTab(tab)
+    }
+  }
+
   const toggleAgent = (ag: AgentCard) => {
     if (selected.find(s => s.id === ag.id)) {
       setSelected(selected.filter(s => s.id !== ag.id))
@@ -117,7 +124,7 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
         <div className="flex items-start justify-between mb-5">
           <div>
             <h1 className="text-2xl font-bold text-apple-text">发起新讨论</h1>
-            <p className="text-apple-secondary mt-1">选择 Agent，开启多视角协作</p>
+            <p className="text-apple-secondary mt-1">选择领域和 Agent，开启同领域多视角协作</p>
           </div>
           <button onClick={onClose} className="text-apple-secondary hover:text-apple-text transition-colors text-sm">
             取消
@@ -129,7 +136,7 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
           {(['history', 'tech'] as Domain[]).map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => switchTab(tab)}
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                 activeTab === tab
                   ? 'bg-white text-apple-primary shadow-sm'
