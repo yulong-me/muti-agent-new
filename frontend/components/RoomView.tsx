@@ -95,6 +95,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [started, setStarted] = useState(false)
   const startRequestedRef = useRef(false)  // prevent duplicate /start calls
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'INIT' as DiscussionState, agents: [] as Agent[] })
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -118,7 +119,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       });
   }, []);
 
-  // Poll for updates (only when roomId is set)
+  // Poll for updates — only when roomId is set and agents are active
   useEffect(() => {
     if (!roomId) return
     telemetry('room:poll:start', { roomId });
@@ -130,24 +131,38 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
           return;
         }
         const data = await res.json()
-        const prevState = data.state
-        setState(data.state || 'INIT')
+        const newState = data.state || 'INIT'
+        const newAgents = data.agents || []
+        pollStateRef.current = { state: newState, agents: newAgents }
+        setState(newState)
         setMessages(data.messages || [])
-        setAgents(data.agents || [])
+        setAgents(newAgents)
         setReport(data.report || '')
+
+        // Auto-start: only in INIT, guarded by both started state and ref
         if (data.state === 'INIT' && !started && !startRequestedRef.current) {
           startRequestedRef.current = true;
           setStarted(true)
           telemetry('room:auto:start', { roomId });
           await fetch(`http://localhost:7001/api/rooms/${roomId}/start`, { method: 'POST' })
         }
+
         telemetry('room:poll:ok', { roomId, state: data.state, messageCount: (data.messages || []).length, agentCount: (data.agents || []).length });
       } catch (err) {
         telemetry('room:poll:error', { roomId, error: String(err) });
       }
     }
     poll()
-    const interval = setInterval(poll, 2000)
+    // Poll every 2s; skip cycles when nothing active (all agents idle/done and not INIT)
+    const interval = setInterval(() => {
+      const { state: s, agents: ag } = pollStateRef.current;
+      const anyThinking = ag.some((a: Agent) => a.status === 'thinking' || a.status === 'waiting');
+      if (!anyThinking && s !== 'INIT' && s !== 'DONE') {
+        telemetry('room:poll:idle_skip', { roomId, state: s, statuses: ag.map((a: Agent) => a.status) });
+        return;
+      }
+      poll()
+    }, 2000)
     return () => {
       clearInterval(interval)
       telemetry('room:poll:stop', { roomId });

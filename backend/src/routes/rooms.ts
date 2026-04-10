@@ -46,14 +46,18 @@ roomsRouter.get('/:id/messages', (req, res) => {
   res.json({ state: room.state, messages: room.messages, agents: room.agents, report: room.report });
 });
 
-// POST /api/rooms/:id/start — 开始 INIT 阶段
+// POST /api/rooms/:id/start — 开始 INIT 阶段（幂等：非 INIT 状态直接返回 ok）
 roomsRouter.post('/:id/start', async (req, res) => {
   const room = store.get(req.params.id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.state !== 'INIT') return res.status(400).json({ error: 'Room already started' });
+  if (room.state !== 'INIT') {
+    // 幂等：不是 INIT 说明已经处理过了，直接返回
+    return res.json({ status: 'ok', state: room.state, idempotent: true });
+  }
   try {
     await hostReply(req.params.id, 'INIT');
-    res.json({ status: 'ok', state: room.state });
+    const updated = store.get(req.params.id);
+    res.json({ status: 'ok', state: updated?.state });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
