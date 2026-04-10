@@ -92,6 +92,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [report, setReport] = useState<string>('')
   const [rooms, setRooms] = useState<{ id: string; topic: string; createdAt: number }[]>([])
   const [advancing, setAdvancing] = useState(false)
+  const [advancingChoice, setAdvancingChoice] = useState<string | undefined>(undefined)
   const [started, setStarted] = useState(false)
   const startRequestedRef = useRef(false)  // prevent duplicate /start calls
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -173,6 +174,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     if (!roomId) return
     telemetry('room:advance', { roomId, state, choice });
     setAdvancing(true)
+    setAdvancingChoice(choice)
     try {
       const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/advance`, {
         method: 'POST',
@@ -189,6 +191,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       telemetry('room:advance:error', { roomId, error: String(err) });
     } finally {
       setAdvancing(false)
+      setAdvancingChoice(undefined)
     }
   }
 
@@ -290,16 +293,19 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
             </button>
           ) : roomId ? (
             <div className="flex gap-3 flex-wrap">
-              {(STATE_BUTTONS[state] || []).map(btn => (
-                <button
-                  key={btn.label}
-                  className="flex-1 bg-apple-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-                  onClick={() => handleAdvance(btn.choice)}
-                  disabled={advancing}
-                >
-                  {advancing ? '处理中...' : btn.label}
-                </button>
-              ))}
+              {(STATE_BUTTONS[state] || []).map(btn => {
+                const isActive = advancing && advancingChoice === btn.choice
+                return (
+                  <button
+                    key={btn.label}
+                    className="flex-1 bg-apple-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
+                    onClick={() => handleAdvance(btn.choice)}
+                    disabled={advancing}
+                  >
+                    {isActive ? '处理中...' : btn.label}
+                  </button>
+                )
+              })}
             </div>
           ) : null}
         </div>
@@ -325,13 +331,13 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                     <p className="text-xs text-apple-secondary">{agent.role === 'HOST' ? '主持人' : agent.domainLabel}</p>
                   </div>
                 </div>
-                <p className="text-xs text-apple-secondary">
-                  <span className={`inline-block w-2 h-2 rounded-full mr-1 ${
-                    agent.status === 'thinking' ? 'bg-yellow-400 animate-pulse' :
-                    agent.status === 'waiting' ? 'bg-orange-400' :
-                    agent.status === 'done' ? 'bg-green-400' : 'bg-gray-300'
+                <p className="text-xs text-apple-secondary flex items-center gap-1.5">
+                  <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                    agent.status === 'thinking' || agent.status === 'waiting'
+                      ? 'bg-green-500 animate-pulse'
+                      : 'bg-gray-300'
                   }`}></span>
-                  {statusLabels[agent.status]}
+                  {agent.status === 'thinking' ? '工作中' : agent.status === 'waiting' ? '等待中' : '空闲'}
                 </p>
               </div>
             )
