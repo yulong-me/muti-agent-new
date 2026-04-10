@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  background: #F5F5F7;
+  color: #1D1D1F;
+}
+
+/* Markdown content spacing */
+.prose p {
+  margin-bottom: 0.75rem;
+  line-height: 1.75;
+}
+.prose h1, .prose h2, .prose h3 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+.prose ul, .prose ol {
+  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+}
+.prose li {
+  margin-bottom: 0.35rem;
+  line-height: 1.75;
+}
+.prose table {
+  margin-bottom: 0.75rem;
+}
+.prose code {
+  font-size: 0.875em;
+}
