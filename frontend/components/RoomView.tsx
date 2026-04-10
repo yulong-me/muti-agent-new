@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import CreateRoomModal from '@/components/CreateRoomModal'
 
 // ── Telemetry ────────────────────────────────────────────────────────────────
@@ -249,8 +251,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                     <span className="text-sm font-semibold" style={{ color: colors.bg }}>{msg.agentName}</span>
                     <span className="text-xs text-apple-secondary">{new Date(msg.timestamp).toLocaleTimeString('zh')}</span>
                   </div>
-                  <div className="bg-white rounded-2xl rounded-tl-sm px-5 py-3 shadow-sm border border-apple-border">
-                    <p className="text-sm text-apple-text whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  <div className="bg-white rounded-2xl rounded-tl-sm px-5 py-3 shadow-sm border border-apple-border prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                   </div>
                 </div>
               </div>
