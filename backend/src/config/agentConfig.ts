@@ -84,6 +84,11 @@ export function getAgent(id: string): AgentConfig | undefined {
   return getAgents().find(a => a.id === id);
 }
 
+/** Lookup by agent name (used when room agents use UUIDs as id but name is stable) */
+export function getAgentByName(name: string): AgentConfig | undefined {
+  return getAgents().find(a => a.name === name);
+}
+
 export function saveAgents(agents: AgentConfig[]): void {
   _cache = agents;
   writeFileSync(CONFIG_PATH, JSON.stringify(agents, null, 2));

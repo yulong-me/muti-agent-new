@@ -16,12 +16,22 @@ export async function* streamOpenCodeProvider(
   const timeout = (opts.timeout as number) ?? 90000;
   const model = opts.model as string | undefined;
   const thinking = opts.thinking !== false; // default true
+  const sessionId = opts.sessionId as string | undefined;
 
-  telemetry('call_start', { agentId, promptLength: prompt.length, timeout, model, thinking });
+  telemetry('call_start', { agentId, promptLength: prompt.length, timeout, model, thinking, sessionId: sessionId ?? 'new' });
 
-  const args = ['run', '--format', 'json', '--', prompt];
-  if (thinking) args.splice(2, 0, '--thinking');
-  if (model) { args.splice(1, 0, '--model', model); }
+  // Build args: opencode run [opts] [--] <prompt>
+  const args: string[] = ['run'];
+  if (sessionId) {
+    args.push('--session', sessionId);
+  }
+  if (thinking) {
+    args.push('--thinking');
+  }
+  if (model) {
+    args.push('--model', model);
+  }
+  args.push('--', prompt);
 
   const proc = spawn('opencode', args, { timeout, stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -29,6 +39,7 @@ export async function* streamOpenCodeProvider(
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });
 
   const rl = createInterface({ input: proc.stdout!, crlfDelay: Infinity });
+  let capturedSessionId = sessionId ?? '';
 
   for await (const rawLine of rl) {
     const line = rawLine.trim();
@@ -44,15 +55,17 @@ export async function* streamOpenCodeProvider(
     const eventType = parsed.type as string;
     const part = parsed.part as Record<string, unknown> | undefined;
 
+    // Capture session ID from step_start
+    if (eventType === 'step_start' && !capturedSessionId) {
+      capturedSessionId = (parsed.sessionID as string) || '';
+    }
+
     if (eventType === 'step_start') {
-      const messageID = part?.messageID as string | undefined;
-      yield { type: 'start', agentId, timestamp: Date.now(), messageId: messageID ?? '' };
+      yield { type: 'start', agentId, timestamp: Date.now(), messageId: (part?.messageID as string) ?? '' };
     } else if (eventType === 'reasoning') {
-      const text = (part?.text as string) ?? '';
-      yield { type: 'thinking_delta', agentId, thinking: text };
+      yield { type: 'thinking_delta', agentId, thinking: (part?.text as string) ?? '' };
     } else if (eventType === 'text') {
-      const text = (part?.text as string) ?? '';
-      yield { type: 'delta', agentId, text };
+      yield { type: 'delta', agentId, text: (part?.text as string) ?? '' };
     } else if (eventType === 'step_finish') {
       const tokens = part?.tokens as Record<string, number> | undefined;
       const cost = part?.cost as number | undefined;
@@ -63,10 +76,10 @@ export async function* streamOpenCodeProvider(
         total_cost_usd: cost ?? 0,
         input_tokens: tokens?.input ?? 0,
         output_tokens: tokens?.output ?? 0,
+        sessionId: capturedSessionId,
       };
     } else if (eventType === 'error' || (part?.type === 'error')) {
-      const errorMsg = (part?.error as string) ?? 'unknown opencode error';
-      yield { type: 'error', agentId, message: errorMsg };
+      yield { type: 'error', agentId, message: (part?.error as string) ?? 'unknown opencode error' };
     }
   }
 
@@ -75,7 +88,7 @@ export async function* streamOpenCodeProvider(
       if (code !== 0 && stderrBuffer.trim()) {
         telemetry('call_error', { agentId, stderr: stderrBuffer.slice(0, 500) });
       } else {
-        telemetry('call_end', { agentId, duration_ms: Date.now() - start });
+        telemetry('call_end', { agentId, duration_ms: Date.now() - start, sessionId: capturedSessionId });
       }
       resolve();
     });

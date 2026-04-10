@@ -14,9 +14,12 @@ export async function* streamClaudeCodeProvider(
 ): AsyncGenerator<ClaudeEvent, void, undefined> {
   const start = Date.now();
   const timeout = (opts.timeout as number) ?? 90000;
-  telemetry('call_start', { agentId, promptLength: prompt.length, timeout });
+  const sessionId = opts.sessionId as string | undefined;
+  telemetry('call_start', { agentId, promptLength: prompt.length, timeout, sessionId: sessionId ?? 'new' });
 
   const args = ['-p', prompt, '--verbose', '--output-format=stream-json', '--include-partial-messages'];
+  if (sessionId) args.splice(1, 0, '--resume', sessionId);
+
   const proc = spawn('claude', args, { timeout, stdio: ['ignore', 'pipe', 'pipe'] });
 
   let stderrBuffer = '';
@@ -24,6 +27,7 @@ export async function* streamClaudeCodeProvider(
 
   const rl = createInterface({ input: proc.stdout!, crlfDelay: Infinity });
   let inThinkingBlock = false;
+  let capturedSessionId = sessionId ?? '';
 
   for await (const rawLine of rl) {
     const line = rawLine.trim();
@@ -37,6 +41,11 @@ export async function* streamClaudeCodeProvider(
     }
 
     const eventType = parsed.type as string;
+
+    // Capture session_id from system/init event (only on first call without resume)
+    if (eventType === 'system' && (parsed.subtype as string) === 'init' && !capturedSessionId) {
+      capturedSessionId = (parsed.session_id as string) || '';
+    }
 
     if (eventType === 'stream_event') {
       const event = parsed.event as Record<string, unknown>;
@@ -70,6 +79,7 @@ export async function* streamClaudeCodeProvider(
         total_cost_usd: (result.total_cost_usd as number) || (modelEntry?.costUSD as number) || 0,
         input_tokens: (usage.input_tokens as number) || (modelEntry?.inputTokens as number) || 0,
         output_tokens: (usage.output_tokens as number) || (modelEntry?.outputTokens as number) || 0,
+        sessionId: capturedSessionId,
       };
     }
   }
@@ -79,7 +89,7 @@ export async function* streamClaudeCodeProvider(
       if (code !== 0 && stderrBuffer.trim()) {
         telemetry('call_error', { agentId, stderr: stderrBuffer.slice(0, 500) });
       } else {
-        telemetry('call_end', { agentId, duration_ms: Date.now() - start });
+        telemetry('call_end', { agentId, duration_ms: Date.now() - start, sessionId: capturedSessionId });
       }
       resolve();
     });

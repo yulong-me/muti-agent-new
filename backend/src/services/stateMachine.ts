@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { getAgent } from '../config/agentConfig.js';
+import { getAgentByName } from '../config/agentConfig.js';
 import { getProvider } from './providers/index.js';
 import type { ClaudeEvent } from './providers/index.js';
 import { emitStreamStart, emitStreamEnd, emitAgentStatus, emitStreamDelta, emitThinkingDelta } from './socketEmitter.js';
@@ -154,24 +154,31 @@ async function streamingCallAgent(
   msgType: MessageType = 'summary',
   agentRole: AgentRole = 'HOST',
 ): Promise<string> {
-  // Look up agent config for provider routing
-  const agentConfig = getAgent(agentId);
+  // Look up agent config by name (room agents use UUIDs, config uses names)
+  const agentConfig = getAgentByName(agentName);
   const providerName = agentConfig?.provider ?? 'claude-code';
-  const providerOpts = agentConfig?.providerOpts ?? {};
   // agentConfig.systemPrompt takes precedence over ctx.systemPrompt
   const systemPrompt = agentConfig?.systemPrompt ?? ctx.systemPrompt;
   const prompt = `【角色】${ctx.domainLabel}（${systemPrompt}）
 
 ${ctx.userMessage}`;
 
+  // Build provider opts — include sessionId for resume/continue
+  const room = store.get(roomId);
+  const existingSessionId = room?.sessionIds[agentName];
+  const providerOpts: Record<string, unknown> = {
+    ...(agentConfig?.providerOpts ?? {}),
+    sessionId: existingSessionId,
+  };
+
   const tempMsgId = uuid();
   // Create placeholder message in store
   const msg = addMessage(roomId, { agentRole, agentName, content: '', type: msgType });
   if (msg) {
-    const room = store.get(roomId);
-    if (room) {
+    const r = store.get(roomId);
+    if (r) {
       store.update(roomId, {
-        messages: room.messages.map(m => m.id === msg.id ? { ...m, tempMsgId } : m),
+        messages: r.messages.map(m => m.id === msg.id ? { ...m, tempMsgId } : m),
       });
     }
   }
@@ -183,6 +190,7 @@ ${ctx.userMessage}`;
   let total_cost_usd = 0;
   let input_tokens = 0;
   let output_tokens = 0;
+  let returnedSessionId = existingSessionId ?? '';
 
   const provider = getProvider(providerName);
   try {
@@ -198,6 +206,10 @@ ${ctx.userMessage}`;
         total_cost_usd = event.total_cost_usd;
         input_tokens = event.input_tokens;
         output_tokens = event.output_tokens;
+        // Capture and persist session ID for future resume
+        if (event.sessionId) {
+          returnedSessionId = event.sessionId;
+        }
       } else if (event.type === 'error') {
         throw new Error(event.message);
       }
@@ -208,12 +220,20 @@ ${ctx.userMessage}`;
     throw err;
   }
 
+  // Persist session ID so next call for this agent continues the conversation
+  if (returnedSessionId) {
+    const r = store.get(roomId);
+    if (r) {
+      store.update(roomId, { sessionIds: { ...r.sessionIds, [agentName]: returnedSessionId } });
+    }
+  }
+
   // Update message content and stats in store
   if (msg) {
-    const room = store.get(roomId);
-    if (room) {
+    const r = store.get(roomId);
+    if (r) {
       store.update(roomId, {
-        messages: room.messages.map(m => m.id === msg.id ? {
+        messages: r.messages.map(m => m.id === msg.id ? {
           ...m,
           content: accumulated,
           thinking: accumulatedThinking,

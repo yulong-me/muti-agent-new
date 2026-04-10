@@ -39,4 +39,6 @@ export interface DiscussionRoom {
   report?: string;
   createdAt: number;
   updatedAt: number;
+  /** agentId → session ID for CLI resume/continue support */
+  sessionIds: Record<string, string>;
 }

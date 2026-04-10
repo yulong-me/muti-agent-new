@@ -28,6 +28,7 @@ roomsRouter.post('/', (req, res) => {
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    sessionIds: {},
   };
   res.json(store.create(room));
 });
