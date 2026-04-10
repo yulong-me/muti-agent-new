@@ -175,6 +175,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     telemetry('room:advance', { roomId, state, choice });
     setAdvancing(true)
     setAdvancingChoice(choice)
+    let success = false
     try {
       const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/advance`, {
         method: 'POST',
@@ -183,15 +184,33 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        telemetry('room:advance:error', { roomId, status: res.status, error: err.error });
+        telemetry('room:advance:error', { roomId, status: res.status, error: err.error || res.statusText });
       } else {
-        telemetry('room:advance:ok', { roomId, choice });
+        const data = await res.json().catch(() => ({}));
+        telemetry('room:advance:ok', { roomId, choice, newState: data.state });
+        success = true
       }
     } catch (err) {
       telemetry('room:advance:error', { roomId, error: String(err) });
     } finally {
       setAdvancing(false)
       setAdvancingChoice(undefined)
+      // Immediately poll once to refresh state/messages after action
+      if (success) {
+        try {
+          const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`)
+          if (res.ok) {
+            const data = await res.json()
+            const newState = data.state || 'INIT'
+            const newAgents = data.agents || []
+            pollStateRef.current = { state: newState, agents: newAgents }
+            setState(newState)
+            setMessages(data.messages || [])
+            setAgents(newAgents)
+            setReport(data.report || '')
+          }
+        } catch {}
+      }
     }
   }
 
@@ -245,9 +264,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         <div className="h-20 bg-white border-b border-apple-border px-8 flex items-center justify-between">
           <h1 className="text-xl font-bold text-apple-text">AI 智囊团</h1>
           {roomId && (
-            <span className="px-4 py-1.5 bg-apple-bg rounded-full text-sm font-medium text-apple-primary">
-              {STATE_LABELS[state]}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-apple-bg rounded-full text-xs font-medium text-apple-secondary">
+                状态
+              </span>
+              <span className="px-4 py-1.5 bg-apple-primary/10 rounded-full text-sm font-bold text-apple-primary">
+                {STATE_LABELS[state]}
+              </span>
+            </div>
           )}
         </div>
 
