@@ -1,19 +1,22 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { roomsRouter } from './routes/rooms.js';
 import { store } from './store.js';
+import { log } from './log.js';
 
 const app = express();
+const httpServer = createServer(app);
+
+const io = new SocketIOServer(httpServer, {
+  cors: { origin: '*', methods: ['GET', 'POST'] },
+});
+
 app.use(cors());
 app.use(express.json());
 
 // ── Request logging middleware ──────────────────────────────────────────────
-function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, meta?: Record<string, unknown>) {
-  const ts = new Date().toISOString();
-  const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
-  console.log(`[${ts}] [${level}] ${msg}${metaStr}`);
-}
-
 app.use((req, res, next) => {
   const start = Date.now();
   const reqId = Math.random().toString(36).slice(2, 9);
@@ -52,7 +55,30 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(7001, () => {
+// ── Socket.IO ───────────────────────────────────────────────────────────────
+io.on('connection', (socket) => {
+  log('INFO', 'socket:connect', { socketId: socket.id });
+  socket.on('join-room', (roomId: string) => {
+    socket.join(roomId);
+    log('INFO', 'socket:join', { socketId: socket.id, roomId });
+  });
+  socket.on('leave-room', (roomId: string) => {
+    socket.leave(roomId);
+    log('INFO', 'socket:leave', { socketId: socket.id, roomId });
+  });
+  socket.on('disconnect', () => {
+    log('INFO', 'socket:disconnect', { socketId: socket.id });
+  });
+});
+
+// Initialize the socket emitter for use by stateMachine/routes
+import { initSocketEmitter } from './services/socketEmitter.js';
+initSocketEmitter(io);
+
+// Export io so routes can emit events
+export { io };
+
+httpServer.listen(7001, () => {
   log('INFO', 'Backend running on http://localhost:7001');
 });
 

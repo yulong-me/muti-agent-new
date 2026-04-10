@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import { DiscussionRoom } from '../types.js';
-import { hostReply, agentInvestigate, agentDebate } from '../services/stateMachine.js';
+import { hostReply, agentInvestigate, agentDebate, addUserMessage } from '../services/stateMachine.js';
 
 export const roomsRouter = Router();
 
@@ -68,6 +68,19 @@ roomsRouter.post('/:id/advance', async (req, res) => {
   const room = store.get(req.params.id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
   const { userChoice } = req.body as { userChoice?: string };
+
+  // Record user's choice as a message
+  if (userChoice) {
+    const choiceLabels: Record<string, string> = {
+      confirm: '确认议题方向',
+      debate: '进入辩论',
+      research: '继续调查',
+      converge: '确认收敛 / 进入收敛',
+      continue: '继续辩论',
+    };
+    const label = choiceLabels[userChoice] || userChoice;
+    addUserMessage(req.params.id, `选择了：${label}`);
+  }
 
   try {
     const specialistAgents = room.agents.filter(a => a.role === 'AGENT');

@@ -2,18 +2,109 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
+import { io, type Socket } from 'socket.io-client'
 import CreateRoomModal from '@/components/CreateRoomModal'
+
+// ── ThinkingBlock: expandable thinking/reasoning section ────────────────────
+function ThinkingBlock({ content, agentColor }: { content: string; agentColor: string }) {
+  const [expanded, setExpanded] = useState(false)
+
+  if (!content) return null
+
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="flex items-center gap-1.5 text-xs font-medium transition-colors"
+        style={{ color: agentColor }}
+        aria-label={expanded ? '收起推理过程' : '展开推理过程'}
+      >
+        {/* Expand/collapse icon — top-left of bubble */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className={`w-3.5 h-3.5 transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
+        >
+          <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L10.293 8 4.646 2.354a.5.5 0 010-.708z" clipRule="evenodd" />
+        </svg>
+        <span className="opacity-70">{expanded ? '收起' : '推理过程'}</span>
+      </button>
+      {expanded && (
+        <div className="mt-1.5 ml-1 pl-3 border-l-2 rounded text-xs text-apple-secondary bg-gray-50 py-2 pr-2 italic font-mono leading-relaxed"
+          style={{ borderColor: `${agentColor}40` }}
+        >
+          {content}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ExpandableText: icon button to expand / collapse long content ──────────────
+function ExpandableText({
+  text,
+  clampClass = 'line-clamp-3',
+  className = '',
+}: {
+  text: string
+  clampClass?: string
+  className?: string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <span>
+      <span className={expanded ? 'whitespace-normal' : clampClass}>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>{text}</ReactMarkdown>
+      </span>
+      {/* Icon button for expand/collapse */}
+      <button
+        className={`mt-1 inline-flex items-center gap-1 text-apple-primary/60 hover:text-apple-primary transition-colors ${className}`}
+        onClick={() => setExpanded(e => !e)}
+        aria-label={expanded ? '收起' : '展开'}
+      >
+        {expanded ? (
+          // chevron up
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+          </svg>
+        ) : (
+          // chevron down
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        )}
+      </button>
+    </span>
+  )
+}
+
+// ── Markdown components matching cat-cafe style ──────────────────────────────
+const mdComponents: Components = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-0.5">{children}</ol>,
+  li: ({ children }) => <li className="mb-0.5">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-gray-300 pl-3 my-2 italic opacity-80">{children}</blockquote>,
+  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{children}</a>,
+  pre: ({ children }) => <pre className="bg-gray-900 text-gray-100 rounded-lg p-3 overflow-x-auto text-xs font-mono my-2">{children}</pre>,
+  code: ({ children }) => <code className="bg-gray-100 rounded px-1 py-0.5 text-xs font-mono">{children}</code>,
+}
 
 // ── Telemetry ────────────────────────────────────────────────────────────────
 function telemetry(event: string, meta?: Record<string, unknown>) {
-  const ts = new Date().toISOString();
-  const prefix = `[${ts}] [FE]`;
+  const ts = new Date().toISOString()
+  const prefix = `[${ts}] [FE]`
   if (meta) {
-    console.log(`${prefix} ${event} ${JSON.stringify(meta)}`);
+    console.log(`${prefix} ${event} ${JSON.stringify(meta)}`)
   } else {
-    console.log(`${prefix} ${event}`);
+    console.log(`${prefix} ${event}`)
   }
 }
 
@@ -35,6 +126,15 @@ interface Message {
   content: string
   timestamp: number
   type: string
+  /** Reasoning/thinking content (populated after streaming completes) */
+  thinking?: string
+  /** Streaming timing (populated after streaming completes) */
+  duration_ms?: number
+  total_cost_usd?: number
+  input_tokens?: number
+  output_tokens?: number
+  /** Temporary ID used during streaming */
+  tempMsgId?: string
 }
 
 const STATE_LABELS: Record<DiscussionState, string> = {
@@ -94,85 +194,242 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [advancing, setAdvancing] = useState(false)
   const [advancingChoice, setAdvancingChoice] = useState<string | undefined>(undefined)
   const [started, setStarted] = useState(false)
-  const startRequestedRef = useRef(false)  // prevent duplicate /start calls
+  const startRequestedRef = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'INIT' as DiscussionState, agents: [] as Agent[] })
 
+  // Streaming state: temp messages that are currently streaming
+  const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
+  // Streaming thinking content per agent (accumulated in real-time)
+  const streamingThinkingRef = useRef<Map<string, string>>(new Map())
+
+  // Track if user has scrolled away from bottom (to avoid fighting their scroll during streaming)
+  const userScrolledRef = useRef(false)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  // Count of currently active streaming messages (to know when streaming is done)
+  const streamingCountRef = useRef(0)
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (userScrolledRef.current) return
+    // During active streaming, use instant scroll (no smooth jitter); smooth only when idle
+    const behavior = streamingCountRef.current > 0 ? 'instant' : 'smooth'
+    messagesEndRef.current?.scrollIntoView({ behavior })
   }
+
+  const handleScroll = () => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    userScrolledRef.current = distFromBottom > 100
+  }
+
   useEffect(() => { scrollToBottom() }, [messages])
+
+  // ── Socket.IO ───────────────────────────────────────────────────────────────
+  const socketRef = useRef<Socket | null>(null)
+
+  useEffect(() => {
+    const socket = io('http://localhost:7001', {
+      transports: ['websocket', 'polling'],
+    })
+    socketRef.current = socket
+
+    socket.on('connect', () => {
+      telemetry('socket:connect')
+    })
+
+    // stream_start: create a placeholder message for real-time streaming
+    socket.on('stream_start', (data: { roomId: string; agentId: string; agentName: string; timestamp: number; tempMsgId: string }) => {
+      if (data.roomId !== roomId) return
+      streamingCountRef.current++
+      // Clear previous thinking buffer for this agent
+      streamingThinkingRef.current.set(data.agentId, '')
+      telemetry('socket:stream_start', { agentName: data.agentName, tempMsgId: data.tempMsgId })
+      const tempMsg: Message = {
+        id: data.tempMsgId,
+        agentRole: 'AGENT',
+        agentName: data.agentName,
+        content: '',
+        timestamp: data.timestamp,
+        type: 'streaming',
+        tempMsgId: data.tempMsgId,
+      }
+      streamingMessagesRef.current.set(data.agentId, tempMsg)
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.tempMsgId !== data.tempMsgId)
+        return [...filtered, tempMsg]
+      })
+    })
+
+    // stream_delta: append text to the streaming message (keyed by tempMsgId via agentId lookup)
+    socket.on('stream_delta', (data: { roomId: string; agentId: string; text: string }) => {
+      if (data.roomId !== roomId) return
+      // Find by agentId: streamingMessagesRef maps agentId → Message
+      const msg = streamingMessagesRef.current.get(data.agentId)
+      if (msg) {
+        msg.content += data.text
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: msg.content } : m))
+      }
+    })
+
+    // thinking_delta: accumulate thinking content for real-time display
+    socket.on('thinking_delta', (data: { roomId: string; agentId: string; thinking: string }) => {
+      if (data.roomId !== roomId) return
+      const existing = streamingThinkingRef.current.get(data.agentId) || ''
+      streamingThinkingRef.current.set(data.agentId, existing + data.thinking)
+      // Update the message's thinking field in real-time
+      const msg = streamingMessagesRef.current.get(data.agentId)
+      if (msg) {
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, thinking: streamingThinkingRef.current.get(data.agentId) } : m))
+      }
+    })
+
+    // stream_end: finalize the message with stats
+    socket.on('stream_end', (data: { roomId: string; agentId: string; tempMsgId: string; duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number }) => {
+      if (data.roomId !== roomId) return
+      streamingCountRef.current = Math.max(0, streamingCountRef.current - 1)
+      telemetry('socket:stream_end', { tempMsgId: data.tempMsgId, duration_ms: data.duration_ms })
+      const msg = streamingMessagesRef.current.get(data.agentId)
+      if (msg) {
+        msg.duration_ms = data.duration_ms
+        msg.total_cost_usd = data.total_cost_usd
+        msg.input_tokens = data.input_tokens
+        msg.output_tokens = data.output_tokens
+        // Replace streaming message with finalized one (using tempMsgId as key)
+        setMessages(prev => prev.map(m => m.id === data.tempMsgId ? { ...msg, type: m.type !== 'streaming' ? m.type : 'statement' } : m))
+      }
+    })
+
+    // agent_status: update agent status in real-time
+    socket.on('agent_status', (data: { roomId: string; agentId: string; status: string }) => {
+      if (data.roomId !== roomId) return
+      setAgents(prev => prev.map(a => a.id === data.agentId ? { ...a, status: data.status as Agent['status'] } : a))
+    })
+
+    return () => {
+      socket.disconnect()
+      socketRef.current = null
+    }
+  }, [])
+
+  // Join room on Socket.IO when roomId changes
+  useEffect(() => {
+    if (!roomId || !socketRef.current) return
+    socketRef.current.emit('join-room', roomId)
+    telemetry('socket:join_room', { roomId })
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.emit('leave-room', roomId)
+      }
+    }
+  }, [roomId])
 
   // Load room list
   useEffect(() => {
-    telemetry('room:list:load');
+    telemetry('room:list:load')
     fetch('http://localhost:7001/api/rooms')
       .then(r => {
-        if (!r.ok) throw new Error(`status ${r.status}`);
-        return r.json();
+        if (!r.ok) throw new Error(`status ${r.status}`)
+        return r.json()
       })
       .then((data: { id: string; topic: string; createdAt: number }[]) => {
-        setRooms(data);
-        telemetry('room:list:ok', { count: data.length });
+        setRooms(data)
+        telemetry('room:list:ok', { count: data.length })
       })
       .catch((err) => {
-        telemetry('room:list:error', { error: err.message });
-      });
-  }, []);
+        telemetry('room:list:error', { error: err.message })
+      })
+  }, [])
 
   // Poll for updates — only when roomId is set and agents are active
   useEffect(() => {
     if (!roomId) return
-    telemetry('room:poll:start', { roomId });
+    telemetry('room:poll:start', { roomId })
     const poll = async () => {
       try {
         const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`)
         if (!res.ok) {
-          telemetry('room:poll:error', { roomId, status: res.status });
-          return;
+          telemetry('room:poll:error', { roomId, status: res.status })
+          return
         }
         const data = await res.json()
         const newState = data.state || 'INIT'
         const newAgents = data.agents || []
         pollStateRef.current = { state: newState, agents: newAgents }
         setState(newState)
-        setMessages(data.messages || [])
         setAgents(newAgents)
         setReport(data.report || '')
 
+        // Merge REST messages with streaming messages:
+        // REST messages replace streaming placeholders (matched by agentName + tempMsgId)
+        // Streaming messages that haven't received final REST update stay visible
+        const restMessages: Message[] = data.messages || []
+
+        setMessages(prev => {
+          const result: Message[] = []
+          const replacedTemps = new Set<string>()
+
+          // First pass: REST messages
+          for (const rm of restMessages) {
+            if (rm.tempMsgId) {
+              replacedTemps.add(rm.tempMsgId)
+              // Find the corresponding streaming message by tempMsgId
+              const streamingMsg = Array.from(streamingMessagesRef.current.values())
+                .find(sm => sm.tempMsgId === rm.tempMsgId)
+              if (streamingMsg) {
+                // Replace streaming placeholder with final REST message
+                result.push({ ...rm, id: streamingMsg.id })
+              } else {
+                result.push(rm)
+              }
+            } else {
+              result.push(rm)
+            }
+          }
+
+          // Second pass: streaming messages not yet replaced by REST (still active)
+          for (const sm of prev) {
+            if (sm.tempMsgId && !replacedTemps.has(sm.tempMsgId)) {
+              result.push(sm)
+            }
+          }
+
+          return result
+        })
+
         // Auto-start: only in INIT, guarded by both started state and ref
         if (data.state === 'INIT' && !started && !startRequestedRef.current) {
-          startRequestedRef.current = true;
+          startRequestedRef.current = true
           setStarted(true)
-          telemetry('room:auto:start', { roomId });
+          telemetry('room:auto:start', { roomId })
           await fetch(`http://localhost:7001/api/rooms/${roomId}/start`, { method: 'POST' })
         }
 
-        telemetry('room:poll:ok', { roomId, state: data.state, messageCount: (data.messages || []).length, agentCount: (data.agents || []).length });
+        telemetry('room:poll:ok', { roomId, state: data.state, messageCount: (data.messages || []).length, agentCount: (data.agents || []).length })
       } catch (err) {
-        telemetry('room:poll:error', { roomId, error: String(err) });
+        telemetry('room:poll:error', { roomId, error: String(err) })
       }
     }
     poll()
     // Poll every 2s; skip cycles when nothing active (all agents idle/done and not INIT)
     const interval = setInterval(() => {
-      const { state: s, agents: ag } = pollStateRef.current;
-      const anyThinking = ag.some((a: Agent) => a.status === 'thinking' || a.status === 'waiting');
+      const { state: s, agents: ag } = pollStateRef.current
+      const anyThinking = ag.some((a: Agent) => a.status === 'thinking' || a.status === 'waiting')
       if (!anyThinking && s !== 'INIT' && s !== 'DONE') {
-        telemetry('room:poll:idle_skip', { roomId, state: s, statuses: ag.map((a: Agent) => a.status) });
-        return;
+        telemetry('room:poll:idle_skip', { roomId, state: s })
+        return
       }
       poll()
     }, 2000)
     return () => {
       clearInterval(interval)
-      telemetry('room:poll:stop', { roomId });
+      telemetry('room:poll:stop', { roomId })
     }
   }, [roomId, started])
 
   const handleAdvance = async (choice?: string) => {
     if (!roomId) return
-    telemetry('room:advance', { roomId, state, choice });
+    telemetry('room:advance', { roomId, state, choice })
     setAdvancing(true)
     setAdvancingChoice(choice)
     let success = false
@@ -183,15 +440,15 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         body: JSON.stringify({ userChoice: choice }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        telemetry('room:advance:error', { roomId, status: res.status, error: err.error || res.statusText });
+        const err = await res.json().catch(() => ({}))
+        telemetry('room:advance:error', { roomId, status: res.status, error: err.error || res.statusText })
       } else {
-        const data = await res.json().catch(() => ({}));
-        telemetry('room:advance:ok', { roomId, choice, newState: data.state });
+        const data = await res.json().catch(() => ({}))
+        telemetry('room:advance:ok', { roomId, choice, newState: data.state })
         success = true
       }
     } catch (err) {
-      telemetry('room:advance:error', { roomId, error: String(err) });
+      telemetry('room:advance:error', { roomId, error: String(err) })
     } finally {
       setAdvancing(false)
       setAdvancingChoice(undefined)
@@ -205,9 +462,9 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
             const newAgents = data.agents || []
             pollStateRef.current = { state: newState, agents: newAgents }
             setState(newState)
-            setMessages(data.messages || [])
             setAgents(newAgents)
             setReport(data.report || '')
+            setMessages(data.messages || [])
           }
         } catch {}
       }
@@ -232,7 +489,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       <div className="w-[260px] bg-white border-r border-apple-border flex flex-col">
         <div className="p-5 border-b border-apple-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-apple-text">讨论历史</h2>
-          <button 
+          <button
             onClick={() => setIsCreateModalOpen(true)}
             className="w-8 h-8 rounded-full bg-apple-bg flex items-center justify-center text-apple-primary hover:bg-gray-200 transition-colors"
             title="发起讨论"
@@ -275,27 +532,119 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
+        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4" ref={messagesContainerRef} onScroll={handleScroll}>
           {messages.map(msg => {
-            const colors = msg.agentRole === 'USER'
-              ? { bg: '#86868B' }
-              : (AGENT_COLORS[msg.agentName] || DEFAULT_AGENT_COLOR)
+            const isUser = msg.agentRole === 'USER'
+            const isStreaming = msg.type === 'streaming' || msg.duration_ms === undefined
+            const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
+            const USER_BG = '#007AFF'
+            const USER_SECONDARY = '#EFF6FF'
+
+            // cat-cafe pattern: user = flex justify-end (right), agent = flex gap-2 (left)
+            if (isUser) {
+              return (
+                <div key={msg.id} className="flex justify-end gap-2 mb-4 items-start">
+                  <div className="w-full max-w-[75%]">
+                    <div className="flex justify-end items-center gap-2 mb-1">
+                      <span className="text-xs text-apple-secondary">
+                        {new Date(msg.timestamp).toLocaleTimeString('zh')}
+                      </span>
+                      {isStreaming && (
+                        <span className="text-xs text-green-600 animate-pulse">● 回答中</span>
+                      )}
+                      <span className="text-xs font-semibold" style={{ color: USER_BG }}>你</span>
+                    </div>
+                    <div
+                      className="rounded-2xl rounded-br-sm px-4 py-3"
+                      style={{ backgroundColor: USER_SECONDARY, color: USER_BG }}
+                    >
+                      <div className="text-sm break-words">
+                        {msg.content.length > 300 && !isStreaming ? (
+                          <ExpandableText text={msg.content} className="text-sm" />
+                        ) : (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                            components={mdComponents}
+                          >{msg.content}</ReactMarkdown>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Avatar on right for user */}
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                    style={{ backgroundColor: USER_BG }}
+                  >
+                    ME
+                  </div>
+                </div>
+              )
+            }
+
+            // Agent message — left aligned
+            const needsExpand = !isStreaming && (msg.content.length > 300 || msg.content.split('\n').length > 5)
             return (
-              <div key={msg.id} className="flex gap-3">
+              <div key={msg.id} className="group flex gap-2 mb-4 items-start">
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                  style={{ backgroundColor: colors.bg }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{ backgroundColor: agentColor }}
                 >
                   {msg.agentName.slice(0, 1)}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold" style={{ color: colors.bg }}>{msg.agentName}</span>
-                    <span className="text-xs text-apple-secondary">{new Date(msg.timestamp).toLocaleTimeString('zh')}</span>
+                <div className="w-full max-w-[75%]">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs font-semibold" style={{ color: agentColor }}>{msg.agentName}</span>
+                    <span className="text-xs text-apple-secondary">
+                      {new Date(msg.timestamp).toLocaleTimeString('zh')}
+                    </span>
+                    {isStreaming && (
+                      <span className="text-xs text-green-600 animate-pulse">
+                        ● 回答中
+                        {/* Typing cursor like cat-cafe */}
+                        <span className="inline-block w-1 h-3.5 bg-green-600 animate-pulse ml-0.5 rounded-sm opacity-60" />
+                      </span>
+                    )}
+                    {!isStreaming && msg.duration_ms && (
+                      <span className="text-xs text-apple-secondary">· {(msg.duration_ms / 1000).toFixed(1)}s</span>
+                    )}
+                    {/* Expand/collapse icon — top-left of bubble */}
+                    {needsExpand && (
+                      <ExpandableText text={msg.content} clampClass="line-clamp-3" className="text-xs ml-auto" />
+                    )}
                   </div>
-                  <div className="bg-white rounded-2xl rounded-tl-sm px-5 py-3 shadow-sm border border-apple-border prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  <div className="rounded-2xl rounded-tl-sm px-4 py-3 bg-white shadow-sm border border-apple-border">
+                    {/* Thinking block — shown above content if available */}
+                    {msg.thinking && (
+                      <ThinkingBlock
+                        content={msg.thinking ?? ''}
+                        agentColor={agentColor}
+                      />
+                    )}
+                    <div className="prose prose-sm max-w-none break-words text-apple-text">
+                      {!needsExpand ? (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkBreaks]}
+                          components={mdComponents}
+                        >{msg.content}</ReactMarkdown>
+                      ) : (
+                        <ExpandableText text={msg.content} clampClass="line-clamp-3" className="text-sm" />
+                      )}
+                    </div>
                   </div>
+                  {!isStreaming && msg.duration_ms && state === 'DONE' && (
+                    <div className="mt-1 px-2 py-1 bg-gray-50 rounded-lg text-xs text-gray-500 flex flex-wrap gap-3">
+                      <span>耗时: {(msg.duration_ms / 1000).toFixed(1)}s</span>
+                      {msg.total_cost_usd !== undefined && msg.total_cost_usd > 0 && (
+                        <span>费用: ${msg.total_cost_usd.toFixed(4)}</span>
+                      )}
+                      {msg.input_tokens !== undefined && msg.input_tokens > 0 && (
+                        <span>输入: {msg.input_tokens} tokens</span>
+                      )}
+                      {msg.output_tokens !== undefined && msg.output_tokens > 0 && (
+                        <span>输出: {msg.output_tokens} tokens</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )
