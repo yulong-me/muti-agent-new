@@ -91,6 +91,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [rooms, setRooms] = useState<{ id: string; topic: string; createdAt: number }[]>([])
   const [advancing, setAdvancing] = useState(false)
   const [started, setStarted] = useState(false)
+  const startRequestedRef = useRef(false)  // prevent duplicate /start calls
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -132,9 +133,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         setMessages(data.messages || [])
         setAgents(data.agents || [])
         setReport(data.report || '')
-        if (data.state === 'INIT' && !started) {
-          telemetry('room:auto:start', { roomId });
+        if (data.state === 'INIT' && !started && !startRequestedRef.current) {
+          startRequestedRef.current = true;
           setStarted(true)
+          telemetry('room:auto:start', { roomId });
           await fetch(`http://localhost:7001/api/rooms/${roomId}/start`, { method: 'POST' })
         }
         telemetry('room:poll:ok', { roomId, state: data.state, messageCount: (data.messages || []).length, agentCount: (data.agents || []).length });
