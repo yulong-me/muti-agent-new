@@ -21,14 +21,14 @@ export function initSchema(): void {
   }
   // Migration: update messages CHECK constraint for MANAGER/WORKER roles
   try {
-    // 检查是否已有新 CHECK 约束（避免重复迁移）
-    const existing = db.prepare("SELECT agent_role FROM messages LIMIT 1").get();
-    if (existing && typeof existing === 'object' && 'agent_role' in existing) {
-      const role = (existing as { agent_role: string }).agent_role;
-      if (role === 'MANAGER' || role === 'WORKER' || role === 'USER') {
-        log('INFO', 'db:schema:migrate:messages:already_migrated');
-        return;
-      }
+    // 清理上次失败的残留表（如果存在）
+    try { db.exec("DROP TABLE IF EXISTS messages_new"); } catch { /* ignore */ }
+
+    // 检查是否需要迁移：如果存在 AGENT/HOST 数据则需要迁移
+    const oldData = db.prepare("SELECT agent_role FROM messages WHERE agent_role IN ('AGENT', 'HOST') LIMIT 1").get();
+    if (!oldData) {
+      log('INFO', 'db:schema:migrate:messages:already_migrated');
+      return;
     }
 
     // 安全迁移：创建新表 → 用 CASE 映射角色 → 删除旧表 → 重命名
@@ -68,6 +68,8 @@ export function initSchema(): void {
     db.exec("ALTER TABLE messages_new RENAME TO messages");
     log('INFO', 'db:schema:migrate:messages:check_constraint');
   } catch (err) {
+    // 迁移失败时清理残留表
+    try { db.exec("DROP TABLE IF EXISTS messages_new"); } catch { /* ignore */ }
     log('WARN', 'db:schema:migrate:messages:check_constraint_failed', { reason: String(err) });
   }
   log('INFO', 'db:schema:init');
