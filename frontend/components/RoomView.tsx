@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
@@ -25,31 +24,28 @@ function BubbleSection({
   isStreaming: boolean
   agentColor: string
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  
   const lineCount = content.split('\n').length
   const isEmpty = !content.trim()
 
-  const iconEl = icon === 'brain' ? (
-    // Brain / lightbulb icon
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-      <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-    </svg>
-  ) : (
-    // Chat bubble icon
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-      <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
-    </svg>
-  )
-
-  const expandIcon = (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      className={`w-3 h-3 transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
+  const expandSquare = (
+    <div
+      className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-[4px] transition-colors"
+      style={{ backgroundColor: `${agentColor}1A`, color: agentColor }}
     >
-      <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L10.293 8 4.646 2.354a.5.5 0 010-.708z" clipRule="evenodd" />
-    </svg>
+      {isExpanded ? (
+        // Minus icon
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+          <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z" />
+        </svg>
+      ) : (
+        // Plus icon
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+          <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" />
+        </svg>
+      )}
+    </div>
   )
 
   const statusText = isEmpty
@@ -59,38 +55,35 @@ function BubbleSection({
     : `${lineCount} 行`
 
   const streamingCursor = isStreaming ? (
-    <span className="inline-block w-1 h-3 bg-current animate-pulse ml-1 rounded-sm opacity-60 align-middle" />
+    <span className="inline-block w-1.5 h-3.5 bg-current animate-pulse ml-1.5 rounded-sm opacity-60 align-middle" />
   ) : null
 
   if (isEmpty && !isStreaming) return null
 
   return (
-    <div className={icon === 'brain' ? 'mb-2' : ''}>
+    <div className={icon === 'brain' ? 'mb-3' : 'mb-1'}>
       {/* Section header — always visible */}
       <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-1.5 text-xs font-medium w-full group/section"
+        onClick={() => setIsExpanded(e => !e)}
+        className="flex items-center gap-2 text-xs font-medium w-full group/section hover:opacity-80 transition-opacity"
         style={{ color: agentColor }}
-        aria-label={`${expanded ? '收起' : '展开'}${label}`}
+        aria-label={`${isExpanded ? '收起' : '展开'}${label}`}
       >
-        {iconEl}
-        <span className="opacity-80">{label}</span>
-        <span className="text-xs opacity-50 ml-0.5">{statusText}</span>
+        {expandSquare}
+        <span className="opacity-90 tracking-wide">{label}</span>
+        <span className="text-[11px] opacity-50 ml-1 font-normal tracking-wider">{statusText}</span>
         {streamingCursor}
-        <span className="ml-auto opacity-40 group-hover/section:opacity-80">
-          {expandIcon}
-        </span>
       </button>
 
       {/* Section body */}
-      {expanded && (
+      {isExpanded && (
         <div
-          className={`mt-1.5 ml-1 pl-3 border-l-2 rounded text-sm leading-relaxed ${
+          className={`mt-2 ml-2 pl-3.5 border-l-2 text-[14px] leading-relaxed ${
             icon === 'brain'
-              ? 'text-xs italic font-mono text-apple-secondary bg-gray-50 py-2 pr-2'
-              : 'text-apple-text'
+              ? 'font-mono text-apple-secondary bg-gray-50/50 py-2.5 px-3 rounded-r-lg text-[13px]'
+              : 'text-apple-text py-0.5'
           }`}
-          style={{ borderColor: `${agentColor}40` }}
+          style={{ borderColor: `${agentColor}30` }}
         >
           {icon === 'output' ? (
             <ReactMarkdown
@@ -98,7 +91,7 @@ function BubbleSection({
               components={mdComponents}
             >{content}</ReactMarkdown>
           ) : (
-            <span className="whitespace-pre-wrap">{content}</span>
+            <span className="whitespace-pre-wrap opacity-80">{content}</span>
           )}
         </div>
       )}
@@ -553,27 +546,15 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       <div className="w-[260px] bg-white border-r border-apple-border flex flex-col">
         <div className="p-5 border-b border-apple-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-apple-text">讨论历史</h2>
-          <div className="flex items-center gap-1">
-            <Link
-              href="/settings/agents"
-              className="w-8 h-8 rounded-full bg-apple-bg flex items-center justify-center text-apple-secondary hover:text-apple-primary transition-colors"
-              title="Agent 配置"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </Link>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="w-8 h-8 rounded-full bg-apple-bg flex items-center justify-center text-apple-primary hover:bg-gray-200 transition-colors"
-              title="发起讨论"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="w-8 h-8 rounded-full bg-apple-bg flex items-center justify-center text-apple-primary hover:bg-gray-200 transition-colors"
+            title="发起讨论"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           {rooms.map(room => (
@@ -682,7 +663,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                       <span className="text-xs text-apple-secondary">· {(msg.duration_ms / 1000).toFixed(1)}s</span>
                     )}
                   </div>
-                  <div className="rounded-2xl rounded-tl-sm px-4 py-3 bg-white shadow-sm border border-apple-border">
+                  <div className="rounded-2xl rounded-tl-sm px-4 py-3.5 bg-white shadow-sm border border-apple-border/50">
                     {/* Section 1: Thinking — collapsible, brain icon */}
                     <BubbleSection
                       label="推理过程"
