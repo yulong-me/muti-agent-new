@@ -97,8 +97,8 @@ function BubbleSection({
   agentColor: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
-  // Reply 流式时自动展开，思考保持折叠，结束后由用户控制
-  const effectiveExpanded = isExpanded || (isStreaming && icon === 'output')
+  // Reply 流式时展开，思考折叠；完成后回复默认展开，思考保持折叠
+  const effectiveExpanded = isExpanded || icon === 'output' || (isStreaming && icon === 'brain')
   const lineCount = content.split('\n').length
   const isEmpty = !content.trim()
 
@@ -552,10 +552,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6 scroll-smooth custom-scrollbar" ref={messagesContainerRef} onScroll={handleScroll}>
-            {/* USER 消息优先排序：同时间戳时用户消息在前 */}
+            {/* USER 消息永远在前，然后按时间戳 */}
             {([...messages].sort((a, b) => {
-              if (a.agentRole === 'USER' && b.agentRole !== 'USER' && Math.abs(a.timestamp - b.timestamp) < 5000) return -1
-              if (b.agentRole === 'USER' && a.agentRole !== 'USER' && Math.abs(a.timestamp - b.timestamp) < 5000) return 1
+              if (a.agentRole === 'USER' && b.agentRole !== 'USER') return -1
+              if (b.agentRole === 'USER' && a.agentRole !== 'USER') return 1
               return a.timestamp - b.timestamp
             })).map(msg => {
               const isUser = msg.agentRole === 'USER'
