@@ -249,11 +249,11 @@ export async function ensureWorkspace(roomId: string): Promise<string> {
 
 **Agent CLI 调用**：
 ```bash
-# Claude Code
-claude -p --workspace {project}/workspaces/room-{id} "prompt"
+# Claude Code — 使用 --add-dir 授权工具访问目录（注意：claude CLI 没有 --workspace 参数）
+claude -p --add-dir {project}/workspaces/room-{id} "prompt"
 
-# OpenCode
-opencode --workspace {project}/workspaces/room-{id} "prompt"
+# OpenCode — 通过 cwd 参数设置工作目录
+opencode "prompt"
 ```
 
 ---
@@ -276,8 +276,8 @@ opencode --workspace {project}/workspaces/room-{id} "prompt"
 
 - [x] AC-1: AgentService 抽象层，支持 Claude Code 和 OpenCode 两个 Provider
 - [x] AC-2: Workspace Manager 创建共享目录 `{project}/workspaces/room-{id}/`
-- [x] AC-3: Agent CLI 调用传入 `--workspace` 参数
-- [x] AC-4: A2A Router 正确解析行首 @mention（支持中文/连字符）
+- [x] AC-3: Agent CLI 调用传入共享 workspace 参数（Claude 用 `--add-dir`，OpenCode 用 `cwd`）
+- [x] AC-4: A2A Router 正确解析行首 @mention（支持中文/连字符），排除 fenced code block
 - [x] AC-5: Manager Agent 能通过 @mention 召集 Worker Agent
 - [x] AC-6: Worker Agent 能看到共享 workspace 中的文件
 - [x] AC-7: A2A 深度达到 4 层时，交回 Manager 决策
@@ -301,7 +301,7 @@ opencode --workspace {project}/workspaces/room-{id} "prompt"
 - [x] Q2: 协作方式？→ **A2A @mention**
 - [x] Q3: Host 角色？→ **Manager Agent，只调度不执行**
 - [x] Q4: AgentService Provider？→ **Claude Code + OpenCode（只做两个）**
-- [x] Q5: Workspace 共享机制？→ **文件级共享，`--workspace` 参数**
+- [x] Q5: Workspace 共享机制？→ **文件级共享，Claude 用 `--add-dir`，OpenCode 用 `cwd`**
 - [x] Q6: A2A Router 位置？→ **hostReply() 内部，流式完成后扫描**
 - [x] Q7: Agent 角色区分？→ **Manager vs Worker**
 - [x] Q8: A2A 深度上限？→ **4 层，达到后交回 Manager 决策**
