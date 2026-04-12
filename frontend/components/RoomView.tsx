@@ -153,8 +153,13 @@ const mdComponents: Components = {
   code: ({ children }) => <code className="bg-surface-muted text-ink rounded px-1.5 py-0.5 text-[0.85em] font-mono border border-line">{children}</code>,
 }
 
+// Debug log store: keep last 100 entries
+const DEBUG_MAX = 100
+const debugLogRef = { current: [] as { ts: string; event: string; meta?: Record<string, unknown> }[] }
 function telemetry(event: string, meta?: Record<string, unknown>) {
-  const ts = new Date().toISOString()
+  const ts = new Date().toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })
+  const entry = { ts, event, meta }
+  debugLogRef.current = [entry, ...debugLogRef.current].slice(0, DEBUG_MAX)
   if (meta) console.log(`[${ts}] [FE] ${event} ${JSON.stringify(meta)}`)
   else console.log(`[${ts}] [FE] ${event}`)
 }
@@ -214,7 +219,9 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'agent' | 'provider'>('agent')
-  
+  const [debugOpen, setDebugOpen] = useState(false)
+  const [debugLogs, setDebugLogs] = useState<{ ts: string; event: string; meta?: Record<string, unknown> }[]>([])
+
   const startRequestedRef = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'INIT' as DiscussionState, agents: [] as Agent[] })
@@ -239,6 +246,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   }
 
   useEffect(() => { scrollToBottom() }, [messages])
+
+  // Sync debug logs from ref to state every 500ms
+  useEffect(() => {
+    const sync = () => setDebugLogs([...debugLogRef.current])
+    sync()
+    const interval = setInterval(sync, 500)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const socket = io('http://localhost:7001', { transports: ['websocket', 'polling'] })
@@ -606,6 +621,17 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         <div className="hidden lg:flex w-[260px] bg-surface border-l border-line flex-col z-20">
           <div className="p-5 border-b border-line">
             <h2 className="text-[15px] font-bold text-ink">参与 Agent</h2>
+            {roomId && (
+              <button
+                onClick={() => navigator.clipboard.writeText(roomId)}
+                title="点击复制 Room ID"
+                className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-soft hover:text-accent transition-colors cursor-pointer group"
+              >
+                <span className="font-mono opacity-60 group-hover:opacity-100">Room:</span>
+                <span className="font-mono truncate max-w-[120px] group-hover:text-accent">{roomId.slice(0, 8)}…</span>
+                <span className="text-[10px] opacity-40">📋</span>
+              </button>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
             {agents.map(agent => {
@@ -631,12 +657,65 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                       {agent.status === 'thinking' ? '工作中' : agent.status === 'waiting' ? '等待中' : '空闲'}
                     </span>
                   </div>
+                  {/* 当前消息 ID：点击可复制 */}
+                  {(() => {
+                    const activeMsg = messages.find(m => m.agentRole === agent.role && m.agentName === agent.name && (m.type === 'streaming' || m.duration_ms === undefined))
+                      || messages.filter(m => m.agentRole === agent.role && m.agentName === agent.name).sort((a, b) => b.timestamp - a.timestamp)[0]
+                    if (!activeMsg) return null
+                    return (
+                      <button
+                        onClick={() => navigator.clipboard.writeText(activeMsg.id)}
+                        title="点击复制消息 ID"
+                        className="mt-1 flex items-center gap-1 text-[10px] text-ink-soft/50 hover:text-accent transition-colors cursor-pointer group font-mono"
+                      >
+                        <span>ID:</span>
+                        <span className="truncate max-w-[100px] group-hover:text-accent">{activeMsg.id.slice(0, 8)}…</span>
+                        <span className="opacity-40">📋</span>
+                      </button>
+                    )
+                  })()}
                 </div>
               )
             })}
             {agents.length === 0 && (
               <p className="text-[12px] text-ink-soft text-center mt-6">选择讨论室后显示参与者</p>
             )}
+
+          {/* Debug 日志面板 */}
+          {roomId && (
+            <div className="border-t border-line mt-2">
+              <button
+                onClick={() => setDebugOpen(o => !o)}
+                className="w-full px-4 py-2.5 flex items-center justify-between text-[12px] font-bold text-ink hover:bg-surface-muted/50 transition-colors"
+              >
+                <span>🔍 Debug 日志</span>
+                <span className="text-[11px] opacity-60">{debugOpen ? '▲' : '▼'}</span>
+              </button>
+              {debugOpen && (
+                <div className="max-h-60 overflow-y-auto px-3 pb-3 custom-scrollbar">
+                  {debugLogs.length === 0 && (
+                    <p className="text-[11px] text-ink-soft/50 font-mono text-center py-2">暂无日志</p>
+                  )}
+                  {debugLogs.map((log, i) => (
+                    <div key={i} className="mb-1.5 font-mono">
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-[10px] text-ink-soft/40 flex-shrink-0">{log.ts}</span>
+                        <span className="text-[11px] font-semibold text-accent/80">{log.event}</span>
+                      </div>
+                      {log.meta && Object.keys(log.meta).length > 0 && (
+                        <pre className="text-[10px] text-ink-soft/60 ml-5 whitespace-pre-wrap break-all max-w-[200px]">
+                          {JSON.stringify(log.meta, (k, v) => {
+                            if (typeof v === 'string' && v.length > 40) return v.slice(0, 40) + '…'
+                            return v
+                          }, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           </div>
         </div>
 

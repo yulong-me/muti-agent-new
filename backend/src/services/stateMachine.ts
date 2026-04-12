@@ -14,6 +14,7 @@ import { scanForA2AMentions, MAX_A2A_DEPTH, buildManagerFallbackPrompt, updateA2
 
 function telemetry(event: string, meta: Record<string, unknown>) {
   auditRepo.log(event, undefined, undefined, meta);
+  console.log(`[DEBUG] ${event}`, JSON.stringify(meta));
 }
 
 function addMessage(roomId: string, msg: Omit<Message, 'id' | 'timestamp'>): Message | undefined {
@@ -184,6 +185,7 @@ ${ctx.userMessage}`;
 
   const tempMsgId = uuid();
   const msg = addMessage(roomId, { agentRole, agentName, content: '', type: msgType });
+  const msgId = msg?.id ?? '';
   if (msg) {
     const r = store.get(roomId);
     if (r) {
@@ -192,6 +194,7 @@ ${ctx.userMessage}`;
       });
     }
   }
+  console.log(`[DEBUG] stream_start agent=${agentName}(${agentId}) msgId=${msgId} tempMsgId=${tempMsgId} room=${roomId}`);
   emitStreamStart(roomId, agentId, agentName, Date.now(), tempMsgId);
 
   let accumulated = '';
@@ -201,15 +204,19 @@ ${ctx.userMessage}`;
   let input_tokens = 0;
   let output_tokens = 0;
   let returnedSessionId = existingSessionId ?? '';
+  let deltaCount = 0;
+  let thinkingCount = 0;
 
   const provider = getProvider(providerName);
   try {
     for await (const event of provider(prompt, agentId, providerOpts)) {
       if (event.type === 'delta') {
+        deltaCount++;
         accumulated += event.text;
-        appendMessageContent(roomId, msg?.id ?? '', event.text);
+        appendMessageContent(roomId, msgId, event.text);
         emitStreamDelta(roomId, agentId, event.text);
       } else if (event.type === 'thinking_delta') {
+        thinkingCount++;
         accumulatedThinking += event.thinking;
         emitThinkingDelta(roomId, agentId, event.thinking);
       } else if (event.type === 'end') {
@@ -262,6 +269,7 @@ ${ctx.userMessage}`;
     }
   }
 
+  console.log(`[DEBUG] stream_end agent=${agentName}(${agentId}) msgId=${msgId} tempMsgId=${tempMsgId} duration=${duration_ms}ms deltas=${deltaCount} thoughts=${thinkingCount} outputLen=${accumulated.length}`);
   emitStreamEnd(roomId, agentId, tempMsgId, { duration_ms, total_cost_usd, input_tokens, output_tokens });
 
   // A2A 编排：在 Agent 输出后检测 @mention 并路由
@@ -290,6 +298,7 @@ export async function a2aOrchestrate(
 
   // 解析 @mentions
   const mentions = scanForA2AMentions(outputText);
+  console.log(`[DEBUG] a2a_scan from=${fromAgentName} mentions=${JSON.stringify(mentions)} depth=${currentDepth} room=${roomId}`);
   if (mentions.length === 0) return;
 
   telemetry('a2a:detected', { roomId, fromAgentName, mentions, depth: currentDepth });

@@ -81,6 +81,7 @@ roomsRouter.get('/:id/messages', (req, res) => {
 roomsRouter.post('/:id/start', async (req, res) => {
   const room = store.get(req.params.id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
+  console.log(`[DEBUG] POST /rooms/${req.params.id}/start state=${room.state} agents=${room.agents.map(a => `${a.name}(${a.status})`).join(', ')}`);
   if (room.state !== 'INIT') {
     return res.json({ status: 'ok', state: room.state, idempotent: true });
   }
