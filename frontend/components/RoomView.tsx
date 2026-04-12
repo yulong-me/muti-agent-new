@@ -571,14 +571,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                           {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                         {isStreaming && <span className="text-[11px] text-accent animate-pulse font-medium">● 回答中</span>}
-                        <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-ink/10 text-ink">你</span>
+                        <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-accent/20 text-accent">你</span>
                       </div>
-                      <div className="rounded-2xl rounded-tr-sm px-4 py-3.5 bg-ink text-bg shadow-sm border border-line/10">
-                        <div className="text-[14px] break-words leading-relaxed text-bg">
+                      <div className="rounded-2xl rounded-tr-sm px-4 py-3.5 bg-accent/10 border border-accent/20 shadow-sm">
+                        <div className="text-[14px] break-words leading-relaxed text-ink">
                           {msg.content.length > 300 && !isStreaming ? (
                             <ExpandableText text={msg.content} className="text-accent hover:text-accent-deep" />
                           ) : (
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={{...mdComponents, p: ({children}) => <p className="mb-2 last:mb-0 text-bg">{children}</p>, a: ({href, children}) => <a href={href} target="_blank" className="underline underline-offset-2 opacity-90 hover:opacity-100">{children}</a>}}>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={{...mdComponents, p: ({children}) => <p className="mb-2 last:mb-0 text-ink">{children}</p>, a: ({href, children}) => <a href={href} target="_blank" className="underline underline-offset-2 opacity-90 hover:opacity-100 text-accent">{children}</a>}}>{msg.content}</ReactMarkdown>
                           )}
                         </div>
                       </div>
@@ -618,8 +618,15 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                         isStreaming={isStreaming}
                         agentColor={agentColor}
                       />
+                      <BubbleSection
+                        label="回复"
+                        icon="output"
+                        content={msg.content}
+                        isStreaming={isStreaming}
+                        agentColor={agentColor}
+                      />
                       {extractMentions(msg.content).length > 0 && (
-                        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium flex-wrap" style={{ color: agentColor }}>
+                        <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap" style={{ color: agentColor }}>
                           <span className="opacity-50 mr-0.5">@点名</span>
                           {extractMentions(msg.content).map((name, i) => (
                             <span
@@ -632,13 +639,6 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                           ))}
                         </div>
                       )}
-                      <BubbleSection
-                        label="回复"
-                        icon="output"
-                        content={msg.content}
-                        isStreaming={isStreaming}
-                        agentColor={agentColor}
-                      />
                     </div>
                     {!isStreaming && msg.duration_ms && state === 'DONE' && (
                       <div className="mt-1.5 px-3 py-1.5 bg-surface border border-line rounded-lg text-[11px] text-ink-soft flex flex-wrap gap-x-4 gap-y-1 max-w-fit">
