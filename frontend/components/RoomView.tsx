@@ -96,9 +96,9 @@ function BubbleSection({
   isStreaming: boolean
   agentColor: string
 }) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  // Reply 流式时展开，思考折叠；完成后回复默认展开，思考保持折叠
-  const effectiveExpanded = isExpanded || icon === 'output' || (isStreaming && icon === 'brain')
+  // 回复默认展开，思考默认折叠；streaming 时都展开，用户可手动切换
+  const [isExpanded, setIsExpanded] = useState(icon === 'output')
+  const effectiveExpanded = isExpanded || isStreaming
   const lineCount = content.split('\n').length
   const isEmpty = !content.trim()
 
