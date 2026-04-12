@@ -218,21 +218,21 @@ const STATE_LABELS: Record<DiscussionState, string> = {
   RUNNING: '讨论中', DONE: '已完成',
 }
 
-const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
-  主持人: { bg: '#4F46E5', text: '#FFFFFF' }, // Indigo
-  司马迁: { bg: '#D97706', text: '#FFFFFF' }, // Amber
-  诸葛亮: { bg: '#059669', text: '#FFFFFF' }, // Emerald
-  李世民: { bg: '#DC2626', text: '#FFFFFF' }, // Red
-  孔子: { bg: '#4D7C0F', text: '#FFFFFF' }, // Olive
-  曹操: { bg: '#9F1239', text: '#FFFFFF' }, // Rose
-  马斯克: { bg: '#2563EB', text: '#FFFFFF' }, // Blue
-  乔布斯: { bg: '#7C3AED', text: '#FFFFFF' }, // Violet
-  爱因斯坦: { bg: '#0284C7', text: '#FFFFFF' }, // Sky
-  图灵: { bg: '#0D9488', text: '#FFFFFF' }, // Teal
-  马云: { bg: '#EA580C', text: '#FFFFFF' }, // Orange
+const AGENT_COLORS: Record<string, { bg: string; text: string; avatar: string }> = {
+  主持人: { bg: '#4F46E5', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=host&backgroundColor=b6e3f4' },
+  司马迁: { bg: '#D97706', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=simaqian' },
+  诸葛亮: { bg: '#059669', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=zhugeliang' },
+  李世民: { bg: '#DC2626', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=lishimin' },
+  孔子: { bg: '#4D7C0F', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=confucius' },
+  曹操: { bg: '#9F1239', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=caocao' },
+  马斯克: { bg: '#2563EB', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=musk' },
+  乔布斯: { bg: '#7C3AED', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jobs' },
+  爱因斯坦: { bg: '#0284C7', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=einstein' },
+  图灵: { bg: '#0D9488', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=turing' },
+  马云: { bg: '#EA580C', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=mayun' },
 }
 
-const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF' } // Emerald
+const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=agent&backgroundColor=c0aede' } // Emerald
 
 const STATE_BUTTONS: Partial<Record<DiscussionState, { label: string; choice?: string }[]>> = {}
 
@@ -561,6 +561,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
               const isUser = msg.agentRole === 'USER'
               const isStreaming = !isUser && (msg.type === 'streaming' || msg.duration_ms === undefined)
               const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
+              const agentAvatar = AGENT_COLORS[msg.agentName]?.avatar || DEFAULT_AGENT_COLOR.avatar
               
               if (isUser) {
                 return (
@@ -589,11 +590,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
               return (
                 <div key={msg.id} className="group flex gap-3 mb-6 items-start">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm mt-1"
-                    style={{ backgroundColor: agentColor }}
-                  >
-                    {msg.agentName.slice(0, 1)}
+                  <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
+                    <img src={agentAvatar} alt={msg.agentName} className="w-full h-full" />
                   </div>
                   <div className="w-full max-w-[85%] md:max-w-[70%]">
                     <div className="mb-1.5 flex items-center gap-2">
@@ -730,8 +728,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
               return (
                 <div key={agent.id} className="bg-bg border border-line rounded-xl p-3 shadow-sm">
                   <div className="flex items-center gap-3 mb-2.5">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm" style={{ backgroundColor: colors.bg }}>
-                      {agent.name.slice(0, 1)}
+                    <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
+                      <img src={colors.avatar} alt={agent.name} className="w-full h-full" />
                     </div>
                     <div>
                       <p className="text-[14px] font-bold leading-none mb-1 text-ink">{agent.name}</p>
