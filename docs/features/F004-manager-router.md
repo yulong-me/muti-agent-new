@@ -1,11 +1,11 @@
 ---
-feature_id: F004
+feature_ids: [F004]
 topics: [multi-agent, manager, orchestration, conversation-mode]
 doc_kind: feature
 created: 2026-04-12
 status: design-approved
 owner: 宪宪
-summary: "Manager 简化为纯路由器：用户自由对话输入 → Manager 编排 Workers A2A 辩论 → Manager 自主决定收敛时机"
+summary: "Manager 简化为纯路由器：用户自由对话输入 → Manager 编排 Workers A2A 辩论 → 用户主动要求生成报告"
 ---
 
 # F004: Manager 简化为路由器（Conversation Mode）
@@ -41,7 +41,9 @@ F003 实现了 A2A 协作能力，但存在两个问题：
 
 4. Manager 判断"够了没"：
    ├── 不够 → 继续组织下一轮
-   └── 够了 → 询问用户确认 / 生成报告
+   └── 够了 → 询问用户确认（不是自动生成报告）
+
+5. 用户主动要求 → 生成报告
 ```
 
 ## 架构变化
@@ -56,9 +58,9 @@ F003 实现了 A2A 协作能力，但存在两个问题：
 - **对话模式 API**：`POST /rooms/:id/messages` — 用户发消息，Manager 处理
 - **Manager 决策分类**：
   - `route`: @mention Workers 组织辩论（唯一决策）
-  - `converge`: 询问用户确认 / 生成报告
+  - `converge`: 询问用户确认（**不自动生成报告**）
   - `wait`: 需要用户明确确认后再继续
-- **无状态对话循环**：用户发消息 → Manager 处理 → 返回结果
+- **有状态对话**：Room 级别存储当前状态（RUNNING/WAITING/DONE）
 
 ### 保留
 - A2A 深度上限（4层安全阀）
@@ -84,7 +86,7 @@ Manager 判断：
 │   → 达上限 → Manager 接管决策
 │
 └─ 需要用户明确确认
-    → 询问用户，暂停等待回复
+    → 询问用户，暂停等待回复（设置 WAITING 状态）
     → 用户回复后继续路由
 ```
 

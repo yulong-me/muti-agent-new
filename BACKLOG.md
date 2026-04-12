@@ -12,4 +12,5 @@ created: 2026-04-09
 | ID | Name | Status | Owner | Link |
 |----|------|--------|-------|------|
 | F001 | Multi-Agent Collaboration Platform | done | 宪宪 | [F001](docs/features/F001-multi-agent-platform.md) |
-| F021 | 数据库持久化 | done | 宪宪 | [F021](docs/features/F021-database-persistence.md) |
+| F003 | A2A Tool Agent | done | 宪宪 | [F003](docs/features/F003-A2A-Tool-Agent.md) |
+| F004 | Manager 路由器（Conversation Mode） | design-approved | 宪宪 | [F004](docs/features/F004-manager-router.md) |
