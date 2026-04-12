@@ -39,5 +39,5 @@ export async function ensureWorkspace(roomId: string): Promise<string> {
  * 获取 Agent CLI 调用的 workspace 参数
  */
 export function getWorkspaceArgs(roomId: string): string[] {
-  return ['--workspace', getWorkspacePath(roomId)];
+  return ['--add-dir', getWorkspacePath(roomId)];
 }

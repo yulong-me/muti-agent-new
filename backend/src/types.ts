@@ -1,4 +1,5 @@
-export type DiscussionState = 'INIT' | 'RESEARCH' | 'DEBATE' | 'CONVERGING' | 'DONE';
+// F004: Manager 路由器 - 简化状态机
+export type DiscussionState = 'RUNNING' | 'DONE';
 // Agent 角色：MANAGER 只调度不执行，WORKER 执行具体任务
 export type AgentRole = 'MANAGER' | 'WORKER';
 export type MessageType = 'system' | 'statement' | 'question' | 'rebuttal' | 'summary' | 'report' | 'user_action' | 'a2a_handoff';

@@ -1,11 +1,11 @@
--- F021: Database schema
--- SQLite with CHECK constraints for enum validation
+-- F004: Manager Router - Simplified state machine
+-- State: RUNNING (active discussion) | DONE (report generated)
 
 CREATE TABLE IF NOT EXISTS rooms (
   id          TEXT PRIMARY KEY,
   topic       TEXT NOT NULL,
-  state       TEXT NOT NULL DEFAULT 'INIT'
-              CHECK (state IN ('INIT','RESEARCH','DEBATE','CONVERGING','DONE')),
+  state       TEXT NOT NULL DEFAULT 'RUNNING'
+              CHECK (state IN ('RUNNING','DONE')),
   report      TEXT,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL

@@ -59,7 +59,7 @@ export default function CreateRoomModal({
 }) {
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
-  const [topic, setTopic] = useState('')
+  const topic = '自由讨论'
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -79,7 +79,6 @@ export default function CreateRoomModal({
 
   useEffect(() => {
     if (!isOpen) {
-      setTopic('')
       setSelected(new Set())
       setActiveTag(null)
       setError('')
@@ -105,7 +104,7 @@ export default function CreateRoomModal({
   }
 
   async function handleSubmit() {
-    if (!topic.trim() || selected.size < 1) return
+    if (selected.size < 1) return
     setSubmitting(true)
     setError('')
     const selectedAgents = agents.filter(a => selected.has(a.id))
@@ -289,29 +288,16 @@ export default function CreateRoomModal({
           </div>
         </div>
 
-        {/* Topic */}
-        <div className="mb-5">
-          <label htmlFor="discussion-topic" className="block text-[13px] font-bold text-ink mb-2 uppercase tracking-wide">讨论议题</label>
-          <textarea
-            id="discussion-topic"
-            className="w-full bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 resize-none focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
-            rows={3}
-            placeholder="例如：折叠屏手机是否是未来趋势？"
-            value={topic}
-            onChange={e => setTopic(e.target.value)}
-          />
-        </div>
-
-        {error && <p className="text-xs text-red-500 mb-4 px-2">{error}</p>}
+{error && <p className="text-xs text-red-500 mb-4 px-2">{error}</p>}
 
         <button
           type="button"
           className="w-full bg-ink text-bg font-bold py-4 rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:active:scale-100"
           onClick={handleSubmit}
-          disabled={submitting || selected.size < 1 || !topic.trim()}
+          disabled={submitting || selected.size < 1}
         >
           <Play className="w-4 h-4 fill-current" aria-hidden/>
-          {submitting ? '创建中...' : '开始讨论'}
+          {submitting ? '创建中...' : '加入讨论'}
         </button>
       </div>
       </div>

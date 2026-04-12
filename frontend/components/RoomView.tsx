@@ -164,8 +164,8 @@ function telemetry(event: string, meta?: Record<string, unknown>) {
   else console.log(`[${ts}] [FE] ${event}`)
 }
 
-type DiscussionState = 'INIT' | 'RESEARCH' | 'DEBATE' | 'CONVERGING' | 'DONE'
-type AgentRole = 'HOST' | 'AGENT'
+type DiscussionState = 'RUNNING' | 'DONE'
+type AgentRole = 'MANAGER' | 'WORKER' | 'USER'
 
 interface Agent {
   id: string; role: AgentRole; name: string; domainLabel: string; status: 'idle' | 'thinking' | 'waiting' | 'done'
@@ -173,11 +173,11 @@ interface Agent {
 
 interface Message {
   id: string; agentRole: AgentRole | 'USER'; agentName: string; content: string; timestamp: number; type: string;
-  thinking?: string; duration_ms?: number; total_cost_usd?: number; input_tokens?: number; output_tokens?: number; tempMsgId?: string
+  thinking?: string; duration_ms?: number; total_cost_usd?: number; input_tokens?: number; output_tokens?: number
 }
 
 const STATE_LABELS: Record<DiscussionState, string> = {
-  INIT: '初始化', RESEARCH: '调查中', DEBATE: '辩论中', CONVERGING: '收敛中', DONE: '已完成',
+  RUNNING: '讨论中', DONE: '已完成',
 }
 
 const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -196,35 +196,28 @@ const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
 
 const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF' } // Emerald
 
-const STATE_BUTTONS: Partial<Record<DiscussionState, { label: string; choice?: string }[]>> = {
-  INIT: [{ label: '确认议题方向', choice: 'confirm' }],
-  RESEARCH: [{ label: '进入辩论', choice: 'debate' }, { label: '继续调查', choice: 'research' }],
-  DEBATE: [{ label: '进入收敛', choice: 'converge' }, { label: '继续辩论', choice: 'continue' }],
-  CONVERGING: [{ label: '确认收敛', choice: 'converge' }, { label: '继续辩论', choice: 'debate' }, { label: '继续调查', choice: 'research' }],
-}
+const STATE_BUTTONS: Partial<Record<DiscussionState, { label: string; choice?: string }[]>> = {}
 
 interface RoomViewProps { roomId?: string; defaultCreateOpen?: boolean }
 
 export default function RoomView({ roomId, defaultCreateOpen = false }: RoomViewProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(defaultCreateOpen)
   const router = useRouter()
-  const [state, setState] = useState<DiscussionState>('INIT')
+  const [state, setState] = useState<DiscussionState>('RUNNING')
   const [messages, setMessages] = useState<Message[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [report, setReport] = useState<string>('')
   const [rooms, setRooms] = useState<{ id: string; topic: string; createdAt: number }[]>([])
-  const [advancing, setAdvancing] = useState(false)
-  const [advancingChoice, setAdvancingChoice] = useState<string | undefined>(undefined)
-  const [started, setStarted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'agent' | 'provider'>('agent')
   const [debugOpen, setDebugOpen] = useState(false)
   const [debugLogs, setDebugLogs] = useState<{ ts: string; event: string; meta?: Record<string, unknown> }[]>([])
+  const [userInput, setUserInput] = useState('')
+  const [sending, setSending] = useState(false)
 
-  const startRequestedRef = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'INIT' as DiscussionState, agents: [] as Agent[] })
+  const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'RUNNING' as DiscussionState, agents: [] as Agent[] })
   const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
   const streamingThinkingRef = useRef<Map<string, string>>(new Map())
   const userScrolledRef = useRef(false)
@@ -264,10 +257,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       if (data.roomId !== roomId) return
       streamingCountRef.current++
       streamingThinkingRef.current.set(data.agentId, '')
-      telemetry('socket:stream_start', { agentName: data.agentName, tempMsgId: data.tempMsgId })
-      const tempMsg: Message = { id: data.tempMsgId, agentRole: 'AGENT', agentName: data.agentName, content: '', timestamp: data.timestamp, type: 'streaming', tempMsgId: data.tempMsgId }
+      telemetry('socket:stream_start', { agentName: data.agentName, id: data.id })
+      const tempMsg: Message = { id: data.id, agentRole: data.agentRole as AgentRole, agentName: data.agentName, content: '', timestamp: data.timestamp, type: 'streaming' }
       streamingMessagesRef.current.set(data.agentId, tempMsg)
-      setMessages(prev => [...prev.filter(m => m.tempMsgId !== data.tempMsgId), tempMsg])
+      setMessages(prev => [...prev.filter(m => m.id !== data.id), tempMsg])
     })
     socket.on('stream_delta', (data: any) => {
       if (data.roomId !== roomId) return
@@ -289,14 +282,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     socket.on('stream_end', (data: any) => {
       if (data.roomId !== roomId) return
       streamingCountRef.current = Math.max(0, streamingCountRef.current - 1)
-      telemetry('socket:stream_end', { tempMsgId: data.tempMsgId, duration_ms: data.duration_ms })
+      telemetry('socket:stream_end', { id: data.id, duration_ms: data.duration_ms })
       const msg = streamingMessagesRef.current.get(data.agentId)
       if (msg) {
         msg.duration_ms = data.duration_ms
         msg.total_cost_usd = data.total_cost_usd
         msg.input_tokens = data.input_tokens
         msg.output_tokens = data.output_tokens
-        setMessages(prev => prev.map(m => m.id === data.tempMsgId ? { ...msg, type: m.type !== 'streaming' ? m.type : 'statement' } : m))
+        setMessages(prev => prev.map(m => m.id === data.id ? { ...msg, type: m.type !== 'streaming' ? m.type : 'statement' } : m))
       }
     })
     socket.on('agent_status', (data: any) => {
@@ -326,72 +319,30 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`)
         if (!res.ok) return
         const data = await res.json()
-        const newState = data.state || 'INIT'
+        const newState = data.state || 'RUNNING'
         const newAgents = data.agents || []
         pollStateRef.current = { state: newState, agents: newAgents }
         setState(newState)
         setAgents(newAgents)
         setReport(data.report || '')
 
-        const restMessages: Message[] = data.messages || []
         setMessages(prev => {
-          const result: Message[] = []
-          const replacedTemps = new Set<string>()
-          for (const rm of restMessages) {
-            if (rm.tempMsgId) {
-              replacedTemps.add(rm.tempMsgId)
-              const streamingMsg = Array.from(streamingMessagesRef.current.values()).find(sm => sm.tempMsgId === rm.tempMsgId)
-              result.push(streamingMsg ? { ...rm, id: streamingMsg.id } : rm)
-            } else {
-              result.push(rm)
-            }
-          }
-          for (const sm of prev) {
-            if (sm.tempMsgId && !replacedTemps.has(sm.tempMsgId)) result.push(sm)
-          }
-          return result
+          // F004: dedup by message id - keep streaming ones, add new ones
+          const existingIds = new Set(prev.map(m => m.id))
+          const newMsgs = (data.messages || []).filter((m: Message) => !existingIds.has(m.id))
+          return [...prev, ...newMsgs]
         })
-
-        if (data.state === 'INIT' && !started && !startRequestedRef.current) {
-          startRequestedRef.current = true
-          setStarted(true)
-          await fetch(`http://localhost:7001/api/rooms/${roomId}/start`, { method: 'POST' })
-        }
       } catch {}
     }
     poll()
     const interval = setInterval(() => {
       const { state: s, agents: ag } = pollStateRef.current
       const anyThinking = ag.some(a => a.status === 'thinking' || a.status === 'waiting')
-      if (!anyThinking && s !== 'INIT' && s !== 'DONE') return
+      if (!anyThinking && s !== 'RUNNING') return
       poll()
     }, 2000)
     return () => clearInterval(interval)
-  }, [roomId, started])
-
-  const handleAdvance = async (choice?: string) => {
-    if (!roomId) return
-    setAdvancing(true)
-    setAdvancingChoice(choice)
-    try {
-      const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/advance`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userChoice: choice }),
-      })
-      if (res.ok) {
-        const res2 = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`)
-        if (res2.ok) {
-          const data = await res2.json()
-          setState(data.state || 'INIT')
-          setAgents(data.agents || [])
-          setReport(data.report || '')
-          setMessages(data.messages || [])
-        }
-      }
-    } catch (err) {} finally {
-      setAdvancing(false)
-      setAdvancingChoice(undefined)
-    }
-  }
+  }, [roomId])
 
   const handleDownload = () => {
     if (!report) return
@@ -399,6 +350,22 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     a.href = URL.createObjectURL(new Blob([report], { type: 'text/markdown' }))
     a.download = 'discussion-report.md'
     a.click()
+  }
+
+  const handleSendMessage = async () => {
+    if (!roomId || !userInput.trim() || sending) return
+    setSending(true)
+    const content = userInput.trim()
+    setUserInput('')
+    try {
+      await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+    } catch {} finally {
+      setSending(false)
+    }
   }
 
   const toggleMobileMenu = () => setMobileMenuOpen(o => !o)
@@ -597,21 +564,24 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                 <Download className="w-4 h-4" aria-hidden/> 下载讨论报告
               </button>
             ) : roomId ? (
-              <div className="flex gap-3 flex-wrap">
-                {(STATE_BUTTONS[state] || []).map(btn => {
-                  const isActive = advancing && advancingChoice === btn.choice
-                  return (
-                    <button
-                      key={btn.label}
-                      type="button"
-                      className="flex-1 bg-surface border border-line text-ink font-semibold py-3 rounded-xl hover:bg-surface-muted transition-all disabled:opacity-50 text-[14px] shadow-sm hover:shadow active:scale-[0.99] disabled:active:scale-100"
-                      onClick={() => handleAdvance(btn.choice)}
-                      disabled={advancing}
-                    >
-                      {isActive ? '处理中...' : btn.label}
-                    </button>
-                  )
-                })}
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  className="flex-1 bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+                  placeholder="输入消息，或 @mention 专家..."
+                  value={userInput}
+                  onChange={e => setUserInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                  disabled={sending}
+                />
+                <button
+                  type="button"
+                  className="bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-deep transition-all disabled:opacity-50 text-[14px] shadow-sm"
+                  onClick={handleSendMessage}
+                  disabled={sending || !userInput.trim()}
+                >
+                  {sending ? '发送中...' : '发送'}
+                </button>
               </div>
             ) : null}
           </div>
@@ -644,7 +614,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                     </div>
                     <div>
                       <p className="text-[14px] font-bold leading-none mb-1 text-ink">{agent.name}</p>
-                      <p className="text-[11px] text-ink-soft leading-none">{agent.role === 'HOST' ? '主持人' : agent.domainLabel}</p>
+                      <p className="text-[11px] text-ink-soft leading-none">{agent.role === 'MANAGER' ? '主持人' : agent.domainLabel}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 bg-surface-muted px-2 py-1 rounded-md max-w-fit">
@@ -720,7 +690,6 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         </div>
 
       </div>
-
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
     </>
   )

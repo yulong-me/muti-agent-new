@@ -37,7 +37,7 @@ F003 实现了 A2A 协作能力，但存在两个问题：
 
 3. Workers 通过 A2A @mention 相互辩论
    ├── 辩论充分 → 停止，汇报给 Manager
-   └── 达深度上限 → Manager 接管决策
+   └── 达深度上限 → 协作链截断，等待用户指令
 
 4. Manager 判断"够了没"：
    ├── 不够 → 继续组织下一轮
@@ -56,11 +56,9 @@ F003 实现了 A2A 协作能力，但存在两个问题：
 
 ### 新增
 - **对话模式 API**：`POST /rooms/:id/messages` — 用户发消息，Manager 处理
-- **Manager 决策分类**：
-  - `route`: @mention Workers 组织辩论（唯一决策）
-  - `converge`: 询问用户确认（**不自动生成报告**）
-  - `wait`: 需要用户明确确认后再继续
-- **有状态对话**：Room 级别存储当前状态（RUNNING/WAITING/DONE）
+- **Manager 决策**：@mention Workers 组织辩论（唯一路由行为）
+- **报告生成**：用户主动请求 `action: 'report'` 触发
+- **有状态对话**：Room 级别存储当前状态（RUNNING/DONE）
 
 ### 保留
 - A2A 深度上限（4层安全阀）
@@ -83,10 +81,7 @@ Manager 判断：
 │   → Manager @mention 最相关的 Worker(s)
 │   → 组织 Workers 辩论
 │   → 监控 A2A 深度
-│   → 达上限 → Manager 接管决策
-│
-└─ 需要用户明确确认
-    → 询问用户，暂停等待回复（设置 WAITING 状态）
+│   → 达上限 → 协作链截断，重置深度计数
     → 用户回复后继续路由
 ```
 
@@ -94,7 +89,7 @@ Manager 判断：
 
 | 文件 | 操作 | 说明 |
 |------|------|------|
-| `backend/src/types.ts` | 修改 | 移除 INIT/RESEARCH/DEBATE/CONVERGING，新增 RUNNING/DONE/WAITING |
+| `backend/src/types.ts` | 修改 | 移除 INIT/RESEARCH/DEBATE/CONVERGING，新增 RUNNING/DONE |
 | `backend/src/prompts/host.ts` | 重写 | 去掉阶段 prompt，改通用 Manager 路由器 prompt |
 | `backend/src/services/stateMachine.ts` | 重构 | 移除 `hostReply(phase)`，改 `handleUserMessage()` |
 | `backend/src/routes/rooms.ts` | 简化 | 移除 `/start` 自动流转、`/advance` userChoice |

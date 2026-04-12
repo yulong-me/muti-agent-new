@@ -1,23 +1,46 @@
+/**
+ * F004: Manager 路由器
+ *
+ * 核心设计：
+ * - handleUserMessage(): 用户消息 → Manager 分析 → 路由决策
+ * - callWorker(): 直接调用 Worker 执行具体任务
+ * - generateReport(): 用户主动触发报告生成
+ * - A2A 编排: Manager/Worker 输出后扫描 @mention → 路由
+ */
+
 import { store } from '../store.js';
 import { getAgent } from '../config/agentConfig.js';
 import { getProvider } from './providers/index.js';
 import type { ClaudeEvent } from './providers/index.js';
-import { emitStreamStart, emitStreamEnd, emitAgentStatus, emitStreamDelta, emitThinkingDelta } from './socketEmitter.js';
+import {
+  emitStreamStart,
+  emitStreamEnd,
+  emitAgentStatus,
+  emitStreamDelta,
+  emitThinkingDelta,
+} from './socketEmitter.js';
 import { HOST_PROMPTS } from '../prompts/host.js';
-import { Message, DiscussionState, AgentRole, Agent, MessageType } from '../types.js';
+import type { Message, Agent, MessageType } from '../types.js';
 import { v4 as uuid } from 'uuid';
 import { roomsRepo, messagesRepo } from '../db/index.js';
 import { sessionsRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
-import { getWorkspacePath, ensureWorkspace } from './workspace.js';
-import { scanForA2AMentions, MAX_A2A_DEPTH, buildManagerFallbackPrompt, updateA2AContext, resetA2ADepth } from './routing/A2ARouter.js';
+import { ensureWorkspace } from './workspace.js';
+import {
+  scanForA2AMentions,
+  MAX_A2A_DEPTH,
+  updateA2AContext,
+} from './routing/A2ARouter.js';
 
 function telemetry(event: string, meta: Record<string, unknown>) {
   auditRepo.log(event, undefined, undefined, meta);
   console.log(`[DEBUG] ${event}`, JSON.stringify(meta));
 }
 
-function addMessage(roomId: string, msg: Omit<Message, 'id' | 'timestamp'>): Message | undefined {
+function addMessage(
+  roomId: string,
+  msg: Omit<Message, 'id' | 'timestamp'>,
+): Message | undefined {
   const room = store.get(roomId);
   if (!room) return undefined;
   const message: Message = { ...msg, id: uuid(), timestamp: Date.now() };
@@ -26,147 +49,196 @@ function addMessage(roomId: string, msg: Omit<Message, 'id' | 'timestamp'>): Mes
   return message;
 }
 
-/** Add a USER-originated message (e.g. button clicks) */
-export function addUserMessage(roomId: string, content: string): Message | undefined {
-  return addMessage(roomId, { agentRole: 'USER', agentName: '你', content, type: 'user_action' });
+export function addUserMessage(
+  roomId: string,
+  content: string,
+): Message | undefined {
+  return addMessage(roomId, {
+    agentRole: 'USER',
+    agentName: '你',
+    content,
+    type: 'user_action',
+  });
 }
 
 function appendMessageContent(roomId: string, messageId: string, extra: string) {
   const room = store.get(roomId);
   if (!room) return;
   const updatedMessages = room.messages.map(m =>
-    m.id === messageId ? { ...m, content: m.content + extra } : m
+    m.id === messageId ? { ...m, content: m.content + extra } : m,
   );
   store.update(roomId, { messages: updatedMessages });
-  // Persist incremental content
   const msg = room.messages.find(m => m.id === messageId);
   if (msg) {
     messagesRepo.updateContent(messageId, msg.content + extra);
   }
 }
 
-function updateAgentStatus(roomId: string, agentId: string, status: 'idle' | 'thinking' | 'waiting' | 'done') {
+function updateAgentStatus(
+  roomId: string,
+  agentId: string,
+  status: 'idle' | 'thinking' | 'waiting' | 'done',
+) {
   const room = store.get(roomId);
   if (!room) return;
   store.update(roomId, {
-    agents: room.agents.map(a => a.id === agentId ? { ...a, status } : a),
+    agents: room.agents.map(a => (a.id === agentId ? { ...a, status } : a)),
   });
   emitAgentStatus(roomId, agentId, status);
 }
 
-export async function hostReply(roomId: string, state: DiscussionState, context?: string): Promise<string> {
+// ─── Manager 处理用户消息 ───────────────────────────────────────────────────
+
+/**
+ * 处理用户消息的入口
+ * 1. 保存用户消息
+ * 2. 调用 Manager 分析输入 → 决策
+ * 3. Manager 决策执行（路由/生成报告）
+ */
+export async function handleUserMessage(
+  roomId: string,
+  userContent: string,
+): Promise<void> {
   const room = store.get(roomId);
-  if (!room) throw new Error('Room not found');
+  if (!room) return;
+  if (room.state === 'DONE') return;
 
-  telemetry('state:enter', { roomId, state, agent: 'MANAGER' });
+  // 1. 保存用户消息
+  addUserMessage(roomId, userContent);
+  telemetry('msg:user', { roomId, contentLength: userContent.length });
 
-  let prompt = '';
-  switch (state) {
-    case 'INIT':
-      prompt = HOST_PROMPTS.INIT(room.topic);
-      break;
-    case 'RESEARCH': {
-      const specialistAgents = room.agents.filter(a => a.role === 'WORKER');
-      const statements = specialistAgents
-        .map(agent => {
-          const stmt = room.messages.find(m => m.agentName === agent.name && m.type === 'statement');
-          return stmt ? `${agent.name}：${stmt.content}` : '';
-        })
-        .filter(Boolean)
-        .join('\n\n');
-      prompt = HOST_PROMPTS.RESEARCH(room.topic, statements);
-      break;
-    }
-    case 'DEBATE': {
-      const specialistAgents = room.agents.filter(a => a.role === 'WORKER');
-      const agentNames = specialistAgents.map(a => a.name).join('、');
-      const statements = specialistAgents
-        .map(agent => {
-          const stmt = room.messages.find(m => m.agentName === agent.name && m.type === 'statement');
-          return stmt ? `${agent.name}：${stmt.content}` : '';
-        })
-        .filter(Boolean)
-        .join('\n\n');
-      prompt = HOST_PROMPTS.DEBATE(agentNames, statements);
-      break;
-    }
-    case 'CONVERGING': {
-      const debateSummaries = room.messages.filter(m => m.type === 'summary' && m.agentRole === 'MANAGER');
-      const latestSummary = debateSummaries[debateSummaries.length - 1]?.content || '';
-      prompt = HOST_PROMPTS.CONVERGING(room.topic, latestSummary);
-      break;
-    }
-    case 'DONE':
-      const allContent = room.messages.map(m => `【${m.agentName}】${m.content}`).join('\n\n');
-      prompt = HOST_PROMPTS.DONE(room.topic, allContent);
-      const reply = await streamingCallAgent({
-        domainLabel: '主持人',
-        systemPrompt: '专业主持人，引导讨论，收敛结论',
-        userMessage: prompt,
-      }, roomId, room.agents.find(a => a.role === 'MANAGER')!.id, 'host', '主持人', 'report');
-      store.update(roomId, { report: reply });
-      roomsRepo.update(roomId, { report: reply });
-      telemetry('state:done', { roomId, state: 'DONE', agent: 'MANAGER', reportLength: reply.length });
-      return reply;
+  // 2. 调用 Manager 路由器 prompt
+  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
+  if (!managerAgent) return;
+
+  const workers = room.agents.filter(a => a.role === 'WORKER');
+  const recentMessages = room.messages
+    .slice(-10)
+    .map(m => `【${m.agentName}】${m.content}`)
+    .join('\n\n');
+
+  const prompt = HOST_PROMPTS.MANAGER_ROUTE(room.topic, userContent, workers);
+
+  // 3. Manager 流式输出（包含 A2A @mention）
+  const managerOutput = await streamingCallAgent(
+    {
+      domainLabel: '主持人',
+      systemPrompt:
+        '专业主持人，负责热情接待、召集专家协作、管理讨论节奏',
+      userMessage: `${prompt}\n\n## 最近对话记录\n${recentMessages || '（暂无）'}`,
+    },
+    roomId,
+    managerAgent.id,
+    'host',
+    '主持人',
+    'statement',
+    'MANAGER',
+  );
+
+  telemetry('manager:output', {
+    roomId,
+    outputLength: managerOutput.length,
+  });
+
+  // 4. 检查用户是否要求生成报告
+  if (isReportRequest(userContent)) {
+    await generateReport(roomId);
   }
-
-  updateAgentStatus(roomId, room.agents.find(a => a.role === 'MANAGER')!.id, 'thinking');
-  const reply = await streamingCallAgent({ domainLabel: '主持人', systemPrompt: '专业主持人，引导讨论，收敛结论', userMessage: prompt }, roomId, room.agents.find(a => a.role === 'MANAGER')!.id, 'host', '主持人');
-  updateAgentStatus(roomId, room.agents.find(a => a.role === 'MANAGER')!.id, 'idle');
-  telemetry('state:exit', { roomId, state, agent: 'MANAGER', replyLength: reply.length, messageCount: room.messages.length });
-  return reply;
 }
 
-export async function agentInvestigate(roomId: string, agent: Agent): Promise<string> {
+// ─── 调用 Worker ─────────────────────────────────────────────────────────────
+
+/**
+ * 直接调用 Worker 执行具体任务（通过 @mention 触发）
+ */
+export async function callWorker(
+  roomId: string,
+  workerId: string,
+  task: string,
+  context?: string,
+): Promise<string> {
   const room = store.get(roomId);
   if (!room) throw new Error('Room not found');
 
-  telemetry('state:enter', { roomId, state: 'RESEARCH', agent: agent.name, agentId: agent.id });
-  updateAgentStatus(roomId, agent.id, 'thinking');
+  const worker = room.agents.find(a => a.id === workerId);
+  if (!worker) throw new Error(`Worker not found: ${workerId}`);
 
-  const userMsg = `议题：${room.topic}\n\n请针对上述议题，从你的专业领域（${agent.domainLabel}）进行调查和分析，给出你的调查结论。\n\n**要求：控制在80~150字，简洁有力，不要发散。**`;
-  const findings = await streamingCallAgent({
-    domainLabel: agent.domainLabel,
-    systemPrompt: `专业${agent.domainLabel}，擅长调查和分析`,
-    userMessage: userMsg,
-  }, roomId, agent.id, agent.configId, agent.name, 'statement', 'WORKER');
+  const userMsg = context
+    ? `${context}\n\n任务：${task}`
+    : `议题：${room.topic}\n\n${task}`;
 
-  updateAgentStatus(roomId, agent.id, 'done');
-  telemetry('state:exit', { roomId, state: 'RESEARCH', agent: agent.name, agentId: agent.id, findingsLength: findings.length });
-  return findings;
+  return streamingCallAgent(
+    {
+      domainLabel: worker.domainLabel,
+      systemPrompt: `专业${worker.domainLabel}，执行具体任务`,
+      userMessage: userMsg,
+    },
+    roomId,
+    worker.id,
+    worker.configId,
+    worker.name,
+    'statement',
+    'WORKER',
+  );
 }
 
-/** Let each specialist agent give their debate perspective on the topic */
-export async function agentDebate(roomId: string, agent: Agent, debateContext: string): Promise<string> {
+// ─── 生成报告 ────────────────────────────────────────────────────────────────
+
+/**
+ * 生成最终报告（用户主动触发）
+ */
+export async function generateReport(roomId: string): Promise<string> {
   const room = store.get(roomId);
   if (!room) throw new Error('Room not found');
 
-  telemetry('state:enter', { roomId, state: 'DEBATE', agent: agent.name, agentId: agent.id });
-  updateAgentStatus(roomId, agent.id, 'thinking');
+  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
+  if (!managerAgent) throw new Error('Manager not found');
 
-  const userMsg = `议题：${room.topic}\n\n辩论背景：\n${debateContext}\n\n请从你的专业视角，对以上辩论背景发表你的核心观点和论据。\n\n**要求：控制在80~150字，简洁有力，不要发散。格式：\\n【${agent.name}观点】\\n[你的立场和论据...]**`;
-  const statement = await streamingCallAgent({
-    domainLabel: agent.domainLabel,
-    systemPrompt: `专业${agent.domainLabel}，擅长批判性分析和辩论`,
-    userMessage: userMsg,
-  }, roomId, agent.id, agent.configId, agent.name, 'statement', 'WORKER');
+  const allContent = room.messages
+    .map(m => `【${m.agentName}】${m.content}`)
+    .join('\n\n');
 
-  updateAgentStatus(roomId, agent.id, 'idle');
-  telemetry('state:exit', { roomId, state: 'DEBATE', agent: agent.name, agentId: agent.id, statementLength: statement.length });
-  return statement;
+  store.update(roomId, { state: 'DONE' });
+  roomsRepo.update(roomId, { state: 'DONE' });
+
+  telemetry('report:start', { roomId, contentLength: allContent.length });
+
+  const report = await streamingCallAgent(
+    {
+      domainLabel: '主持人',
+      systemPrompt: '专业主持人，整理讨论结论',
+      userMessage: HOST_PROMPTS.GENERATE_REPORT(room.topic, allContent),
+    },
+    roomId,
+    managerAgent.id,
+    'host',
+    '主持人',
+    'report',
+    'MANAGER',
+  );
+
+  store.update(roomId, { report });
+  roomsRepo.update(roomId, { report });
+  telemetry('report:done', { roomId, reportLength: report.length });
+
+  return report;
 }
 
-/** Wraps the provider stream, emits Socket.IO events and updates the message in store */
+// ─── 流式调用 ───────────────────────────────────────────────────────────────
+
 async function streamingCallAgent(
-  ctx: { domainLabel: string; systemPrompt: string; userMessage: string },
+  ctx: {
+    domainLabel: string;
+    systemPrompt: string;
+    userMessage: string;
+  },
   roomId: string,
   agentId: string,
   configId: string,
   agentName: string,
   msgType: MessageType = 'summary',
-  agentRole: AgentRole = 'MANAGER',
+  agentRole: 'MANAGER' | 'WORKER' = 'MANAGER',
 ): Promise<string> {
-  // id-based lookup: avoids name collision if multiple agents share the same name
   const agentConfig = getAgent(configId);
   const providerName = agentConfig?.provider ?? 'claude-code';
   const systemPrompt = agentConfig?.systemPrompt ?? ctx.systemPrompt;
@@ -176,26 +248,25 @@ ${ctx.userMessage}`;
 
   const room = store.get(roomId);
   const existingSessionId = room?.sessionIds[agentName];
-  const workspace = await ensureWorkspace(roomId);  // 确保 workspace 目录存在
+  const workspace = await ensureWorkspace(roomId);
   const providerOpts: Record<string, unknown> = {
     ...(agentConfig?.providerOpts ?? {}),
     sessionId: existingSessionId,
-    workspace,  // A2A 协作：所有 Agent 共享 workspace
+    workspace,
   };
 
-  const tempMsgId = uuid();
-  const msg = addMessage(roomId, { agentRole, agentName, content: '', type: msgType });
+  const msg = addMessage(roomId, {
+    agentRole,
+    agentName,
+    content: '',
+    type: msgType,
+  });
   const msgId = msg?.id ?? '';
-  if (msg) {
-    const r = store.get(roomId);
-    if (r) {
-      store.update(roomId, {
-        messages: r.messages.map(m => m.id === msg.id ? { ...m, tempMsgId } : m),
-      });
-    }
-  }
-  console.log(`[DEBUG] stream_start agent=${agentName}(${agentId}) msgId=${msgId} tempMsgId=${tempMsgId} room=${roomId}`);
-  emitStreamStart(roomId, agentId, agentName, Date.now(), tempMsgId);
+
+  console.log(
+    `[DEBUG] stream_start agent=${agentName}(${agentId}) msgId=${msgId} room=${roomId} role=${agentRole}`,
+  );
+  emitStreamStart(roomId, agentId, agentName, Date.now(), msgId, agentRole);
 
   let accumulated = '';
   let accumulatedThinking = '';
@@ -224,23 +295,26 @@ ${ctx.userMessage}`;
         total_cost_usd = event.total_cost_usd;
         input_tokens = event.input_tokens;
         output_tokens = event.output_tokens;
-        if (event.sessionId) {
-          returnedSessionId = event.sessionId;
-        }
+        if (event.sessionId) returnedSessionId = event.sessionId;
       } else if (event.type === 'error') {
         throw new Error(event.message);
       }
     }
   } catch (err) {
     const ts = new Date().toISOString();
-    console.error(`[${ts}] [ERROR] streamingCallAgent provider=${providerName} agentId=${agentId}`, err);
+    console.error(
+      `[${ts}] [ERROR] streamingCallAgent provider=${providerName} agentId=${agentId}`,
+      err,
+    );
     throw err;
   }
 
   if (returnedSessionId) {
     const r = store.get(roomId);
     if (r) {
-      store.update(roomId, { sessionIds: { ...r.sessionIds, [agentName]: returnedSessionId } });
+      store.update(roomId, {
+        sessionIds: { ...r.sessionIds, [agentName]: returnedSessionId },
+      });
       sessionsRepo.upsert(agentName, roomId, returnedSessionId);
     }
   }
@@ -249,15 +323,19 @@ ${ctx.userMessage}`;
     const r = store.get(roomId);
     if (r) {
       store.update(roomId, {
-        messages: r.messages.map(m => m.id === msg.id ? {
-          ...m,
-          content: accumulated,
-          thinking: accumulatedThinking,
-          duration_ms,
-          total_cost_usd,
-          input_tokens,
-          output_tokens,
-        } : m),
+        messages: r.messages.map(m =>
+          m.id === msg.id
+            ? {
+                ...m,
+                content: accumulated,
+                thinking: accumulatedThinking,
+                duration_ms,
+                total_cost_usd,
+                input_tokens,
+                output_tokens,
+              }
+            : m,
+        ),
       });
       messagesRepo.updateContent(msg.id, accumulated, {
         thinking: accumulatedThinking,
@@ -269,73 +347,58 @@ ${ctx.userMessage}`;
     }
   }
 
-  console.log(`[DEBUG] stream_end agent=${agentName}(${agentId}) msgId=${msgId} tempMsgId=${tempMsgId} duration=${duration_ms}ms deltas=${deltaCount} thoughts=${thinkingCount} outputLen=${accumulated.length}`);
-  emitStreamEnd(roomId, agentId, tempMsgId, { duration_ms, total_cost_usd, input_tokens, output_tokens });
+  console.log(
+    `[DEBUG] stream_end agent=${agentName}(${agentId}) msgId=${msgId} duration=${duration_ms}ms deltas=${deltaCount} thoughts=${thinkingCount} outputLen=${accumulated.length}`,
+  );
+  emitStreamEnd(roomId, agentId, msgId, {
+    duration_ms,
+    total_cost_usd,
+    input_tokens,
+    output_tokens,
+  });
 
-  // A2A 编排：在 Agent 输出后检测 @mention 并路由
+  // A2A 编排：扫描 @mention 并路由到对应 Worker
   await a2aOrchestrate(roomId, agentId, agentName, accumulated);
 
   return accumulated;
 }
 
-/**
- * A2A 编排器 — 检测 @mention 并路由到目标 Agent
- *
- * 在每个 Agent 输出后调用，检查是否有 @mention，
- * 如果有则继续调用对应的 Agent，直到达到深度上限。
- */
+// ─── A2A 编排 ───────────────────────────────────────────────────────────────
+
 export async function a2aOrchestrate(
   roomId: string,
   fromAgentId: string,
   fromAgentName: string,
-  outputText: string
+  outputText: string,
 ): Promise<void> {
   const room = store.get(roomId);
   if (!room) return;
 
+  const mentions = scanForA2AMentions(outputText);
+  console.log(
+    `[DEBUG] a2a_scan from=${fromAgentName} mentions=${JSON.stringify(mentions)} room=${roomId}`,
+  );
+  if (mentions.length === 0) return;
+
   const currentDepth = room.a2aDepth ?? 0;
   const currentChain = room.a2aCallChain ?? [];
 
-  // 解析 @mentions
-  const mentions = scanForA2AMentions(outputText);
-  console.log(`[DEBUG] a2a_scan from=${fromAgentName} mentions=${JSON.stringify(mentions)} depth=${currentDepth} room=${roomId}`);
-  if (mentions.length === 0) return;
-
   telemetry('a2a:detected', { roomId, fromAgentName, mentions, depth: currentDepth });
 
-  // 更新调用链
-  const newChain = [...currentChain, fromAgentName];
-
-  // 检查深度上限
+  // 达深度上限 → 截断，等待用户下一步
   if (currentDepth >= MAX_A2A_DEPTH) {
-    // 达到上限，触发 Manager 兜底
-    telemetry('a2a:depth_limit', { roomId, depth: currentDepth, chain: newChain });
-
-    // 构建兜底 prompt，让 Manager 决策
-    const fallbackPrompt = buildManagerFallbackPrompt(
-      newChain,
-      `用户请求：${room.topic}\n\n最后输出：${outputText.slice(0, 200)}...`
-    );
-
-    // 调用 Manager（HOST）处理兜底
-    updateA2AContext(roomId, currentDepth, newChain);
-    await streamingCallAgent({
-      domainLabel: '主持人',
-      systemPrompt: '专业主持人，决策是否继续 A2A 协作或接管',
-      userMessage: fallbackPrompt,
-    }, roomId, room.agents.find(a => a.role === 'MANAGER')!.id, 'host', '主持人', 'system', 'MANAGER');
-
+    telemetry('a2a:depth_limit', { roomId, depth: currentDepth, chain: currentChain });
     return;
   }
 
-  // 继续 A2A 路由
+  const newChain = [...currentChain, fromAgentName];
   updateA2AContext(roomId, currentDepth + 1, newChain);
 
-  // 找到被 @mention 的 Agent
   for (const mention of mentions) {
-    const targetAgent = room.agents.find(a =>
-      a.name.toLowerCase() === mention.toLowerCase() ||
-      a.configId.toLowerCase() === mention.toLowerCase()
+    const targetAgent = room.agents.find(
+      a =>
+        a.name.toLowerCase() === mention.toLowerCase() ||
+        a.configId.toLowerCase() === mention.toLowerCase(),
     );
 
     if (!targetAgent) {
@@ -343,42 +406,51 @@ export async function a2aOrchestrate(
       continue;
     }
 
-    // 跳过已经在调用链中的 Agent（防止循环）
+    // 跳过已在调用链中的 Agent（防止循环）
     if (newChain.includes(targetAgent.name)) {
       telemetry('a2a:skip_cycle', { roomId, target: targetAgent.name, chain: newChain });
       continue;
     }
 
-    telemetry('a2a:route', { roomId, from: fromAgentName, to: targetAgent.name, depth: currentDepth + 1 });
+    telemetry('a2a:route', {
+      roomId,
+      from: fromAgentName,
+      to: targetAgent.name,
+      depth: currentDepth + 1,
+    });
 
-    // 构建 A2A 调用 prompt
     const a2aPrompt = `【A2A 协作请求】
 
 来自：${fromAgentName}
 调用链：${newChain.join(' → ')}
-任务：${room.topic}
+议题：${room.topic}
 
 ${fromAgentName} 的输出：
 ${outputText}
 
 请基于以上上下文，以你的专业角色（${targetAgent.domainLabel}）继续工作。
-你可以通过 @mention 继续召集其他 Agent。
+如需调用其他专家，请使用行首 @mention 格式。`;
 
-**注意**：如果需要调用其他 Agent，请使用行首 @mention 格式。`;
-
-    // 调用目标 Agent
-    await streamingCallAgent({
-      domainLabel: targetAgent.domainLabel,
-      systemPrompt: `专业${targetAgent.domainLabel}，执行具体任务`,
-      userMessage: a2aPrompt,
-    }, roomId, targetAgent.id, targetAgent.configId, targetAgent.name, 'statement', 'WORKER');
+    await streamingCallAgent(
+      {
+        domainLabel: targetAgent.domainLabel,
+        systemPrompt: `专业${targetAgent.domainLabel}，执行具体任务`,
+        userMessage: a2aPrompt,
+      },
+      roomId,
+      targetAgent.id,
+      targetAgent.configId,
+      targetAgent.name,
+      'statement',
+      'WORKER',
+    );
   }
 }
 
-/**
- * 重置 A2A 深度计数（当 Manager 决定继续 A2A 协作时）
- */
-export function a2aReset(roomId: string): void {
-  resetA2ADepth(roomId);
-  telemetry('a2a:reset', { roomId });
+// ─── 辅助函数 ───────────────────────────────────────────────────────────────
+
+/** 判断用户输入是否请求生成报告 */
+function isReportRequest(text: string): boolean {
+  const keywords = ['生成报告', '输出报告', '整理报告', '导出报告', '总结报告', 'report'];
+  return keywords.some(k => text.toLowerCase().includes(k));
 }

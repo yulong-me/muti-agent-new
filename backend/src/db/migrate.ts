@@ -19,61 +19,23 @@ export function initSchema(): void {
   } catch {
     // Column already exists — safe to ignore
   }
-  // Migration: update messages CHECK constraint for MANAGER/WORKER roles
+  // F004 Migration: Rebuild strategy for rooms/messages (conversation data not preserved)
   try {
-    // 清理上次失败的残留表（如果存在）
-    try { db.exec("DROP TABLE IF EXISTS messages_new"); } catch { /* ignore */ }
-
-    // 检查 schema 是否需要迁移：查看 messages 表的 CHECK 约束定义
-    const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='messages'").get() as { sql: string } | undefined;
-    if (schema) {
-      // 如果 CHECK 约束已经包含 MANAGER/WORKER，说明已迁移
-      if (schema.sql.includes('MANAGER') && schema.sql.includes('WORKER')) {
-        log('INFO', 'db:schema:migrate:messages:already_migrated');
-        return;
+    const roomsSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='rooms'").get() as { sql: string } | undefined;
+    if (roomsSchema) {
+      // 如果 CHECK 约束已经是 RUNNING/DONE，说明已迁移
+      if (roomsSchema.sql.includes('RUNNING') && roomsSchema.sql.includes('DONE')) {
+        log('INFO', 'db:schema:migrate:rooms:already_migrated');
+      } else {
+        // 旧 schema：重建 rooms 和 messages 表（对话数据丢弃）
+        db.exec("DROP TABLE IF EXISTS messages");
+        db.exec("DROP TABLE IF EXISTS rooms");
+        db.exec(sql);  // 重新应用 schema
+        log('INFO', 'db:schema:migrate:rooms:rebuilt');
       }
     }
-
-    // 安全迁移：创建新表 → 用 CASE 映射角色 → 删除旧表 → 重命名
-    db.exec(`
-      CREATE TABLE messages_new (
-        id              TEXT PRIMARY KEY,
-        room_id         TEXT NOT NULL,
-        agent_role      TEXT NOT NULL
-                        CHECK (agent_role IN ('MANAGER','WORKER','USER')),
-        agent_name      TEXT NOT NULL,
-        content         TEXT NOT NULL,
-        timestamp       INTEGER NOT NULL,
-        type            TEXT NOT NULL
-                        CHECK (type IN ('system','statement','question','rebuttal','summary','report','user_action')),
-        thinking        TEXT,
-        duration_ms     INTEGER,
-        total_cost_usd  REAL,
-        input_tokens    INTEGER,
-        output_tokens   INTEGER,
-        temp_msg_id     TEXT,
-        FOREIGN KEY (room_id) REFERENCES rooms(id)
-      )`);
-    db.exec(`
-      INSERT INTO messages_new
-        SELECT
-          id, room_id,
-          CASE agent_role
-            WHEN 'AGENT' THEN 'WORKER'
-            WHEN 'HOST' THEN 'MANAGER'
-            ELSE agent_role
-          END,
-          agent_name, content, timestamp, type,
-          thinking, duration_ms, total_cost_usd,
-          input_tokens, output_tokens, temp_msg_id
-        FROM messages`);
-    db.exec("DROP TABLE messages");
-    db.exec("ALTER TABLE messages_new RENAME TO messages");
-    log('INFO', 'db:schema:migrate:messages:check_constraint');
   } catch (err) {
-    // 迁移失败时清理残留表
-    try { db.exec("DROP TABLE IF EXISTS messages_new"); } catch { /* ignore */ }
-    log('WARN', 'db:schema:migrate:messages:check_constraint_failed', { reason: String(err) });
+    log('WARN', 'db:schema:migrate:rooms:rebuild_failed', { reason: String(err) });
   }
   log('INFO', 'db:schema:init');
 }

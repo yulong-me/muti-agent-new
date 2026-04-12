@@ -22,18 +22,18 @@ export function emitStreamDelta(roomId: string, agentId: string, text: string) {
 }
 
 /** Emit streaming start — frontend creates a placeholder message */
-export function emitStreamStart(roomId: string, agentId: string, agentName: string, timestamp: number, tempMsgId: string) {
-  getIO().to(roomId).emit('stream_start', { roomId, agentId, agentName, timestamp, tempMsgId });
+export function emitStreamStart(roomId: string, agentId: string, agentName: string, timestamp: number, id: string, agentRole: string) {
+  getIO().to(roomId).emit('stream_start', { roomId, agentId, agentName, timestamp, id, agentRole });
 }
 
 /** Emit streaming end — frontend finalizes the message with timing/stats */
 export function emitStreamEnd(
   roomId: string,
   agentId: string,
-  tempMsgId: string,
+  id: string,
   stats: { duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number },
 ) {
-  getIO().to(roomId).emit('stream_end', { roomId, agentId, tempMsgId, ...stats });
+  getIO().to(roomId).emit('stream_end', { roomId, agentId, id, ...stats });
 }
 
 /** Emit thinking delta to clients in a room */
