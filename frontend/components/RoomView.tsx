@@ -965,23 +965,6 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                   position={mentionPositionRef.current}
                 />
               )}
-              {/* F0042: recipient badge */}
-              {selectedRecipientId && (() => {
-                const recipient = agents.find(a => a.id === selectedRecipientId)
-                const colors = recipient ? (AGENT_COLORS[recipient.name] || DEFAULT_AGENT_COLOR) : DEFAULT_AGENT_COLOR
-                return (
-                  <div className="flex items-center gap-2 px-1">
-                    <span className="text-[11px] text-ink-soft">发送给:</span>
-                    <span
-                      className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full"
-                      style={{ backgroundColor: `${colors.bg}15`, color: colors.bg, border: `1px solid ${colors.bg}30` }}
-                    >
-                      <img src={colors.avatar} alt="" className="w-3.5 h-3.5 rounded-full" />
-                      {recipient?.name ?? '未知'}
-                    </span>
-                  </div>
-                )
-              })()}
               <div className="flex gap-3">
                 <textarea
                   ref={textareaRef}
