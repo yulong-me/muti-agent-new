@@ -521,6 +521,17 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [mentionPickerOpen, closeMentionPicker])
 
+  // Auto-resize textarea after each userInput change (runs after reconciliation, no React/style conflict)
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    // min-height from Tailwind min-h-[48px] = 48px
+    const minHeight = 48
+    const maxHeight = parseInt(getComputedStyle(ta).maxHeight) || 160
+    ta.style.height = 'auto'
+    ta.style.height = Math.max(minHeight, Math.min(ta.scrollHeight, maxHeight)) + 'px'
+  }, [userInput])
+
   const selectMentionAgent = useCallback((agentName: string) => {
     const ta = textareaRef.current
     if (!ta || mentionStartIdx < 0) return
@@ -902,14 +913,6 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
                   disabled={sending}
-                  style={{ height: '48px' }}
-                  onInput={e => {
-                    const ta = e.currentTarget
-                    const newHeight = Math.min(ta.scrollHeight, 160)
-                    if (newHeight > ta.clientHeight) {
-                      ta.style.height = newHeight + 'px'
-                    }
-                  }}
                 />
                 <button
                   type="button"
