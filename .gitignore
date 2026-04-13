@@ -33,3 +33,10 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Agent tooling (local)
+.cat-cafe/
+.claude/
+.codex/
+.gemini/
+.kimi/
