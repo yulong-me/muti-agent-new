@@ -18,17 +18,23 @@ import { getAgent } from '../config/agentConfig.js';
 
 export const roomsRouter = Router();
 
-// GET /api/rooms — 列出所有讨论室
+// GET /api/rooms — 列出所有讨论室（按最近活跃排序）
 roomsRouter.get('/', (_req, res) => {
-  res.json(store.list());
+  res.json(roomsRepo.list());
 });
 
 // POST /api/rooms — 创建讨论室
 roomsRouter.post('/', (req, res) => {
-  const { managerId = 'host', workerIds = [] } = req.body as {
+  const { managerId: rawManagerId, workerIds: rawWorkerIds } = req.body as {
     managerId?: string;
     workerIds?: string[];
+    agents?: string[]; // Legacy: flat agents array
   };
+
+  // Backward compat: accept legacy { agents: ['host', 'fs-dev', ...] }
+  const managerId = rawManagerId ?? 'host';
+  const workerIds: string[] = rawWorkerIds ?? (req.body as { agents?: string[] }).agents ?? [];
+
   if (!workerIds || workerIds.length < 1) {
     return res.status(400).json({ error: '至少选择 1 位专家' });
   }
@@ -42,10 +48,17 @@ roomsRouter.post('/', (req, res) => {
     return res.status(400).json({ error: `Agent ${managerId} is not a MANAGER` });
   }
 
-  // Resolve workers
+  // Resolve workers (with role + enabled validation)
   const invalid = workerIds.filter(id => !getAgent(id));
   if (invalid.length > 0) {
     return res.status(400).json({ error: `Agent not found: ${invalid.join(', ')}` });
+  }
+  const disabled = workerIds.filter(id => {
+    const cfg = getAgent(id)!;
+    return !cfg.enabled || cfg.role !== 'WORKER';
+  });
+  if (disabled.length > 0) {
+    return res.status(400).json({ error: `Invalid workers (must be enabled WORKER): ${disabled.join(', ')}` });
   }
 
   const managerEntry = {

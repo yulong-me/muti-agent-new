@@ -37,7 +37,7 @@ export async function* streamClaudeCodeProvider(
     args.push('--add-dir', workspace);
   }
 
-  console.log(`[PROVIDER:claude-code] COMMAND: ${cliPath} ${args.join(' ')}`);
+  console.log(`[PROVIDER:claude-code] COMMAND: ${cliPath} -p [...${prompt.length} chars prompt] --verbose --output-format=stream-json${sessionId ? ` --resume ${sessionId}` : ''}${workspace ? ` --add-dir ${workspace}` : ''}`);
 
   const proc = spawn(cliPath, args, { timeout, env, stdio: ['ignore', 'pipe', 'pipe'] });
 

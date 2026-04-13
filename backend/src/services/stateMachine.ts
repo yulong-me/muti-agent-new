@@ -47,6 +47,8 @@ function addMessage(
   const message: Message = { ...msg, id: uuid(), timestamp: Date.now() };
   store.update(roomId, { messages: [...room.messages, message] });
   messagesRepo.insert(roomId, message);
+  // Sync updatedAt to DB so roomsRepo.list() reflects recent activity order
+  roomsRepo.update(roomId, {});
   // Emit socket event so frontend inserts user message immediately (no waiting for poll)
   emitUserMessage(roomId, message);
   return message;
@@ -75,6 +77,8 @@ function appendMessageContent(roomId: string, messageId: string, extra: string) 
   if (msg) {
     messagesRepo.updateContent(messageId, msg.content + extra);
   }
+  // Sync updatedAt to DB so roomsRepo.list() reflects recent activity order
+  roomsRepo.update(roomId, {});
 }
 
 function updateAgentStatus(

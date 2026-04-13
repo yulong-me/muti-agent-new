@@ -45,7 +45,7 @@ export async function* streamOpenCodeProvider(
   // Workspace support — 每个 Room 有独立工作目录
   const workspace = opts.workspace as string | undefined;
 
-  console.log(`[PROVIDER:opencode] COMMAND: ${cliPath} ${args.join(' ')}`);
+  console.log(`[PROVIDER:opencode] COMMAND: ${cliPath} run${sessionId ? ` --session ${sessionId}` : ''}${thinking ? ' --thinking' : ''} --format json [...${prompt.length} chars prompt]${workspace ? ` (cwd=${workspace})` : ''}`);
 
   const proc = spawn(cliPath, args, { timeout, env, cwd: workspace ?? '/tmp', stdio: ['ignore', 'pipe', 'pipe'] });
 
