@@ -522,6 +522,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     }
   }, [roomId, agents])
 
+  // F0042: 强制同步 recipientIdRef ← selectedRecipientId（覆盖所有变更来源）
+  // 任何 setSelectedRecipientId 调用后，此 effect 立即将 ref 同步到最新值
+  useEffect(() => {
+    if (selectedRecipientId !== null) {
+      recipientIdRef.current = selectedRecipientId
+    }
+  }, [selectedRecipientId])
+
   // @mention picker helpers
   const filteredAgents = mentionQuery
     ? agents.filter(a => a.name.toLowerCase().includes(mentionQuery.toLowerCase()))
