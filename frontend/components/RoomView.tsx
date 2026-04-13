@@ -324,6 +324,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [sendError, setSendError] = useState<string | null>(null)
   // F0042: 当前消息接收人，默认主持人
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
+  // ref 版本：handleSendMessage 闭包会始终读到最新值（避免 setState 异步导致的闭包陈旧）
+  const recipientIdRef = useRef<string | null>(null)
 
   // @mention picker state
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false)
@@ -520,10 +522,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     if (!roomId || agents.length === 0) return
     const manager = agents.find(a => a.role === 'MANAGER')
     console.log(`[RoomView] useEffect[agents] room=${roomId} agentsCount=${agents.length} manager=${manager ? `${manager.name}(${manager.id})` : 'NONE'}`)
-    if (manager) setSelectedRecipientId(prev => {
-      console.log(`[RoomView] setSelectedRecipientId prev=${prev} → ${prev ?? manager.id}`)
-      return prev ?? manager.id
-    })
+    if (manager) {
+      setSelectedRecipientId(prev => {
+        const next = prev ?? manager.id
+        recipientIdRef.current = next
+        console.log(`[RoomView] setSelectedRecipientId prev=${prev} → ${next}`)
+        return next
+      })
+    }
   }, [roomId, agents])
 
   // @mention picker helpers
@@ -573,7 +579,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     // F0042: 选中该 agent 作为接收人
     const target = agents.find(a => a.name === agentName)
     console.log(`[RoomView] selectMentionAgent agentName="${agentName}" target=${target ? `${target.name}(${target.role}, id=${target.id})` : 'NOT FOUND'} agentsCount=${agents.length}`)
-    if (target) setSelectedRecipientId(target.id)
+    if (target) {
+      recipientIdRef.current = target.id
+      setSelectedRecipientId(target.id)
+    }
     // Restore focus and cursor after the inserted text
     setTimeout(() => {
       const newPos = mentionStartIdx + agentName.length + 2
@@ -657,7 +666,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     setMentionPickerOpen(false)
     setSending(true)
     const content = userInput.trim()
-    const recipientId = selectedRecipientId
+    // F0042: 用 ref 保证读到最新值（避免 setState 异步导致的闭包陈旧）
+    const recipientId = recipientIdRef.current
     const recipient = agents.find(a => a.id === recipientId)
     console.log(`[RoomView] handleSendMessage content="${content.slice(0, 30)}" selectedRecipientId=${recipientId} recipient=${recipient?.name}(${recipient?.role}) agentsCount=${agents.length}`)
     setUserInput('')
@@ -665,7 +675,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, toAgentId: selectedRecipientId }),
+        body: JSON.stringify({ content, toAgentId: recipientId }),
       })
       if (!res.ok) {
         const err = await res.text()
