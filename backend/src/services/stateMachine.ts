@@ -180,8 +180,11 @@ export async function routeToAgent(
   const managerAgent = room.agents.find(a => a.role === 'MANAGER');
   if (!managerAgent) return;
 
+  console.log(`[DEBUG] routeToAgent room=${roomId} content="${content?.slice(0, 20)}" toAgentId=${toAgentId} managerId=${managerAgent.id}`);
+
   // backward compat: 无 toAgentId → 发给主持人
   if (!toAgentId || toAgentId === managerAgent.id) {
+    console.log(`[DEBUG] routeToAgent → MANAGER (backward compat or MANAGER target)`);
     await handleUserMessage(roomId, content);
     return;
   }
@@ -189,14 +192,16 @@ export async function routeToAgent(
   // 直接发给 Worker（跳过主持人分析）
   const target = room.agents.find(a => a.id === toAgentId);
   if (!target) {
+    console.log(`[DEBUG] routeToAgent → target NOT FOUND (toAgentId=${toAgentId})`);
     telemetry('route:agent_not_found', { roomId, toAgentId });
     return;
   }
   if (target.role !== 'WORKER') {
-    // 非 WORKER（如 MANAGER 自身）→ 走主持人路由
+    console.log(`[DEBUG] routeToAgent → target.role=${target.role} not WORKER, fallback to MANAGER`);
     await handleUserMessage(roomId, content);
     return;
   }
+  console.log(`[DEBUG] routeToAgent → WORKER:${target.name}(${target.id})`);
 
   // 保存用户消息，标记 toAgentId
   addUserMessage(roomId, content, target.id);

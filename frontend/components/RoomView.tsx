@@ -659,6 +659,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     const recipientId = recipientIdRef.current
     const recipient = agents.find(a => a.id === recipientId)
     setUserInput('')
+    console.log(`[RoomView] POST /messages content="${content.slice(0, 20)}" toAgentId=${recipientId} agents=[${agents.map(a => `${a.id.slice(0,8)}(${a.role}:${a.name})`).join(', ')}]`)
     try {
       const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`, {
         method: 'POST',
