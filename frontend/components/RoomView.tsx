@@ -309,6 +309,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [agents, setAgents] = useState<Agent[]>([])
   const [report, setReport] = useState<string>('')
   const [rooms, setRooms] = useState<{ id: string; topic: string; createdAt: number; state: DiscussionState }[]>([])
+  // F0042: roomId → agents map for sidebar badge rendering
+  const [roomsAgentsMap, setRoomsAgentsMap] = useState<Record<string, Agent[]>>({})
+  // F0042: roomId → last USER message's toAgentId for sidebar badge
+  const [roomsLastToAgentMap, setRoomsLastToAgentMap] = useState<Record<string, string | undefined>>({})
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'agent' | 'provider'>('agent')
@@ -448,7 +452,20 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
   useEffect(() => {
     telemetry('room:list:load')
-    fetch('http://localhost:7001/api/rooms').then(r => r.ok ? r.json() : []).then(data => setRooms(data)).catch(console.error)
+    fetch('http://localhost:7001/api/rooms').then(r => r.ok ? r.json() : []).then((data: any[]) => {
+      setRooms(data.map((room: any) => ({ id: room.id, topic: room.topic, createdAt: room.createdAt, state: room.state as DiscussionState })))
+      // F0042: build agents map and last USER toAgentId per room
+      const agentsMap: Record<string, Agent[]> = {}
+      const toAgentMap: Record<string, string | undefined> = {}
+      for (const room of data) {
+        agentsMap[room.id] = room.agents || []
+        // Last USER message's toAgentId
+        const lastUserMsg = [...(room.messages || [])].reverse().find((m: Message) => m.agentRole === 'USER')
+        toAgentMap[room.id] = lastUserMsg?.toAgentId
+      }
+      setRoomsAgentsMap(agentsMap)
+      setRoomsLastToAgentMap(toAgentMap)
+    }).catch(console.error)
   }, [])
 
   useEffect(() => {
@@ -673,7 +690,12 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-            {rooms.map(room => (
+            {rooms.map(room => {
+              const lastToAgentId = roomsLastToAgentMap[room.id]
+              const roomAgents = roomsAgentsMap[room.id] || []
+              const lastRecipient = lastToAgentId ? roomAgents.find(a => a.id === lastToAgentId) : null
+              const lastRecipientColors = lastRecipient ? (AGENT_COLORS[lastRecipient.name] || DEFAULT_AGENT_COLOR) : null
+              return (
               <div
                 key={room.id}
                 onClick={() => router.push(`/room/${room.id}`)}
@@ -692,9 +714,19 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                     {room.state === 'RUNNING' ? '进行中' : '已完成'}
                   </span>
                 </div>
+                {/* F0042: 正在和谁对话 badge */}
+                {lastRecipient && lastRecipientColors && (
+                  <div className="mt-1.5 flex items-center gap-1 ml-5.5">
+                    <span className="text-[10px] text-ink-soft">正在和</span>
+                    <img src={lastRecipientColors.avatar} alt="" className="w-3.5 h-3.5 rounded-full" />
+                    <span className="text-[10px] font-medium" style={{ color: lastRecipientColors.bg }}>{lastRecipient.name}</span>
+                    <span className="text-[10px] text-ink-soft">对话</span>
+                  </div>
+                )}
                 <p className="text-[11px] text-ink-soft mt-1 ml-5.5">{formatRelativeTime(room.createdAt)}</p>
               </div>
-            ))}
+              )
+            })}
             {rooms.length === 0 && (
               <p className="text-xs text-ink-soft text-center mt-6">暂无讨论记录</p>
             )}
@@ -718,7 +750,12 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-                {rooms.map(room => (
+                {rooms.map(room => {
+                  const lastToAgentId = roomsLastToAgentMap[room.id]
+                  const roomAgents = roomsAgentsMap[room.id] || []
+                  const lastRecipient = lastToAgentId ? roomAgents.find(a => a.id === lastToAgentId) : null
+                  const lastRecipientColors = lastRecipient ? (AGENT_COLORS[lastRecipient.name] || DEFAULT_AGENT_COLOR) : null
+                  return (
                   <div
                     key={room.id}
                     onClick={() => { router.push(`/room/${room.id}`); toggleMobileMenu(); }}
@@ -734,9 +771,19 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                         {room.state === 'RUNNING' ? '进行中' : '已完成'}
                       </span>
                     </div>
+                    {/* F0042: 正在和谁对话 badge */}
+                    {lastRecipient && lastRecipientColors && (
+                      <div className="mt-1.5 flex items-center gap-1">
+                        <span className="text-[10px] text-ink-soft">正在和</span>
+                        <img src={lastRecipientColors.avatar} alt="" className="w-3.5 h-3.5 rounded-full" />
+                        <span className="text-[10px] font-medium" style={{ color: lastRecipientColors.bg }}>{lastRecipient.name}</span>
+                        <span className="text-[10px] text-ink-soft">对话</span>
+                      </div>
+                    )}
                     <p className="text-[11px] text-ink-soft mt-1">{formatRelativeTime(room.createdAt)}</p>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -779,6 +826,9 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
               const agentAvatar = AGENT_COLORS[msg.agentName]?.avatar || DEFAULT_AGENT_COLOR.avatar
               
               if (isUser) {
+                // F0042: 显示「发送给: xxx」徽章
+                const toRecipient = msg.toAgentId ? agents.find(a => a.id === msg.toAgentId) : null
+                const toColors = toRecipient ? (AGENT_COLORS[toRecipient.name] || DEFAULT_AGENT_COLOR) : null
                 return (
                   <div key={msg.id} className="flex justify-end gap-3 mb-6 items-start">
                     <div className="w-full max-w-[85%] md:max-w-[70%]">
@@ -788,6 +838,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                         </span>
                         {isStreaming && <span className="text-[11px] text-accent animate-pulse font-medium">● 回答中</span>}
                         <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-accent/20 text-accent">你</span>
+                        {/* F0042: 发送给谁 */}
+                        {toRecipient && toColors && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: `${toColors.bg}15`, color: toColors.bg }}>
+                            <span>→</span>
+                            <img src={toColors.avatar} alt="" className="w-3 h-3 rounded-full" />
+                            {toRecipient.name}
+                          </span>
+                        )}
                       </div>
                       <div className="rounded-2xl rounded-tr-sm px-4 py-3.5 bg-accent/10 border border-accent/20 shadow-sm">
                         <div className="text-[14px] break-words leading-relaxed text-ink">
