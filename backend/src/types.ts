@@ -61,6 +61,8 @@ export interface Message {
     depth: number;
     callChain: string[];
   };
+  /** F0042: 直接路由的接收人 agentId（MANAGER 时为空） */
+  toAgentId?: string;
 }
 
 export interface DiscussionRoom {

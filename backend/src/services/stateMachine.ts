@@ -57,12 +57,14 @@ function addMessage(
 export function addUserMessage(
   roomId: string,
   content: string,
+  toAgentId?: string,
 ): Message | undefined {
   return addMessage(roomId, {
     agentRole: 'USER',
     agentName: '你',
     content,
     type: 'user_action',
+    toAgentId,
   });
 }
 
@@ -111,13 +113,14 @@ export async function handleUserMessage(
   if (!room) return;
   if (room.state === 'DONE') return;
 
-  // 1. 保存用户消息
-  addUserMessage(roomId, userContent);
+  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
+  if (!managerAgent) return;
+
+  // 1. 保存用户消息（toAgentId = MANAGER.id，表示发给主持人）
+  addUserMessage(roomId, userContent, managerAgent.id);
   telemetry('msg:user', { roomId, contentLength: userContent.length });
 
   // 2. 调用 Manager 路由器 prompt
-  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
-  if (!managerAgent) return;
 
   const managerCfg = getAgent(managerAgent.configId);
   const managerSystemPrompt = managerCfg?.systemPrompt ?? '专业主持人，负责热情接待、召集专家协作、管理讨论节奏';
@@ -154,6 +157,76 @@ export async function handleUserMessage(
   if (isReportRequest(userContent)) {
     await generateReport(roomId);
   }
+}
+
+// ─── F0042: 直接路由 ───────────────────────────────────────────────────────
+
+/**
+ * F0042: 直接路由到指定 Agent
+ *
+ * - toAgentId === MANAGER → 走 handleUserMessage（主持人路由逻辑）
+ * - toAgentId === WORKER → 直接调用 callWorker（跳过主持人分析）
+ * - 无 toAgentId → backward compat，走 handleUserMessage
+ */
+export async function routeToAgent(
+  roomId: string,
+  content: string,
+  toAgentId?: string,
+): Promise<void> {
+  const room = store.get(roomId);
+  if (!room) return;
+  if (room.state === 'DONE') return;
+
+  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
+  if (!managerAgent) return;
+
+  // backward compat: 无 toAgentId → 发给主持人
+  if (!toAgentId || toAgentId === managerAgent.id) {
+    await handleUserMessage(roomId, content);
+    return;
+  }
+
+  // 直接发给 Worker（跳过主持人分析）
+  const target = room.agents.find(a => a.id === toAgentId);
+  if (!target) {
+    telemetry('route:agent_not_found', { roomId, toAgentId });
+    return;
+  }
+  if (target.role !== 'WORKER') {
+    // 非 WORKER（如 MANAGER 自身）→ 走主持人路由
+    await handleUserMessage(roomId, content);
+    return;
+  }
+
+  // 保存用户消息，标记 toAgentId
+  addUserMessage(roomId, content, target.id);
+  telemetry('msg:user:direct', { roomId, contentLength: content.length, toAgentId: target.id, toAgentName: target.name });
+
+  // 直接调用 Worker
+  const recentMessages = room.messages
+    .slice(-10)
+    .map(m => `【${m.agentName}】${m.content}`)
+    .join('\n\n');
+
+  const workerOutput = await streamingCallAgent(
+    {
+      domainLabel: target.domainLabel,
+      systemPrompt: `专业${target.domainLabel}，执行具体任务`,
+      userMessage: `议题：${room.topic}\n\n用户（直接发送给你）：${content}\n\n## 最近对话记录\n${recentMessages || '（暂无）'}`,
+    },
+    roomId,
+    target.id,
+    target.configId,
+    target.name,
+    'statement',
+    'WORKER',
+  );
+
+  telemetry('worker:direct:output', {
+    roomId,
+    workerName: target.name,
+    outputLength: workerOutput.length,
+  });
 }
 
 // ─── 调用 Worker ─────────────────────────────────────────────────────────────

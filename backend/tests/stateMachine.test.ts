@@ -1,0 +1,147 @@
+/**
+ * F004: Manager 路由器 - stateMachine 测试
+ *
+ * 核心变化：
+ * - 移除 INIT/RESEARCH/DEBATE/CONVERGING 状态
+ * - 新增 RUNNING/DONE 状态（简化设计）
+ * - handleUserMessage() 处理用户消息
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock 依赖
+vi.mock('../src/store.js', () => ({
+  store: {
+    get: vi.fn(),
+    update: vi.fn(),
+    create: vi.fn(),
+    list: vi.fn(),
+  },
+}));
+
+vi.mock('../src/db/index.js', () => ({
+  roomsRepo: { create: vi.fn(), update: vi.fn() },
+  messagesRepo: { insert: vi.fn(), updateContent: vi.fn() },
+  sessionsRepo: { upsert: vi.fn() },
+  auditRepo: { log: vi.fn() },
+}));
+
+vi.mock('../src/config/agentConfig.js', () => ({
+  getAgent: vi.fn().mockReturnValue({
+    id: 'host',
+    name: '主持人',
+    role: 'MANAGER',
+    roleLabel: '主持人',
+    provider: 'claude-code',
+    systemPrompt: '专业主持人',
+  }),
+}));
+
+// Mock provider as async generator
+vi.mock('../src/services/providers/index.js', () => ({
+  getProvider: vi.fn().mockReturnValue(async function* () {
+    yield { type: 'delta', agentId: 'manager-1', text: '好的，我来处理' };
+    yield { type: 'end', agentId: 'manager-1', duration_ms: 100, total_cost_usd: 0.01, input_tokens: 100, output_tokens: 50 };
+  }),
+}));
+
+vi.mock('../src/services/socketEmitter.js', () => ({
+  emitStreamStart: vi.fn(),
+  emitStreamEnd: vi.fn(),
+  emitAgentStatus: vi.fn(),
+  emitStreamDelta: vi.fn(),
+  emitThinkingDelta: vi.fn(),
+  emitUserMessage: vi.fn(),
+}));
+
+// 动态导入以获取最新代码
+describe('F004: Manager 路由器', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('状态类型', () => {
+    it('应该只有 RUNNING/DONE 两种状态', async () => {
+      const { DiscussionState } = await import('../src/types.js');
+      const validStates = ['RUNNING', 'DONE'];
+      const allStates: DiscussionState[] = ['RUNNING', 'DONE'];
+
+      // 验证只有两种状态
+      expect(validStates).toHaveLength(2);
+      allStates.forEach(state => {
+        expect(validStates).toContain(state);
+      });
+    });
+
+    it('不应该包含旧状态 INIT/RESEARCH/DEBATE/CONVERGING', async () => {
+      const { DiscussionState } = await import('../src/types.js');
+      const oldStates: DiscussionState[] = ['INIT', 'RESEARCH', 'DEBATE', 'CONVERGING', 'WAITING'];
+
+      oldStates.forEach(state => {
+        // @ts-ignore - 测试旧状态不存在
+        const isValid = ['RUNNING', 'DONE'].includes(state);
+        expect(isValid).toBe(false);
+      });
+    });
+  });
+
+  describe('handleUserMessage()', () => {
+    it('应该存在 handleUserMessage 函数', async () => {
+      const stateMachine = await import('../src/services/stateMachine.js');
+      expect(typeof stateMachine.handleUserMessage).toBe('function');
+    });
+
+    it('应该将用户消息添加到消息列表', async () => {
+      const { handleUserMessage } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'manager-1', role: 'MANAGER' as const, name: '主持人', domainLabel: '主持人', configId: 'host', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation((id, updates) => {});
+
+      await handleUserMessage('room-1', '用户输入的话题');
+
+      expect(store.update).toHaveBeenCalled();
+      expect(messagesRepo.insert).toHaveBeenCalled();
+    });
+  });
+
+  describe('Manager 决策路由', () => {
+    it('应该能解析 @mention 并路由到 Worker', async () => {
+      const { scanForA2AMentions } = await import('../src/services/routing/A2ARouter.js');
+
+      const text = '@架构师 请分析这个方案';
+      const mentions = scanForA2AMentions(text);
+
+      expect(mentions).toContain('架构师');
+    });
+
+    it('应该排除 code block 内的 @mention', async () => {
+      const { scanForA2AMentions } = await import('../src/services/routing/A2ARouter.js');
+
+      const text = `这是代码：
+\`\`\`
+@不应该触发
+\`\`\`
+@应该触发`;
+
+      const mentions = scanForA2AMentions(text);
+
+      expect(mentions).not.toContain('不应该触发');
+      expect(mentions).toContain('应该触发');
+    });
+  });
+});

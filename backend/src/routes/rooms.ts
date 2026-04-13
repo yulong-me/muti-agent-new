@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
-import { handleUserMessage } from '../services/stateMachine.js';
+import { handleUserMessage, routeToAgent } from '../services/stateMachine.js';
 import { roomsRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { getAgent } from '../config/agentConfig.js';
@@ -128,7 +128,7 @@ roomsRouter.get('/:id/messages', (req, res) => {
   });
 });
 
-// POST /api/rooms/:id/messages — 用户发送消息 → Manager 处理
+// POST /api/rooms/:id/messages — 用户发送消息 → Manager 或直接 Agent 处理
 roomsRouter.post('/:id/messages', async (req, res) => {
   const room = store.get(req.params.id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -136,14 +136,22 @@ roomsRouter.post('/:id/messages', async (req, res) => {
     return res.status(400).json({ error: 'Room already done' });
   }
 
-  const { content } = req.body as { content?: string };
+  const { content, toAgentId } = req.body as { content?: string; toAgentId?: string };
   if (!content?.trim()) {
     return res.status(400).json({ error: 'content required' });
   }
 
+  // F0042: toAgentId 验证 — 必须是在这个 room 内的 agent
+  if (toAgentId) {
+    const target = room.agents.find(a => a.id === toAgentId);
+    if (!target) {
+      return res.status(400).json({ error: `Agent not found: ${toAgentId}` });
+    }
+  }
+
   // 异步处理，不阻塞响应
-  handleUserMessage(req.params.id, content.trim()).catch(err => {
-    console.error('[ERROR] handleUserMessage failed:', err);
+  routeToAgent(req.params.id, content.trim(), toAgentId).catch(err => {
+    console.error('[ERROR] routeToAgent failed:', err);
   });
 
   res.json({ status: 'ok' });

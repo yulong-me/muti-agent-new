@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS messages (
   input_tokens    INTEGER,
   output_tokens   INTEGER,
   temp_msg_id     TEXT,
+  -- F0042: 直接路由的接收人 agentId（USER 消息用于显示；可空，兼容旧数据）
+  to_agent_id     TEXT,
   FOREIGN KEY (room_id) REFERENCES rooms(id)
 );
 

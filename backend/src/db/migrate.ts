@@ -46,6 +46,14 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  // F0042 Migration: add to_agent_id column to messages table (nullable, backward compat)
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN to_agent_id TEXT");
+    log('INFO', 'db:schema:migrate:messages:to_agent_id');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   // F004 Migration: INIT/RESEARCH/DEBATE/CONVERGING → RUNNING, HOST → MANAGER, AGENT → WORKER
   try {
     const roomsSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='rooms'").get() as { sql: string } | undefined;

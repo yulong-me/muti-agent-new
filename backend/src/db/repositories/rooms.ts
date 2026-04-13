@@ -78,8 +78,8 @@ export const roomsRepo = {
 export const messagesRepo = {
   insert(roomId: string, msg: Message): Message {
     db.prepare(`
-      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id)
-      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId)
+      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id, to_agent_id)
+      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId, @toAgentId)
     `).run({
       id: msg.id,
       roomId,
@@ -94,6 +94,7 @@ export const messagesRepo = {
       inputTokens: msg.input_tokens ?? null,
       outputTokens: msg.output_tokens ?? null,
       tempMsgId: msg.tempMsgId ?? null,
+      toAgentId: msg.toAgentId ?? null,
     });
     return msg;
   },
@@ -136,6 +137,7 @@ export const messagesRepo = {
       input_tokens: r.input_tokens as number | undefined,
       output_tokens: r.output_tokens as number | undefined,
       tempMsgId: r.temp_msg_id as string | undefined,
+      toAgentId: (r.to_agent_id as string) ?? undefined,
     }));
   },
 };
