@@ -69,7 +69,7 @@ export const roomsRepo = {
   },
 
   list(): DiscussionRoom[] {
-    const rows = db.prepare('SELECT id FROM rooms ORDER BY created_at DESC').all() as { id: string }[];
+    const rows = db.prepare('SELECT id FROM rooms ORDER BY updated_at DESC').all() as { id: string }[];
     return rows.map(r => this.get(r.id)!);
   },
 };

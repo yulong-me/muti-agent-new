@@ -57,21 +57,25 @@ export default function CreateRoomModal({
   isOpen: boolean
   onClose: () => void
 }) {
-  const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [allAgents, setAllAgents] = useState<AgentConfig[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
   const topic = '自由讨论'
+  const [selectedManager, setSelectedManager] = useState<string>('host')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
+  const managers = allAgents.filter(a => a.role === 'MANAGER' && a.enabled)
+  const workers = allAgents.filter(a => a.role === 'WORKER' && a.enabled)
+
   useEffect(() => {
     if (!isOpen) return
     fetch(`${API}/api/agents`)
       .then(r => r.json())
       .then((data: AgentConfig[]) => {
-        setAgents(data.filter(a => a.role !== 'MANAGER' && a.enabled))
+        setAllAgents(data)
         setLoadingAgents(false)
       })
       .catch(() => setLoadingAgents(false))
@@ -79,6 +83,7 @@ export default function CreateRoomModal({
 
   useEffect(() => {
     if (!isOpen) {
+      setSelectedManager('host')
       setSelected(new Set())
       setActiveTag(null)
       setError('')
@@ -107,14 +112,14 @@ export default function CreateRoomModal({
     if (selected.size < 1) return
     setSubmitting(true)
     setError('')
-    const selectedAgents = agents.filter(a => selected.has(a.id))
     try {
       const res = await fetch(`${API}/api/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic,
-          agents: selectedAgents.map(a => a.id),
+          managerId: selectedManager,
+          workerIds: workers.filter(a => selected.has(a.id)).map(a => a.id),
         }),
       })
       if (!res.ok) {
@@ -132,8 +137,8 @@ export default function CreateRoomModal({
     }
   }
 
-  const filteredAgents = activeTag ? agents.filter(a => a.tags.includes(activeTag)) : agents
-  const selectedAgents = agents.filter(a => selected.has(a.id))
+  const filteredWorkers = activeTag ? workers.filter(a => a.tags.includes(activeTag)) : workers
+  const selectedWorkers = workers.filter(a => selected.has(a.id))
 
   return (
     <>
@@ -159,16 +164,49 @@ export default function CreateRoomModal({
               <h1 className="text-2xl font-bold text-ink flex items-center gap-2">
                 <BrainCircuit className="w-6 h-6 text-accent" aria-hidden/> 发起新讨论
               </h1>
-              <p className="text-ink-soft mt-1 text-[14px]">选择 Agent，开启多智能体协作讨论</p>
+              <p className="text-ink-soft mt-1 text-[14px]">选择主持人和专家，开启多智能体协作讨论</p>
             </div>
             <button onClick={onClose} aria-label="关闭" className="p-2 text-ink-soft hover:text-ink hover:bg-surface rounded-full transition-colors">
               <X className="w-5 h-5" aria-hidden/>
             </button>
           </div>
 
+          {/* Manager Selection */}
+          {!loadingAgents && managers.length > 0 && (
+            <div className="mb-5">
+              <p className="text-[12px] font-bold text-ink-soft uppercase tracking-wide mb-2">主持人</p>
+              <div className="flex flex-wrap gap-2">
+                {managers.map(m => {
+                  const isSelected = selectedManager === m.id
+                  const color = agentColor(m.name)
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedManager(m.id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all ${
+                        isSelected
+                          ? 'border-accent bg-accent/5 shadow-sm'
+                          : 'border-line bg-surface hover:border-accent/40'
+                      }`}
+                    >
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: color }}>
+                        {m.name.slice(0, 1)}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[13px] font-bold text-ink">{m.name}</p>
+                        <p className="text-[11px] text-ink-soft">{m.roleLabel}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Tag Filter Bar */}
-          {!loadingAgents && agents.length > 0 && (() => {
-            const availableTags = [...new Set(agents.flatMap(a => a.tags))]
+          {!loadingAgents && workers.length > 0 && (() => {
+            const availableTags = [...new Set(workers.flatMap(a => a.tags))]
             return (
               <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="按领域筛选">
                 <button
@@ -206,16 +244,16 @@ export default function CreateRoomModal({
             )
           })()}
 
-        {/* Agent Grid */}
+        {/* Worker Grid */}
         {loadingAgents ? (
           <div className="text-center py-10 text-ink-soft text-sm">加载 Agent 配置...</div>
-        ) : filteredAgents.length === 0 ? (
+        ) : filteredWorkers.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-ink-soft text-sm mb-3">该领域暂无 Agent</p>
+            <p className="text-ink-soft text-sm mb-3">该领域暂无专家</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-            {filteredAgents.map(ag => {
+            {filteredWorkers.map(ag => {
               const isSelected = selected.has(ag.id)
               const color = agentColor(ag.name)
               const domainTag = ag.tags[0] // first tag is the domain
@@ -263,10 +301,10 @@ export default function CreateRoomModal({
         {/* Selected */}
         <div className="mb-5 bg-surface p-4 rounded-2xl border border-line">
           <p className="text-[13px] font-bold text-ink mb-3 uppercase tracking-wide">
-            已选 {selected.size} 位 Agent{selected.size < 1 ? '（至少选 1 位）' : ''}
+            已选 {selected.size} 位专家{selected.size < 1 ? '（至少选 1 位）' : ''}
           </p>
           <div className="flex flex-wrap gap-2">
-            {selectedAgents.map(ag => {
+            {selectedWorkers.map(ag => {
               const color = agentColor(ag.name)
               return (
                 <div

@@ -37,6 +37,8 @@ export async function* streamClaudeCodeProvider(
     args.push('--add-dir', workspace);
   }
 
+  console.log(`[PROVIDER:claude-code] COMMAND: ${cliPath} ${args.join(' ')}`);
+
   const proc = spawn(cliPath, args, { timeout, env, stdio: ['ignore', 'pipe', 'pipe'] });
 
   let stderrBuffer = '';

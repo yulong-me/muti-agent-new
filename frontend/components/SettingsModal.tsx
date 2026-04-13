@@ -9,7 +9,7 @@ const API = 'http://localhost:7001'
 type ProviderName = 'claude-code' | 'opencode'
 
 interface AgentConfig {
-  id: string; name: string; roleLabel: string; role: 'HOST' | 'AGENT'
+  id: string; name: string; roleLabel: string; role: 'MANAGER' | 'WORKER'
   provider: ProviderName; providerOpts: { thinking?: boolean; [k: string]: unknown }
   systemPrompt: string; enabled: boolean; tags: string[]
 }
@@ -51,7 +51,7 @@ function AgentRow({ agent, onSave, onDelete, saving }: {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const isHost = agent.role === 'HOST'
+  const isHost = agent.role === 'MANAGER'
   const pc = PROVIDER_COLORS[agent.provider]
 
   if (!editing) {
@@ -256,7 +256,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   function handleAddAgent() {
     if (!addForm.id || !addForm.name) { setAddError('ID 和名称必填'); return }
     setSaving(true)
-    fetch(`${API}/api/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...addForm, role: 'AGENT', providerOpts: { thinking: true }, enabled: true }) })
+    fetch(`${API}/api/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...addForm, role: 'WORKER', providerOpts: { thinking: true }, enabled: true }) })
       .then(r => {
         if (!r.ok) return r.json().then(err => { throw new Error(err.error || `HTTP ${r.status}`) })
         return r.json()

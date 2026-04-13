@@ -31,7 +31,7 @@ agentsRouter.post('/', (req: Request, res: Response) => {
     id: body.id,
     name: body.name,
     roleLabel: body.roleLabel ?? body.name,
-    role: body.role ?? 'WORKER',
+    role: (body.role as string === 'HOST' ? 'MANAGER' : (body.role as string) === 'AGENT' ? 'WORKER' : (body.role ?? 'WORKER')) as AgentConfig['role'],
     provider: body.provider,
     providerOpts: body.providerOpts ?? {},
     systemPrompt: body.systemPrompt ?? '',
@@ -50,7 +50,9 @@ agentsRouter.put('/:id', (req: Request, res: Response) => {
   const idx = agents.findIndex(a => a.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Agent not found' });
 
-  const updated: AgentConfig = { ...agents[idx], ...req.body, id: req.params.id };
+  const rawRole = req.body.role;
+  const normalizedRole: AgentConfig['role'] = ((rawRole as unknown as string) === 'HOST' ? 'MANAGER' : (rawRole as unknown as string) === 'AGENT' ? 'WORKER' : (rawRole ?? 'WORKER')) as AgentConfig['role'];
+  const updated: AgentConfig = { ...agents[idx], ...req.body, role: normalizedRole, id: req.params.id };
   agents[idx] = updated;
   saveAgents(agents);
   res.json(updated);

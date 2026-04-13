@@ -25,7 +25,7 @@ interface AgentConfig {
   id: string
   name: string
   roleLabel: string
-  role: 'HOST' | 'AGENT'
+  role: 'MANAGER' | 'WORKER'
   provider: ProviderName
   providerOpts: { model?: string; thinking?: boolean; [key: string]: unknown }
   systemPrompt: string

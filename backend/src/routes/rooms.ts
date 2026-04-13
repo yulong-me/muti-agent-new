@@ -23,23 +23,45 @@ roomsRouter.get('/', (_req, res) => {
   res.json(store.list());
 });
 
-// POST /api/rooms — 创建讨论室（F004：无需 topic）
+// POST /api/rooms — 创建讨论室
 roomsRouter.post('/', (req, res) => {
-  const { agents: agentIds } = req.body as { agents: string[] };
-  if (!agentIds || agentIds.length < 1) {
-    return res.status(400).json({ error: 'at least 1 agent required' });
+  const { managerId = 'host', workerIds = [] } = req.body as {
+    managerId?: string;
+    workerIds?: string[];
+  };
+  if (!workerIds || workerIds.length < 1) {
+    return res.status(400).json({ error: '至少选择 1 位专家' });
   }
 
-  const invalidAgents = agentIds.filter(id => !getAgent(id));
-  if (invalidAgents.length > 0) {
-    return res.status(400).json({ error: `Agent not found: ${invalidAgents.join(', ')}` });
+  // Resolve manager
+  const managerCfg = getAgent(managerId);
+  if (!managerCfg) {
+    return res.status(400).json({ error: `Manager not found: ${managerId}` });
+  }
+  if (managerCfg.role !== 'MANAGER') {
+    return res.status(400).json({ error: `Agent ${managerId} is not a MANAGER` });
   }
 
-  const agentEntries = agentIds.map(id => {
+  // Resolve workers
+  const invalid = workerIds.filter(id => !getAgent(id));
+  if (invalid.length > 0) {
+    return res.status(400).json({ error: `Agent not found: ${invalid.join(', ')}` });
+  }
+
+  const managerEntry = {
+    id: uuid(),
+    role: 'MANAGER' as const,
+    name: managerCfg.name,
+    domainLabel: managerCfg.roleLabel,
+    configId: managerCfg.id,
+    status: 'idle' as const,
+  };
+
+  const workerEntries = workerIds.map(id => {
     const cfg = getAgent(id)!;
     return {
       id: uuid(),
-      role: cfg.role,
+      role: 'WORKER' as const,
       name: cfg.name,
       domainLabel: cfg.roleLabel,
       configId: cfg.id,
@@ -51,17 +73,7 @@ roomsRouter.post('/', (req, res) => {
     id: uuid(),
     topic: '自由讨论',
     state: 'RUNNING',
-    agents: [
-      {
-        id: uuid(),
-        role: 'MANAGER' as const,
-        name: '主持人',
-        domainLabel: '主持人',
-        configId: 'host',
-        status: 'idle' as const,
-      },
-      ...(agentEntries as DiscussionRoom['agents']),
-    ],
+    agents: [managerEntry, ...workerEntries],
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -73,7 +85,9 @@ roomsRouter.post('/', (req, res) => {
   roomsRepo.create(room);
   auditRepo.log('room:create', room.topic, undefined, {
     roomId: room.id,
-    agentCount: room.agents.length,
+    manager: managerEntry.name,
+    workerCount: workerEntries.length,
+    workers: workerEntries.map(w => w.name),
   });
   res.json(room);
 });

@@ -114,6 +114,9 @@ export async function handleUserMessage(
   const managerAgent = room.agents.find(a => a.role === 'MANAGER');
   if (!managerAgent) return;
 
+  const managerCfg = getAgent(managerAgent.configId);
+  const managerSystemPrompt = managerCfg?.systemPrompt ?? '专业主持人，负责热情接待、召集专家协作、管理讨论节奏';
+
   const workers = room.agents.filter(a => a.role === 'WORKER');
   const recentMessages = room.messages
     .slice(-10)
@@ -125,15 +128,14 @@ export async function handleUserMessage(
   // 3. Manager 流式输出（包含 A2A @mention）
   const managerOutput = await streamingCallAgent(
     {
-      domainLabel: '主持人',
-      systemPrompt:
-        '专业主持人，负责热情接待、召集专家协作、管理讨论节奏',
+      domainLabel: managerAgent.domainLabel,
+      systemPrompt: managerSystemPrompt,
       userMessage: `${prompt}\n\n## 最近对话记录\n${recentMessages || '（暂无）'}`,
     },
     roomId,
     managerAgent.id,
-    'host',
-    '主持人',
+    managerAgent.configId,
+    managerAgent.name,
     'statement',
     'MANAGER',
   );
@@ -208,14 +210,14 @@ export async function generateReport(roomId: string): Promise<string> {
 
   const report = await streamingCallAgent(
     {
-      domainLabel: '主持人',
+      domainLabel: managerAgent.domainLabel,
       systemPrompt: '专业主持人，整理讨论结论',
       userMessage: HOST_PROMPTS.GENERATE_REPORT(room.topic, allContent),
     },
     roomId,
     managerAgent.id,
-    'host',
-    '主持人',
+    managerAgent.configId,
+    managerAgent.name,
     'report',
     'MANAGER',
   );

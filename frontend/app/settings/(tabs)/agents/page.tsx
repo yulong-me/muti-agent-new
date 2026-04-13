@@ -12,7 +12,7 @@ interface AgentConfig {
   id: string
   name: string
   roleLabel: string
-  role: 'HOST' | 'AGENT'
+  role: 'MANAGER' | 'WORKER'
   provider: ProviderName
   providerOpts: {
     thinking?: boolean
@@ -74,7 +74,7 @@ function AgentRow({
     setForm(agent)
   }
 
-  const isHost = agent.role === 'HOST'
+  const isHost = agent.role === 'MANAGER'
   const providerColorClass = PROVIDER_COLORS[agent.provider]
 
   if (!editing) {
@@ -264,7 +264,7 @@ function AddAgentForm({ onAdded }: { onAdded: () => void }) {
     fetch(`${API}/api/agents`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, role: 'AGENT', providerOpts: { thinking: true }, enabled: true }),
+      body: JSON.stringify({ ...form, role: 'WORKER', providerOpts: { thinking: true }, enabled: true }),
     }).then(async r => {
       const data = await r.json()
       if (!r.ok) { setError((data as { error?: string }).error ?? '创建失败'); setSaving(false); return }
