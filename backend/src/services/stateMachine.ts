@@ -32,10 +32,11 @@ import {
   MAX_A2A_DEPTH,
   updateA2AContext,
 } from './routing/A2ARouter.js';
+import { debug, info, warn, error } from '../lib/logger.js';
 
 function telemetry(event: string, meta: Record<string, unknown>) {
   auditRepo.log(event, undefined, undefined, meta);
-  console.log(`[DEBUG] ${event}`, JSON.stringify(meta));
+  debug(event, meta);
 }
 
 function addMessage(
@@ -180,11 +181,21 @@ export async function routeToAgent(
   const managerAgent = room.agents.find(a => a.role === 'MANAGER');
   if (!managerAgent) return;
 
-  console.log(`[DEBUG] routeToAgent room=${roomId} content="${content?.slice(0, 20)}" toAgentId=${toAgentId} managerId=${managerAgent.id}`);
+// 补全用户旅程事件链（人类可读）
+  const contentSnippet = content.length > 80 ? content.slice(0, 80) + '…' : content;
+  const mentions = scanForA2AMentions(content);
+  info('msg:recv', {
+    roomId,
+    contentLength: content.length,
+    contentSnippet,
+    mentions,
+    toAgentId,
+    managerId: managerAgent.id,
+  });
 
   // backward compat: 无 toAgentId → 发给主持人
   if (!toAgentId || toAgentId === managerAgent.id) {
-    console.log(`[DEBUG] routeToAgent → MANAGER (backward compat or MANAGER target)`);
+    debug('route.to', { roomId, toAgentId, toAgentName: managerAgent.name, toAgentRole: 'MANAGER', path: 'handleUserMessage', reason: 'backward_compat' });
     await handleUserMessage(roomId, content);
     return;
   }
@@ -192,20 +203,20 @@ export async function routeToAgent(
   // 直接发给 Worker（跳过主持人分析）
   const target = room.agents.find(a => a.id === toAgentId);
   if (!target) {
-    console.log(`[DEBUG] routeToAgent → target NOT FOUND (toAgentId=${toAgentId})`);
+    warn('route.fallback', { roomId, toAgentId, reason: 'agent_not_found' });
     telemetry('route:agent_not_found', { roomId, toAgentId });
     return;
   }
   if (target.role !== 'WORKER') {
-    console.log(`[DEBUG] routeToAgent → target.role=${target.role} not WORKER, fallback to MANAGER`);
+    warn('route.fallback', { roomId, toAgentId, toAgentName: target.name, toAgentRole: target.role, reason: 'not_worker_fallback' });
     await handleUserMessage(roomId, content);
     return;
   }
-  console.log(`[DEBUG] routeToAgent → WORKER:${target.name}(${target.id})`);
+  debug('route.to', { roomId, toAgentId, toAgentName: target.name, toAgentRole: 'WORKER', path: 'callWorker' });
 
   // 保存用户消息，标记 toAgentId
   addUserMessage(roomId, content, target.id);
-  telemetry('msg:user:direct', { roomId, contentLength: content.length, toAgentId: target.id, toAgentName: target.name });
+  info('msg.user', { roomId, contentLength: content.length, toAgentId: target.id, toAgentName: target.name, toAgentRole: 'WORKER' });
 
   // 直接调用 Worker
   const recentMessages = room.messages
@@ -353,9 +364,18 @@ ${ctx.userMessage}`;
   });
   const msgId = msg?.id ?? '';
 
-  console.log(
-    `[DEBUG] stream_start agent=${agentName}(${agentId}) msgId=${msgId} room=${roomId} role=${agentRole}`,
-  );
+  // 用户旅程：AI 开始生成
+  info('ai:start', {
+    roomId,
+    agentName,
+    agentRole,
+    provider: providerName,
+    cliPath: (agentConfig?.providerOpts as any)?.cliPath ?? '',
+    promptLength: prompt.length,
+    sessionId: existingSessionId ?? 'new',
+    workspace,
+  });
+  debug('stream.start', { roomId, agentId, agentName, msgId, agentRole });
   emitStreamStart(roomId, agentId, agentName, Date.now(), msgId, agentRole);
   updateAgentStatus(roomId, agentId, 'thinking');
 
@@ -392,11 +412,7 @@ ${ctx.userMessage}`;
       }
     }
   } catch (err) {
-    const ts = new Date().toISOString();
-    console.error(
-      `[${ts}] [ERROR] streamingCallAgent provider=${providerName} agentId=${agentId}`,
-      err,
-    );
+    error('stream.error', { roomId, agentId, agentName, provider: providerName, error: String(err) });
     // 确保错误时也发出 stream_end 和 idle，防止 UI 卡在"回答中"
     if (msgId) {
       emitStreamEnd(roomId, agentId, msgId, { duration_ms: 0, total_cost_usd: 0, input_tokens: 0, output_tokens: 0 });
@@ -443,9 +459,19 @@ ${ctx.userMessage}`;
     }
   }
 
-  console.log(
-    `[DEBUG] stream_end agent=${agentName}(${agentId}) msgId=${msgId} duration=${duration_ms}ms deltas=${deltaCount} thoughts=${thinkingCount} outputLen=${accumulated.length}`,
-  );
+  // 用户旅程：AI 生成结束
+  info('ai:end', {
+    roomId,
+    agentName,
+    agentRole,
+    outputSnippet: accumulated.length > 80 ? accumulated.slice(0, 80) + '…' : accumulated,
+    outputLength: accumulated.length,
+    duration_ms,
+    total_cost_usd,
+    input_tokens,
+    output_tokens,
+  });
+  debug('stream.end', { roomId, agentId, agentName, msgId, duration_ms, deltaCount, thinkingCount, outputLen: accumulated.length });
   emitStreamEnd(roomId, agentId, msgId, {
     duration_ms,
     total_cost_usd,
@@ -472,9 +498,7 @@ export async function a2aOrchestrate(
   if (!room) return;
 
   let mentions = scanForA2AMentions(outputText);
-  console.log(
-    `[DEBUG] a2a_scan from=${fromAgentName} mentions=${JSON.stringify(mentions)} room=${roomId}`,
-  );
+  debug('a2a:scan', { roomId, fromAgentName, mentions });
   if (mentions.length === 0) return;
 
   // Output guard: only applies to Manager (host) agents in Clarify mode.
@@ -482,7 +506,7 @@ export async function a2aOrchestrate(
   const isManager = room.agents.some(a => a.id === fromAgentId && a.role === 'MANAGER');
   const hasQuestion = /[？?]/.test(outputText);
   if (isManager && hasQuestion && mentions.length > 1) {
-    console.log(`[DEBUG] a2a_guard: Manager question + ${mentions.length} mentions → keeping only first (@${mentions[0]})`);
+    debug('a2a:guard', { roomId, fromAgentName, mentionsCount: mentions.length + 1, keptMention: mentions[0] });
     mentions = [mentions[0]];
   }
 

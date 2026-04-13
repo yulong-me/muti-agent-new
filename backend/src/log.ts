@@ -1,5 +1,3 @@
-export function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, meta?: Record<string, unknown>) {
-  const ts = new Date().toISOString();
-  const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
-  console.log(`[${ts}] [${level}] ${msg}${metaStr}`);
-}
+// Re-export from lib/logger for backward compat
+export { log, debug, info, warn, error, logger } from './lib/logger.js';
+export type { LogLevel } from './lib/logger.js';

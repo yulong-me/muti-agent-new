@@ -8,6 +8,7 @@
  */
 
 import { Router } from 'express';
+import { error } from '../lib/logger.js';
 import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
@@ -151,7 +152,7 @@ roomsRouter.post('/:id/messages', async (req, res) => {
 
   // 异步处理，不阻塞响应
   routeToAgent(req.params.id, content.trim(), toAgentId).catch(err => {
-    console.error('[ERROR] routeToAgent failed:', err);
+    error('route:msg_error', { roomId: req.params.id, error: String(err) });
   });
 
   res.json({ status: 'ok' });

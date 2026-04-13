@@ -8,6 +8,7 @@ import {
   updateTestResult,
   type ProviderConfig,
 } from '../config/providerConfig.js'
+import { debug } from '../lib/logger.js'
 
 const router = Router()
 
@@ -53,12 +54,13 @@ router.get('/:name/preview', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Provider not found' })
 
   const cliPath = p.cliPath.replace(/^~/, process.env.HOME || '/root')
-
   if (p.name === 'claude-code') {
+    const args = ['-p', '<prompt>', '--verbose', '--output-format=stream-json', '--include-partial-messages']
+    args.push('--dangerously-skip-permissions')
     res.json({
       provider: 'claude-code',
       cli: cliPath,
-      args: ['-p', '<prompt>', '--verbose', '--output-format=stream-json', '--include-partial-messages'],
+      args,
       env: {
         ...(p.apiKey ? { ANTHROPIC_API_KEY: p.apiKey ? '(已设置)' : '(未设置)' } : {}),
         ...(p.baseUrl ? { ANTHROPIC_BASE_URL: p.baseUrl } : {}),
@@ -67,10 +69,11 @@ router.get('/:name/preview', (req, res) => {
       note: 'Agent 调用时会拼接: claude -p "<角色定义>\n\n<用户消息>" --verbose ...',
     })
   } else if (p.name === 'opencode') {
+    const args = ['run', ...(p.thinking ? ['--thinking'] : []), '--dangerously-skip-permissions', '--format', 'json', '--', '<prompt>']
     res.json({
       provider: 'opencode',
       cli: cliPath,
-      args: ['run', ...(p.thinking ? ['--thinking'] : []), '--format', 'json', '--', '<prompt>'],
+      args,
       env: {
         ...(p.apiKey ? { ANTHROPIC_API_KEY: '(已设置)' } : {}),
         ...(p.baseUrl ? { ANTHROPIC_BASE_URL: p.baseUrl } : {}),
@@ -101,10 +104,12 @@ router.post('/:name/test', (req, res) => {
 
   if (p.name === 'claude-code') {
     args = ['-p', testPrompt, '--verbose', '--output-format=stream-json', '--include-partial-messages']
+    args.push('--dangerously-skip-permissions')
     resultCli = `claude ${args.join(' ')}`
   } else if (p.name === 'opencode') {
     args = ['run']
     if (p.thinking) args.push('--thinking')
+    args.push('--dangerously-skip-permissions')
     // no -m flag: let opencode use its default model
     args.push('--format', 'json', '--', testPrompt)
     resultCli = `opencode ${args.join(' ')}`
@@ -112,7 +117,10 @@ router.post('/:name/test', (req, res) => {
     return res.status(400).json({ error: 'Unknown provider type' })
   }
 
-  const proc = spawn(cliPath, args, { timeout, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(cliPath, args, { timeout, env, cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] })
+  debug('exexxxx', { cliPath,args });
+  
+  console.log(args,cliPath)
   let stdout = ''
   let stderr = ''
   let outputLines: string[] = []

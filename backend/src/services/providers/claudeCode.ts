@@ -48,7 +48,10 @@ export async function* streamClaudeCodeProvider(
   const args = ['-p', prompt, '--verbose', '--output-format=stream-json', '--include-partial-messages'];
   // Default all permissions
   args.push('--dangerously-skip-permissions');
+  debug('provider:sessionId', {sessionId})
+
   if (sessionId) args.splice(1, 0, '--resume', sessionId);
+  debug('provider:sessionId', {sessionId})
 
   if (workspace) {
     args.push('--add-dir', workspace);

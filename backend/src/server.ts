@@ -5,6 +5,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { roomsRouter } from './routes/rooms.js';
 import { agentsRouter } from './routes/agents.js';
 import providersRouter from './routes/providers.js';
+import { logsRouter } from './routes/logs.js';
 import { store } from './store.js';
 import { log } from './log.js';
 import { initDB, roomsRepo } from './db/index.js';
@@ -44,6 +45,7 @@ app.use((req, res, next) => {
 app.use('/api/rooms', roomsRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/providers', providersRouter);
+app.use('/api/logs', logsRouter);
 
 // ── Debug endpoint ──────────────────────────────────────────────────────────
 app.get('/api/debug', (_req, res) => {

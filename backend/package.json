@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "LOG_LEVEL=debug tsx watch src/server.ts",
     "build": "tsc"
   },
   "dependencies": {
