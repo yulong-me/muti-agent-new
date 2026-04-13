@@ -2,11 +2,7 @@ import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { ClaudeEvent } from './index.js';
 import { getProvider } from '../../config/providerConfig.js';
-
-function telemetry(event: 'call_start' | 'call_end' | 'call_error', meta: Record<string, unknown>) {
-  const ts = new Date().toISOString();
-  console.log(`[${ts}] [PROVIDER:claude-code] ${event} ${JSON.stringify(meta)}`);
-}
+import { debug, info, error } from '../../lib/logger.js';
 
 function shellQuote(arg: string): string {
   if (arg === '') return "''";
@@ -24,16 +20,20 @@ export async function* streamClaudeCodeProvider(
   const sessionId = opts.sessionId as string | undefined;
   const roomId = opts.roomId as string | undefined;
   const agentName = opts.agentName as string | undefined;
+  // Default all permissions: write, exec, network
 
   // Resolve CLI path (expand ~)
   const cliPath = (providerCfg?.cliPath ?? 'claude').replace(/^~/, process.env.HOME || '/root');
+
+  // Workspace support — 每个 Room 有独立工作目录
+  const workspace = opts.workspace as string | undefined;
 
   // Build environment: inject API key and base URL if configured
   const env: Record<string, string> = { ...(process.env as Record<string, string>) };
   if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
   if (providerCfg?.baseUrl) env.ANTHROPIC_BASE_URL = providerCfg.baseUrl;
 
-  telemetry('call_start', {
+  debug('provider:call_start', {
     roomId,
     agentId,
     agentName,
@@ -41,23 +41,35 @@ export async function* streamClaudeCodeProvider(
     timeout,
     sessionId: sessionId ?? 'new',
     cliPath,
+    cwd: workspace ?? process.cwd(),
+    spawnOpts: { cwd: workspace ?? process.cwd(), timeout, env, stdio: ['ignore', 'pipe', 'pipe'] },
   });
 
   const args = ['-p', prompt, '--verbose', '--output-format=stream-json', '--include-partial-messages'];
+  // Default all permissions
+  args.push('--dangerously-skip-permissions');
   if (sessionId) args.splice(1, 0, '--resume', sessionId);
 
-  // Workspace support — 每个 Room 有独立工作目录
-  const workspace = opts.workspace as string | undefined;
   if (workspace) {
     args.push('--add-dir', workspace);
   }
 
   const command = `${shellQuote(cliPath)} ${args.map(a => shellQuote(a)).join(' ')}`;
-  console.log(
-    `[PROVIDER:claude-code] COMMAND room=${roomId ?? '-'} agent=${agentName ?? agentId}: ${command}`,
-  );
+  debug('provider:command', {
+    roomId,
+    agentId: agentName ?? agentId,
+    command,
+    provider: 'claude-code',
+    cwd: workspace ?? process.cwd(),
+    spawnOpts: { cwd: workspace ?? process.cwd(), timeout, env, stdio: ['ignore', 'pipe', 'pipe'] },
+  });
 
-  const proc = spawn(cliPath, args, { timeout, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(cliPath, args, {
+    timeout,
+    env,
+    cwd: workspace ?? process.cwd(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
   let stderrBuffer = '';
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });
@@ -125,15 +137,15 @@ export async function* streamClaudeCodeProvider(
     proc.on('close', (code) => {
       if (code !== 0) {
         const errMsg = stderrBuffer.trim() || `CLI exited with code ${code}`;
-        telemetry('call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
+        error('provider:call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
         reject(new Error(errMsg));
       } else {
-        telemetry('call_end', { roomId, agentId, agentName, duration_ms: Date.now() - start, sessionId: capturedSessionId });
+        debug('provider:call_end', { roomId, agentId, agentName, duration_ms: Date.now() - start, sessionId: capturedSessionId });
         resolve();
       }
     });
     proc.on('error', (err) => {
-      telemetry('call_error', { roomId, agentId, agentName, error: err.message });
+      error('provider:error', { roomId, agentId, agentName, error: err.message });
       reject(err);
     });
   });

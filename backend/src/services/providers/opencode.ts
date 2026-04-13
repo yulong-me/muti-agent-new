@@ -2,11 +2,7 @@ import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { ClaudeEvent } from './index.js';
 import { getProvider } from '../../config/providerConfig.js';
-
-function telemetry(event: 'call_start' | 'call_end' | 'call_error', meta: Record<string, unknown>) {
-  const ts = new Date().toISOString();
-  console.log(`[${ts}] [PROVIDER:opencode] ${event} ${JSON.stringify(meta)}`);
-}
+import { debug, error } from '../../lib/logger.js';
 
 function shellQuote(arg: string): string {
   if (arg === '') return "''";
@@ -26,16 +22,20 @@ export async function* streamOpenCodeProvider(
   const sessionId = opts.sessionId as string | undefined;
   const roomId = opts.roomId as string | undefined;
   const agentName = opts.agentName as string | undefined;
+  // Default all permissions: write, exec, network
 
   // Resolve CLI path (expand ~)
   const cliPath = (providerCfg?.cliPath ?? 'opencode').replace(/^~/, process.env.HOME || '/root');
+
+  // Workspace support — 每个 Room 有独立工作目录
+  const workspace = opts.workspace as string | undefined;
 
   // Build environment: inject API key and base URL if configured
   const env: Record<string, string> = { ...(process.env as Record<string, string>) };
   if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
   if (providerCfg?.baseUrl) env.ANTHROPIC_BASE_URL = providerCfg.baseUrl;
 
-  telemetry('call_start', {
+  debug('provider:call_start', {
     roomId,
     agentId,
     agentName,
@@ -44,27 +44,38 @@ export async function* streamOpenCodeProvider(
     thinking,
     sessionId: sessionId ?? 'new',
     cliPath,
+    cwd: workspace ?? '/tmp',
+    spawnOpts: { cwd: workspace ?? '/tmp', timeout, stdio: ['ignore', 'pipe', 'pipe'] },
   });
 
   // Build args: opencode run [opts] -- <prompt>
   // Critical: always use --format json (clowder-ai reference implementation)
   const args: string[] = ['run'];
+  if (workspace) {
+    // opencode does not support --add-dir; use --dir + spawn cwd to ensure room workspace.
+    args.push('--dir', workspace);
+  }
   if (sessionId) {
     args.push('--session', sessionId);
   }
   if (thinking) {
     args.push('--thinking');
   }
+  // Default all permissions
+  args.push('--dangerously-skip-permissions');
   args.push('--format', 'json');
   args.push('--', prompt);
 
-  // Workspace support — 每个 Room 有独立工作目录
-  const workspace = opts.workspace as string | undefined;
-
   const command = `${shellQuote(cliPath)} ${args.map(a => shellQuote(a)).join(' ')}`;
-  console.log(
-    `[PROVIDER:opencode] COMMAND room=${roomId ?? '-'} agent=${agentName ?? agentId}: ${command}${workspace ? ` (cwd=${workspace})` : ''}`,
-  );
+  debug('provider:command', {
+    roomId,
+    agentId: agentName ?? agentId,
+    command,
+    workspace,
+    provider: 'opencode',
+    cwd: workspace ?? '/tmp',
+    spawnOpts: { cwd: workspace ?? '/tmp', timeout, stdio: ['ignore', 'pipe', 'pipe'] },
+  });
 
   const proc = spawn(cliPath, args, { timeout, env, cwd: workspace ?? '/tmp', stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -82,13 +93,13 @@ export async function* streamOpenCodeProvider(
     try {
       parsed = JSON.parse(line);
     } catch {
-      if (line.trim()) console.log(`[PROVIDER:opencode] NON_JSON: ${line.slice(0,200)}`);
+      if (line.trim()) debug('provider:non_json', { roomId, agentId, agentName, line: line.slice(0, 200) });
       continue;
     }
 
     const eventType = parsed.type as string;
     const part = parsed.part as Record<string, unknown> | undefined;
-    console.log(`[PROVIDER:opencode] EVENT: type=${eventType} partType=${part?.type}`);
+    debug('provider:event', { roomId, agentId, agentName, eventType, partType: part?.type });
 
     // Capture session ID from step_start
     if (eventType === 'step_start' && !capturedSessionId) {
@@ -128,15 +139,15 @@ export async function* streamOpenCodeProvider(
     proc.on('close', (code) => {
       if (code !== 0) {
         const errMsg = stderrBuffer.trim() || `CLI exited with code ${code}`;
-        telemetry('call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
+        error('provider:call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
         reject(new Error(errMsg));
       } else {
-        telemetry('call_end', { roomId, agentId, agentName, duration_ms: Date.now() - start, sessionId: capturedSessionId });
+        debug('provider:call_end', { roomId, agentId, agentName, duration_ms: Date.now() - start, sessionId: capturedSessionId });
         resolve();
       }
     });
     proc.on('error', (err) => {
-      telemetry('call_error', { roomId, agentId, agentName, error: err.message });
+      error('provider:error', { roomId, agentId, agentName, error: err.message });
       reject(err);
     });
   });
