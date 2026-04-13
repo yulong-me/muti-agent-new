@@ -17,12 +17,14 @@ function MentionPicker({
   query,
   highlightIndex,
   onSelect,
+  onHighlight,
   position,
 }: {
   agents: Agent[]
   query: string
   highlightIndex: number
   onSelect: (name: string) => void
+  onHighlight: (index: number) => void
   position: { top: number; left: number }
 }) {
   const filtered = query
@@ -33,8 +35,9 @@ function MentionPicker({
 
   return (
     <div
+      data-mention-picker="1"
       className="fixed z-50 bg-surface border border-line rounded-xl shadow-2xl overflow-hidden"
-      style={{ top: position.top, left: Math.min(position.left, typeof window !== 'undefined' ? window.innerWidth - 280 : position.left), minWidth: 220, maxWidth: 280 }}
+      style={{ top: position.top, left: Math.max(0, Math.min(position.left, typeof window !== 'undefined' ? window.innerWidth - 240 : position.left)), minWidth: 220, maxWidth: 280 }}
     >
       <div className="px-3 py-1.5 bg-surface-muted border-b border-line">
         <span className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider">选择专家</span>
@@ -49,7 +52,7 @@ function MentionPicker({
               className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                 isHighlighted ? 'bg-accent/10' : 'hover:bg-surface-muted/60'
               }`}
-              onMouseEnter={() => {}}
+              onMouseEnter={() => onHighlight(i)}
               onClick={() => onSelect(agent.name)}
             >
               <div className="w-7 h-7 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
@@ -491,12 +494,12 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     ? agents.filter(a => a.name.toLowerCase().includes(mentionQuery.toLowerCase()))
     : agents
 
-  const openMentionPicker = useCallback((cursorPos: number, top: number, left: number) => {
+  const openMentionPicker = useCallback((mentionAtIdx: number, query: string, top: number, left: number) => {
     setMentionPickerOpen(true)
-    setMentionQuery('')
-    setMentionStartIdx(cursorPos)
+    setMentionQuery(query)
+    setMentionStartIdx(mentionAtIdx)
     setMentionHighlightIdx(0)
-    mentionPositionRef.current = { top: top + 4, left: Math.min(left, typeof window !== 'undefined' ? window.innerWidth - 290 : left) }
+    mentionPositionRef.current = { top, left: Math.max(0, Math.min(left, typeof window !== 'undefined' ? window.innerWidth - 240 : left)) }
   }, [])
 
   const closeMentionPicker = useCallback(() => {
@@ -505,11 +508,25 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     setMentionStartIdx(-1)
   }, [])
 
+  useEffect(() => {
+    if (!mentionPickerOpen) return
+    const onMouseDown = (ev: MouseEvent) => {
+      const target = ev.target as HTMLElement | null
+      if (!target) return
+      if (textareaRef.current?.contains(target)) return
+      if (target.closest('[data-mention-picker="1"]')) return
+      closeMentionPicker()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [mentionPickerOpen, closeMentionPicker])
+
   const selectMentionAgent = useCallback((agentName: string) => {
     const ta = textareaRef.current
-    if (!ta) return
+    if (!ta || mentionStartIdx < 0) return
+    const cursor = ta.selectionStart ?? userInput.length
     const before = userInput.slice(0, mentionStartIdx)
-    const after = userInput.slice(ta.selectionStart)
+    const after = userInput.slice(cursor)
     const newInput = before + '@' + agentName + ' ' + after
     setUserInput(newInput)
     closeMentionPicker()
@@ -538,21 +555,15 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       const atPos = lineStart + lastAt
       const charBefore = atPos > 0 ? val[atPos - 1] : ''
       if (charBefore === '' || charBefore === ' ' || charBefore === '\n') {
-        // Position the popover near the textarea
+        // Position the popover directly below the textarea
         const rect = textareaRef.current?.getBoundingClientRect()
         if (rect) {
-          // Approximate cursor position based on line height
-          const lineHeight = parseInt(getComputedStyle(textareaRef.current!).lineHeight) || 24
-          const lines = textOnLine.slice(0, lastAt).split('\n')
-          const col = lastAt
-          const top = rect.top + lineHeight * Math.min(lines.length, 3)
-          const left = rect.left + Math.min(col * 8, rect.width - 220)
-          openMentionPicker(cursor, top, left)
+          const top = rect.bottom + 4
+          const left = rect.left
+          openMentionPicker(atPos, query, top, left)
         } else {
-          openMentionPicker(cursor, 300, 50)
+          openMentionPicker(atPos, query, 300, 50)
         }
-        setMentionQuery(query)
-        setMentionHighlightIdx(0)
         return
       }
     }
@@ -570,6 +581,13 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     }
 
     const count = filteredAgents.length
+    if (count === 0) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeMentionPicker()
+      }
+      return
+    }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -585,12 +603,6 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     } else if (e.key === 'Escape') {
       e.preventDefault()
       closeMentionPicker()
-    } else if (e.key === 'Backspace') {
-      // Let the normal backspace happen; if it deletes the @, close picker
-      // We'll handle this via a small timeout to check after the change
-      closeMentionPicker()
-    } else {
-      // Any other key: let it through, update query
     }
   }, [mentionPickerOpen, filteredAgents, mentionHighlightIdx, selectMentionAgent, closeMentionPicker])
 
@@ -875,6 +887,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                   query={mentionQuery}
                   highlightIndex={mentionHighlightIdx}
                   onSelect={selectMentionAgent}
+                  onHighlight={setMentionHighlightIdx}
                   position={mentionPositionRef.current}
                 />
               )}
@@ -887,12 +900,13 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
                   disabled={sending}
-                  rows={1}
-                  style={{ height: 'auto' }}
+                  style={{ height: '48px' }}
                   onInput={e => {
                     const ta = e.currentTarget
-                    ta.style.height = 'auto'
-                    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'
+                    const newHeight = Math.min(ta.scrollHeight, 160)
+                    if (newHeight > ta.clientHeight) {
+                      ta.style.height = newHeight + 'px'
+                    }
                   }}
                 />
                 <button
