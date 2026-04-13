@@ -137,6 +137,7 @@ roomsRouter.post('/:id/messages', async (req, res) => {
   }
 
   const { content, toAgentId } = req.body as { content?: string; toAgentId?: string };
+  console.log(`[DEBUG] POST /messages room=${req.params.id} content="${content?.slice(0, 30)}" toAgentId=${toAgentId} agents=[${room.agents.map(a => `${a.id}(${a.role}:${a.name})`).join(', ')}]`);
   if (!content?.trim()) {
     return res.status(400).json({ error: 'content required' });
   }
@@ -145,8 +146,12 @@ roomsRouter.post('/:id/messages', async (req, res) => {
   if (toAgentId) {
     const target = room.agents.find(a => a.id === toAgentId);
     if (!target) {
+      console.log(`[DEBUG] POST /messages → toAgentId "${toAgentId}" NOT FOUND in room agents`);
       return res.status(400).json({ error: `Agent not found: ${toAgentId}` });
     }
+    console.log(`[DEBUG] POST /messages → routing to ${target.role}:${target.name} (id=${target.id})`);
+  } else {
+    console.log(`[DEBUG] POST /messages → no toAgentId, backward compat to MANAGER`);
   }
 
   // 异步处理，不阻塞响应

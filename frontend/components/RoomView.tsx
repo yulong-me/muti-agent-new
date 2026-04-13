@@ -519,7 +519,11 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   useEffect(() => {
     if (!roomId || agents.length === 0) return
     const manager = agents.find(a => a.role === 'MANAGER')
-    if (manager) setSelectedRecipientId(prev => prev ?? manager.id)
+    console.log(`[RoomView] useEffect[agents] room=${roomId} agentsCount=${agents.length} manager=${manager ? `${manager.name}(${manager.id})` : 'NONE'}`)
+    if (manager) setSelectedRecipientId(prev => {
+      console.log(`[RoomView] setSelectedRecipientId prev=${prev} → ${prev ?? manager.id}`)
+      return prev ?? manager.id
+    })
   }, [roomId, agents])
 
   // @mention picker helpers
@@ -568,6 +572,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     closeMentionPicker()
     // F0042: 选中该 agent 作为接收人
     const target = agents.find(a => a.name === agentName)
+    console.log(`[RoomView] selectMentionAgent agentName="${agentName}" target=${target ? `${target.name}(${target.role}, id=${target.id})` : 'NOT FOUND'} agentsCount=${agents.length}`)
     if (target) setSelectedRecipientId(target.id)
     // Restore focus and cursor after the inserted text
     setTimeout(() => {
@@ -652,6 +657,9 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     setMentionPickerOpen(false)
     setSending(true)
     const content = userInput.trim()
+    const recipientId = selectedRecipientId
+    const recipient = agents.find(a => a.id === recipientId)
+    console.log(`[RoomView] handleSendMessage content="${content.slice(0, 30)}" selectedRecipientId=${recipientId} recipient=${recipient?.name}(${recipient?.role}) agentsCount=${agents.length}`)
     setUserInput('')
     try {
       const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`, {
