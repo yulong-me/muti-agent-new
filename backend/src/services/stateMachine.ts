@@ -429,6 +429,11 @@ export async function a2aOrchestrate(
       depth: currentDepth + 1,
     });
 
+    // Filter out self-mentions from output text so agent doesn't @mention itself
+    const filteredOutput = outputText
+      .replace(new RegExp(`@${targetAgent.name}(?![\\w])`, 'g'), targetAgent.name)
+      .replace(new RegExp(`@${targetAgent.domainLabel}(?![\\w])`, 'g'), targetAgent.domainLabel);
+
     const a2aPrompt = `【A2A 协作请求】
 
 来自：${fromAgentName}
@@ -436,10 +441,10 @@ export async function a2aOrchestrate(
 议题：${room.topic}
 
 ${fromAgentName} 的输出：
-${outputText}
+${filteredOutput}
 
-请基于以上上下文，以你的专业角色（${targetAgent.domainLabel}）继续工作。
-如需调用其他专家，请使用行首 @mention 格式。`;
+你是 ${targetAgent.domainLabel}。请基于以上上下文继续深入讨论或补充观点。
+如果需要其他专家参与，请使用行首 @mention 格式（不要 @ 自己）。`;
 
     await streamingCallAgent(
       {
