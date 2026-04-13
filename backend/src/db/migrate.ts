@@ -7,6 +7,13 @@ import { log } from '../log.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
+/** Normalize legacy agent roles to F004 values */
+function normalizeRole(role: string): string {
+  if (role === 'AGENT') return 'WORKER';
+  if (role === 'HOST') return 'MANAGER';
+  return role;
+}
+
 /** Apply DDL schema */
 export function initSchema(): void {
   const schemaPath = path.join(__dirname, 'schema.sql');
@@ -18,6 +25,17 @@ export function initSchema(): void {
     log('INFO', 'db:schema:migrate:agents:tags');
   } catch {
     // Column already exists — safe to ignore
+  }
+
+  // Normalize existing agent roles: AGENT→WORKER, HOST→MANAGER (always run)
+  db.exec("UPDATE agents SET role = 'WORKER' WHERE role = 'AGENT'");
+  db.exec("UPDATE agents SET role = 'MANAGER' WHERE role = 'HOST'");
+  log('INFO', 'db:schema:migrate:agents:role_normalized');
+
+  // Startup warning: check for any remaining legacy roles
+  const legacy = db.prepare("SELECT COUNT(*) as cnt FROM agents WHERE role IN ('AGENT','HOST')").get() as { cnt: number };
+  if (legacy.cnt > 0) {
+    log('WARN', `db:agents:legacy_roles_remaining=${legacy.cnt}`);
   }
 
   // Migration: add agent_ids column to rooms table for persistent agent membership
@@ -133,7 +151,7 @@ export function migrateFromJson(): void {
           insert.run({
             id: a.id as string,
             name: a.name as string,
-            role: a.role as string,
+            role: normalizeRole(a.role as string),
             roleLabel: (a.roleLabel ?? a.name) as string,
             provider: a.provider as string,
             providerOpts: JSON.stringify(a.providerOpts ?? {}),
