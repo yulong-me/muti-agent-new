@@ -42,7 +42,7 @@ function MentionPicker({
       <div className="px-3 py-1.5 bg-surface-muted border-b border-line">
         <span className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider">选择专家</span>
       </div>
-      <div className="max-h-60 overflow-y-auto custom-scrollbar">
+      <div className="max-h-48 overflow-y-auto custom-scrollbar">
         {filtered.map((agent, i) => {
           const colors = AGENT_COLORS[agent.name] || DEFAULT_AGENT_COLOR
           const isHighlighted = i === highlightIndex
@@ -555,14 +555,16 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       const atPos = lineStart + lastAt
       const charBefore = atPos > 0 ? val[atPos - 1] : ''
       if (charBefore === '' || charBefore === ' ' || charBefore === '\n') {
-        // Position the popover directly below the textarea
+        // Position the popover ABOVE the textarea, clamping to viewport top
         const rect = textareaRef.current?.getBoundingClientRect()
         if (rect) {
-          const top = rect.bottom + 4
+          const PANEL_HEIGHT = 280
+          const rawTop = rect.top - PANEL_HEIGHT - 4
+          const top = typeof window !== 'undefined' ? Math.max(8, rawTop) : rawTop
           const left = rect.left
           openMentionPicker(atPos, query, top, left)
         } else {
-          openMentionPicker(atPos, query, 300, 50)
+          openMentionPicker(atPos, query, 50, 50)
         }
         return
       }
