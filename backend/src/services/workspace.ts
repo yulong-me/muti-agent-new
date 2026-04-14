@@ -21,6 +21,7 @@ import { fileURLToPath } from 'url';
 // 使用项目根目录下的 workspaces/，避免 /workspace 需要 root 权限
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_BASE = path.resolve(__dirname, '../../workspaces');
+const WORKSPACE_ARCHIVE = path.resolve(__dirname, '../../workspaces-archive');
 
 export function getWorkspacePath(roomId: string): string {
   return path.join(WORKSPACE_BASE, `room-${roomId}`);
@@ -40,4 +41,19 @@ export async function ensureWorkspace(roomId: string): Promise<string> {
  */
 export function getWorkspaceArgs(roomId: string): string[] {
   return ['--add-dir', getWorkspacePath(roomId)];
+}
+
+/**
+ * 将 workspace 移动到归档目录（软删除时调用）
+ */
+export async function archiveWorkspace(roomId: string): Promise<void> {
+  const src = getWorkspacePath(roomId);
+  const dest = path.join(WORKSPACE_ARCHIVE, `room-${roomId}`);
+  try {
+    await fs.mkdir(WORKSPACE_ARCHIVE, { recursive: true });
+    await fs.rename(src, dest);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return; // 目录本来就不存在，无所谓
+    throw err;
+  }
 }

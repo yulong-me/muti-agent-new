@@ -69,11 +69,28 @@ export const roomsRepo = {
   },
 
   list(): DiscussionRoom[] {
-    const rows = db.prepare('SELECT id FROM rooms ORDER BY updated_at DESC').all() as { id: string }[];
+    const rows = db.prepare('SELECT id FROM rooms WHERE deleted_at IS NULL ORDER BY updated_at DESC').all() as { id: string }[];
     return rows.map(r => this.get(r.id)!);
   },
 
-  delete(id: string): void {
+  archive(id: string): void {
+    db.prepare('UPDATE rooms SET deleted_at = ? WHERE id = ?').run(Date.now(), id);
+  },
+
+  listArchived(): { id: string; topic: string; state: string; createdAt: number; deletedAt: number }[] {
+    const rows = db.prepare('SELECT id, topic, state, created_at, deleted_at FROM rooms WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC').all() as {
+      id: string; topic: string; state: string; created_at: number; deleted_at: number
+    }[];
+    return rows.map(r => ({
+      id: r.id,
+      topic: r.topic,
+      state: r.state,
+      createdAt: r.created_at,
+      deletedAt: r.deleted_at,
+    }));
+  },
+
+  permanentDelete(id: string): void {
     db.prepare('DELETE FROM messages WHERE room_id = ?').run(id);
     db.prepare('DELETE FROM rooms WHERE id = ?').run(id);
   },

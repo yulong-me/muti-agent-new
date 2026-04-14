@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bot, Server, ChevronLeft } from 'lucide-react'
+import { Bot, Server, ChevronLeft, Archive } from 'lucide-react'
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   const isAgents = pathname === '/settings/agents'
   const isProviders = pathname === '/settings/providers'
+  const isArchive = pathname === '/settings/archive'
 
   return (
     <div className="min-h-screen bg-bg">
@@ -34,6 +35,15 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
             }`}
           >
             <Server className="w-3.5 h-3.5" /> Provider 配置
+          </Link>
+          <span className="text-line">|</span>
+          <Link
+            href="/settings/archive"
+            className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors ${
+              isArchive ? 'text-accent font-bold' : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5" /> 归档
           </Link>
         </div>
       </div>

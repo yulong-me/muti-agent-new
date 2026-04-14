@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? '${API}'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { io, type Socket } from 'socket.io-client'
@@ -103,7 +105,7 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
 
   // ─── Socket ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const socket = io('http://localhost:7001', { transports: ['websocket', 'polling'] })
+    const socket = io('${API}', { transports: ['websocket', 'polling'] })
     socketRef.current = socket
 
     socket.on('connect', () => telemetry('socket:connect'))
@@ -240,7 +242,7 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
   // ─── Room list ───────────────────────────────────────────────────────────────
   useEffect(() => {
     telemetry('room:list:load')
-    fetch('http://localhost:7001/api/rooms').then(r => r.ok ? r.json() : []).then((data: any[]) => {
+    fetch('${API}/api/rooms').then(r => r.ok ? r.json() : []).then((data: any[]) => {
       setRooms(data.map((room: any) => ({ id: room.id, topic: room.topic, createdAt: room.createdAt, state: room.state as DiscussionState })))
       const agentsMap: Record<string, Agent[]> = {}
       const toAgentMap: Record<string, string | undefined> = {}
@@ -259,7 +261,7 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
     if (!roomId) return
     const poll = async () => {
       try {
-        const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`)
+        const res = await fetch(`${API}/api/rooms/${roomId}/messages`)
         if (!res.ok) return
         const data = await res.json()
         const newState = data.state || 'RUNNING'
@@ -413,7 +415,7 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
     })
     setUserInput('')
     try {
-      const res = await fetch(`http://localhost:7001/api/rooms/${roomId}/messages`, {
+      const res = await fetch(`${API}/api/rooms/${roomId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, toAgentId: recipientId }),
@@ -453,8 +455,8 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
           onNewRoom={() => setIsCreateModalOpen(true)}
           onSelectRoom={id => router.push(`/room/${id}`)}
           onDeleteRoom={async (id) => {
-            if (!confirm('确定删除此讨论？')) return
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rooms/${id}`, { method: 'DELETE' })
+            const res = await fetch(`${API}/api/rooms/${id}/archive`, { method: 'PATCH' })
+            if (!res.ok) return
             if (id === roomId) router.push('/')
             else setRooms(rooms => rooms.filter(r => r.id !== id))
           }}
@@ -469,8 +471,8 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
           onNewRoom={() => setIsCreateModalOpen(true)}
           onSelectRoom={id => router.push(`/room/${id}`)}
           onDeleteRoom={async (id) => {
-            if (!confirm('确定删除此讨论？')) return
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rooms/${id}`, { method: 'DELETE' })
+            const res = await fetch(`${API}/api/rooms/${id}/archive`, { method: 'PATCH' })
+            if (!res.ok) return
             if (id === roomId) router.push('/')
             else setRooms(rooms => rooms.filter(r => r.id !== id))
           }}

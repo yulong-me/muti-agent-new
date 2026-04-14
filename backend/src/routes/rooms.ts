@@ -15,6 +15,7 @@ import type { DiscussionRoom } from '../types.js';
 import { handleUserMessage, routeToAgent } from '../services/stateMachine.js';
 import { roomsRepo, sessionsRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
+import { archiveWorkspace } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
 
 export const roomsRouter = Router();
@@ -158,16 +159,30 @@ roomsRouter.post('/:id/messages', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// DELETE /api/rooms/:id — 删除讨论室
-roomsRouter.delete('/:id', (req, res) => {
+// PATCH /api/rooms/:id/archive — 归档讨论室（软删除）
+roomsRouter.patch('/:id/archive', async (req, res) => {
   const { id } = req.params;
   const room = store.get(id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
 
-  roomsRepo.delete(id);
-  sessionsRepo.deleteByRoom(id);
+  roomsRepo.archive(id);
   store.delete(id);
+  await archiveWorkspace(id).catch(() => { }); // workspace 不存在也无妨
 
-  auditRepo.log('room:delete', room.topic, undefined, { roomId: id });
+  auditRepo.log('room:archive', room.topic, undefined, { roomId: id });
+  res.json({ status: 'ok' });
+});
+
+// GET /api/rooms/archived — 列出已归档讨论室
+roomsRouter.get('/archived', (_req, res) => {
+  res.json(roomsRepo.listArchived());
+});
+
+// DELETE /api/rooms/archived/:id — 彻底删除已归档讨论室
+roomsRouter.delete('/archived/:id', (req, res) => {
+  const { id } = req.params;
+  roomsRepo.permanentDelete(id);
+  sessionsRepo.deleteByRoom(id);
+  auditRepo.log('room:permanent_delete', '', undefined, { roomId: id });
   res.json({ status: 'ok' });
 });
