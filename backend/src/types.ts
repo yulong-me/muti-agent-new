@@ -72,6 +72,8 @@ export interface DiscussionRoom {
   agents: Agent[];
   messages: Message[];
   report?: string;
+  /** F006: 自定义工作目录，留空则使用 workspaces/room-{id}/ */
+  workspace?: string;
   createdAt: number;
   updatedAt: number;
   /** agentId → session ID for CLI resume/continue support */

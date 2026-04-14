@@ -62,6 +62,14 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  // F006: add workspace column to rooms table
+  try {
+    db.exec("ALTER TABLE rooms ADD COLUMN workspace TEXT");
+    log('INFO', 'db:schema:migrate:rooms:workspace');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   // F004 Migration: INIT/RESEARCH/DEBATE/CONVERGING → RUNNING, HOST → MANAGER, AGENT → WORKER
   try {
     const roomsSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='rooms'").get() as { sql: string } | undefined;
@@ -97,7 +105,7 @@ export function initSchema(): void {
     // agent_ids: 旧 room 无存储，回填 ["host"]（主持人必定在）
     // deleted_at: 旧 room 全部为 NULL（未归档）
     db.exec(`
-      INSERT INTO rooms (id, topic, state, report, agent_ids, created_at, updated_at, deleted_at)
+      INSERT INTO rooms (id, topic, state, report, agent_ids, workspace, created_at, updated_at, deleted_at)
       SELECT
         id, topic,
         CASE state
@@ -109,6 +117,7 @@ export function initSchema(): void {
         END,
         report,
         '["host"]',
+        NULL,
         created_at, updated_at,
         NULL
       FROM rooms_backup`);

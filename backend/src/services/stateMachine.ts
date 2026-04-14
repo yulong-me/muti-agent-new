@@ -341,13 +341,13 @@ async function streamingCallAgent(
   const agentConfig = getAgent(configId);
   const providerName = agentConfig?.provider ?? 'claude-code';
   const systemPrompt = agentConfig?.systemPrompt ?? ctx.systemPrompt;
-  const workspace = await ensureWorkspace(roomId);
+  const room = store.get(roomId);
+  const workspace = await ensureWorkspace(roomId, room?.workspace);
   const prompt = `【工作目录】${workspace}
 【角色】${ctx.domainLabel}（${systemPrompt}）
 
 ${ctx.userMessage}`;
 
-  const room = store.get(roomId);
   const existingSessionId = room?.sessionIds[agentName];
   const providerOpts: Record<string, unknown> = {
     ...(agentConfig?.providerOpts ?? {}),

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { X, Play, BrainCircuit } from 'lucide-react'
 
 const API = 'http://localhost:7001'
+const FRONTEND_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:7001'
 
 interface AgentConfig {
   id: string
@@ -65,6 +66,7 @@ export default function CreateRoomModal({
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [workspacePath, setWorkspacePath] = useState('')
   const router = useRouter()
 
   const managers = allAgents.filter(a => a.role === 'MANAGER' && a.enabled)
@@ -87,6 +89,7 @@ export default function CreateRoomModal({
       setSelected(new Set())
       setActiveTag(null)
       setError('')
+      setWorkspacePath('')
     }
   }, [isOpen])
 
@@ -113,13 +116,14 @@ export default function CreateRoomModal({
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch(`${API}/api/rooms`, {
+      const res = await fetch(`${FRONTEND_API}/api/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic,
           managerId: selectedManager,
           workerIds: workers.filter(a => selected.has(a.id)).map(a => a.id),
+          ...(workspacePath.trim() ? { workspacePath: workspacePath.trim() } : {}),
         }),
       })
       if (!res.ok) {
@@ -203,6 +207,19 @@ export default function CreateRoomModal({
               </div>
             </div>
           )}
+
+          {/* F006: Custom Workspace */}
+          <div className="mb-5 p-4 bg-surface rounded-2xl border border-line">
+            <p className="text-[12px] font-bold text-ink-soft uppercase tracking-wide mb-2">工作目录（可选）</p>
+            <input
+              type="text"
+              value={workspacePath}
+              onChange={e => setWorkspacePath(e.target.value)}
+              placeholder="/Users/yulong/work/my-project"
+              className="w-full px-4 py-2.5 rounded-xl bg-bg border border-line text-[14px] text-ink placeholder:text-ink-soft/50 focus:outline-none focus:border-accent/50 transition-colors"
+            />
+            <p className="text-[11px] text-ink-soft/60 mt-1.5">留空则使用默认临时工作区，agent 将在该目录下读写文件</p>
+          </div>
 
           {/* Tag Filter Bar */}
           {!loadingAgents && workers.length > 0 && (() => {

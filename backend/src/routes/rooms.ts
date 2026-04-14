@@ -15,7 +15,7 @@ import type { DiscussionRoom } from '../types.js';
 import { handleUserMessage, routeToAgent } from '../services/stateMachine.js';
 import { roomsRepo, sessionsRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
-import { archiveWorkspace } from '../services/workspace.js';
+import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
 
 export const roomsRouter = Router();
@@ -26,16 +26,26 @@ roomsRouter.get('/', (_req, res) => {
 });
 
 // POST /api/rooms — 创建讨论室
-roomsRouter.post('/', (req, res) => {
-  const { managerId: rawManagerId, workerIds: rawWorkerIds } = req.body as {
+roomsRouter.post('/', async (req, res) => {
+  const { managerId: rawManagerId, workerIds: rawWorkerIds, workspacePath } = req.body as {
     managerId?: string;
     workerIds?: string[];
     agents?: string[]; // Legacy: flat agents array
+    workspacePath?: string; // F006: custom workspace directory
   };
 
   // Backward compat: accept legacy { agents: ['host', 'fs-dev', ...] }
   const managerId = rawManagerId ?? 'host';
   const workerIds: string[] = rawWorkerIds ?? (req.body as { agents?: string[] }).agents ?? [];
+
+  // F006: Validate custom workspace path if provided
+  if (workspacePath) {
+    try {
+      await validateWorkspacePath(workspacePath);
+    } catch (err) {
+      return res.status(400).json({ error: (err as Error).message });
+    }
+  }
 
   if (!workerIds || workerIds.length < 1) {
     return res.status(400).json({ error: '至少选择 1 位专家' });
@@ -93,6 +103,7 @@ roomsRouter.post('/', (req, res) => {
     state: 'RUNNING',
     agents: [managerEntry, ...workerEntries],
     messages: [],
+    workspace: workspacePath,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     sessionIds: {},

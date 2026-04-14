@@ -7,14 +7,15 @@ import { v4 as uuid } from 'uuid';
 export const roomsRepo = {
   create(room: DiscussionRoom): DiscussionRoom {
     db.prepare(`
-      INSERT INTO rooms (id, topic, state, report, agent_ids, created_at, updated_at)
-      VALUES (@id, @topic, @state, @report, @agentIds, @createdAt, @updatedAt)
+      INSERT INTO rooms (id, topic, state, report, agent_ids, workspace, created_at, updated_at)
+      VALUES (@id, @topic, @state, @report, @agentIds, @workspace, @createdAt, @updatedAt)
     `).run({
       id: room.id,
       topic: room.topic,
       state: room.state,
       report: room.report ?? null,
       agentIds: JSON.stringify(room.agents.map(a => a.configId)),
+      workspace: room.workspace ?? null,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
     });
@@ -34,6 +35,7 @@ export const roomsRepo = {
       topic: row.topic as string,
       state: row.state as DiscussionRoom['state'],
       report: row.report as string | undefined,
+      workspace: (row.workspace as string) ?? undefined,
       createdAt: row.created_at as number,
       updatedAt: row.updated_at as number,
       agents,

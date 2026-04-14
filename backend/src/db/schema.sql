@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS rooms (
               CHECK (state IN ('RUNNING','DONE')),
   report      TEXT,
   agent_ids   TEXT NOT NULL DEFAULT '[]',
+  workspace   TEXT,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER

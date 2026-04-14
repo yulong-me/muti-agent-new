@@ -14,6 +14,42 @@
  * └── .done-B.md           ← Agent B 交接文档
  */
 
+// F006: Workspace path validation error
+export class WorkspaceSecurityError extends Error {
+  constructor(
+    message: string,
+    public readonly code: 'TRAVERSAL' | 'NOT_FOUND' | 'NOT_DIRECTORY',
+  ) {
+    super(message);
+    this.name = 'WorkspaceSecurityError';
+  }
+}
+
+/**
+ * Validate a user-provided workspace path.
+ * - Must be an absolute path
+ * - Must exist and be a directory
+ * - Must not escape to parent directories
+ */
+export async function validateWorkspacePath(workspacePath: string): Promise<void> {
+  const normalized = path.normalize(workspacePath);
+  if (!normalized.startsWith('/')) {
+    throw new WorkspaceSecurityError('Workspace path must be absolute', 'TRAVERSAL');
+  }
+  if (normalized.includes('..')) {
+    throw new WorkspaceSecurityError('Workspace path cannot contain parent directory references', 'TRAVERSAL');
+  }
+  try {
+    const stat = await fs.stat(workspacePath);
+    if (!stat.isDirectory()) {
+      throw new WorkspaceSecurityError('Workspace path is not a directory', 'NOT_DIRECTORY');
+    }
+  } catch (err) {
+    if (err instanceof WorkspaceSecurityError) throw err;
+    throw new WorkspaceSecurityError(`Workspace path does not exist: ${workspacePath}`, 'NOT_FOUND');
+  }
+}
+
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -30,7 +66,11 @@ export function getWorkspacePath(roomId: string): string {
 /**
  * 确保 Room 的 workspace 目录存在
  */
-export async function ensureWorkspace(roomId: string): Promise<string> {
+export async function ensureWorkspace(roomId: string, customWorkspace?: string): Promise<string> {
+  if (customWorkspace) {
+    await validateWorkspacePath(customWorkspace);
+    return customWorkspace;
+  }
   const workspacePath = getWorkspacePath(roomId);
   await fs.mkdir(workspacePath, { recursive: true });
   return workspacePath;
