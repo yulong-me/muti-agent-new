@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Play, BrainCircuit } from 'lucide-react'
+import { DirectoryPicker } from './DirectoryPicker'
 
 const API = 'http://localhost:7001'
 const FRONTEND_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:7001'
@@ -67,7 +68,6 @@ export default function CreateRoomModal({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [workspacePath, setWorkspacePath] = useState('')
-  const dirInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   const managers = allAgents.filter(a => a.role === 'MANAGER' && a.enabled)
@@ -91,7 +91,6 @@ export default function CreateRoomModal({
       setActiveTag(null)
       setError('')
       setWorkspacePath('')
-      if (dirInputRef.current) dirInputRef.current.value = ''
     }
   }, [isOpen])
 
@@ -213,37 +212,10 @@ export default function CreateRoomModal({
           {/* F006: Custom Workspace */}
           <div className="mb-5 p-4 bg-surface rounded-2xl border border-line">
             <p className="text-[12px] font-bold text-ink-soft uppercase tracking-wide mb-2">工作目录（可选）</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={workspacePath}
-                onChange={e => setWorkspacePath(e.target.value)}
-                placeholder="/Users/yulong/work/my-project"
-                className="flex-1 px-4 py-2.5 rounded-xl bg-bg border border-line text-[14px] text-ink placeholder:text-ink-soft/50 focus:outline-none focus:border-accent/50 transition-colors"
-              />
-              <button
-                type="button"
-                onClick={() => dirInputRef.current?.click()}
-                className="px-4 py-2.5 rounded-xl bg-surface-muted border border-line text-[13px] text-ink-soft hover:text-ink hover:bg-line transition-colors flex-shrink-0"
-              >
-                浏览
-              </button>
-            </div>
-            {/* Hidden directory picker */}
-            <input
-              ref={dirInputRef}
-              type="file"
-              {...({ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
-              className="hidden"
-              onChange={e => {
-                const file = e.target.files?.[0]
-                if (file) {
-                  // Electron/Next.js: File.path contains the full absolute path
-                  const p = (file as File & { path?: string }).path
-                  if (p) setWorkspacePath(p)
-                  else setWorkspacePath(file.webkitRelativePath.split('/')[0])
-                }
-              }}
+            <DirectoryPicker
+              value={workspacePath}
+              onChange={setWorkspacePath}
+              placeholder="/Users/yulong/work/my-project"
             />
             <p className="text-[11px] text-ink-soft/60 mt-1.5">留空则使用默认临时工作区，agent 将在该目录下读写文件</p>
           </div>
