@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   report      TEXT,
   agent_ids   TEXT NOT NULL DEFAULT '[]',
   created_at  INTEGER NOT NULL,
-  updated_at  INTEGER NOT NULL
+  updated_at  INTEGER NOT NULL,
+  deleted_at  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS messages (

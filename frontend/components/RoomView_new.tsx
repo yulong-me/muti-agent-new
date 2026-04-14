@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? '${API}'
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:7001'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { io, type Socket } from 'socket.io-client'

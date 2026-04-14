@@ -38,9 +38,9 @@ export default function ArchivePage() {
   const handlePermanentDelete = async (id: string) => {
     if (!confirm('彻底删除后不可恢复，确定要删除吗？')) return
     setDeleting(id)
-    await fetch(`${API}/api/rooms/archived/${id}`, { method: 'DELETE' })
+    const res = await fetch(`${API}/api/rooms/archived/${id}`, { method: 'DELETE' })
     setDeleting(null)
-    setRooms(rooms => rooms.filter(r => r.id !== id))
+    if (res.ok) setRooms(rooms => rooms.filter(r => r.id !== id))
   }
 
   return (

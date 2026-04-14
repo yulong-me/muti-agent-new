@@ -95,8 +95,9 @@ export function initSchema(): void {
 
     // 迁移 rooms 数据: INIT/RESEARCH/DEBATE/CONVERGING → RUNNING, DONE → DONE
     // agent_ids: 旧 room 无存储，回填 ["host"]（主持人必定在）
+    // deleted_at: 旧 room 全部为 NULL（未归档）
     db.exec(`
-      INSERT INTO rooms (id, topic, state, report, agent_ids, created_at, updated_at)
+      INSERT INTO rooms (id, topic, state, report, agent_ids, created_at, updated_at, deleted_at)
       SELECT
         id, topic,
         CASE state
@@ -108,7 +109,8 @@ export function initSchema(): void {
         END,
         report,
         '["host"]',
-        created_at, updated_at
+        created_at, updated_at,
+        NULL
       FROM rooms_backup`);
 
     // 迁移 messages 数据: HOST → MANAGER, AGENT → WORKER, 移除 temp_msg_id 列

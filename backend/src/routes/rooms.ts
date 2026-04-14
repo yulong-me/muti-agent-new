@@ -181,8 +181,10 @@ roomsRouter.get('/archived', (_req, res) => {
 // DELETE /api/rooms/archived/:id — 彻底删除已归档讨论室
 roomsRouter.delete('/archived/:id', (req, res) => {
   const { id } = req.params;
+  const archived = roomsRepo.listArchived().find(r => r.id === id);
+  if (!archived) return res.status(404).json({ error: 'Archived room not found' });
   roomsRepo.permanentDelete(id);
   sessionsRepo.deleteByRoom(id);
-  auditRepo.log('room:permanent_delete', '', undefined, { roomId: id });
+  auditRepo.log('room:permanent_delete', archived.topic, undefined, { roomId: id });
   res.json({ status: 'ok' });
 });
