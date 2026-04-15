@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, Search } from 'lucide-react'
-import { getAgentColor, getAgentAvatar } from './BubbleSection'
+import { getAgentAvatar } from './BubbleSection'
+import { AgentAvatar } from './AgentAvatar'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:7001'
 
@@ -27,15 +28,17 @@ function useAgentList(excludeIds: string[]) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setLoading(true)
+    setError(null)
+    const excludeSet = new Set(excludeIds)
     fetch(`${API}/api/agents`)
       .then(r => r.json())
       .then((data: AgentItem[]) => {
-        const filtered = data.filter(a => !excludeIds.includes(a.id) && a.id !== 'host')
-        setAgents(filtered)
+        setAgents(data.filter(a => !excludeSet.has(a.id) && a.id !== 'host'))
       })
       .catch(() => setError('无法加载专家列表'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [excludeIds.join(',')])
 
   return { agents, loading, error }
 }
@@ -80,8 +83,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
       }
       setDone(agentId)
       onInvited(agentId)
-      // 250ms 后自动关闭
-      setTimeout(onClose, 250)
+      // 不自动关闭，用户可继续邀请多个专家
     } catch {
       setInviteError('网络错误')
     } finally {
@@ -96,10 +98,13 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
 
       {/* 弹窗 */}
       <div className="relative z-10 bg-bg rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-line"
-           style={{ maxHeight: '70vh' }}>
+           style={{ maxHeight: '70vh' }}
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="agent-invite-title">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-line flex-shrink-0">
-          <h2 className="text-base font-bold text-ink">邀请专家入群</h2>
+          <h2 id="agent-invite-title" className="text-base font-bold text-ink">邀请专家入群</h2>
           <button
             onClick={onClose}
             className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface rounded-lg transition-colors"
@@ -113,12 +118,14 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
         <div className="px-4 py-3 border-b border-line flex-shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-soft" />
+            <label htmlFor="agent-invite-search" className="sr-only">搜索专家</label>
             <input
+              id="agent-invite-search"
               ref={inputRef}
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="搜索专家..."
+              placeholder="搜索专家…"
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-bg border border-line text-[14px] text-ink placeholder:text-ink-soft/50 focus:outline-none focus:border-accent/50 transition-colors"
             />
           </div>
@@ -132,7 +139,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
 
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <span className="text-xs text-ink-soft animate-pulse">加载中...</span>
+              <span className="text-xs text-ink-soft animate-pulse">加载中…</span>
             </div>
           )}
 
@@ -147,7 +154,6 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
           )}
 
           {!loading && filtered.map(agent => {
-            const color = getAgentColor(agent.name)
             const avatar = getAgentAvatar(agent.name)
             const isDone = done === agent.id
             const isInviting = invitingId === agent.id
@@ -158,7 +164,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
               >
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
-                  <img src={avatar} alt="" className="w-full h-full" />
+                  <AgentAvatar src={avatar} alt={`${agent.name} 头像`} size={36} className="w-full h-full" />
                 </div>
 
                 {/* Info */}
@@ -180,7 +186,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
                         : 'bg-accent hover:bg-accent/80 text-white'
                   }`}
                 >
-                  {isDone ? '已邀请' : isInviting ? '邀请中...' : '邀请'}
+                  {isDone ? '已邀请' : isInviting ? '邀请中…' : '邀请'}
                 </button>
               </div>
             )

@@ -1,6 +1,7 @@
 'use client'
 
 import { AGENT_COLORS, DEFAULT_AGENT_COLOR, type Agent } from '../lib/agents'
+import { AgentAvatar } from './AgentAvatar'
 
 interface MentionPickerProps {
   agents: Agent[]
@@ -38,9 +39,10 @@ export default function MentionPicker({ agents, query, highlightIndex, onSelect,
               }`}
               onMouseEnter={() => onHighlight(i)}
               onClick={() => onSelect(agent.name)}
+              aria-label={`选择专家 ${agent.name}`}
             >
               <div className="w-7 h-7 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
-                <img src={colors.avatar} alt={agent.name} className="w-full h-full" />
+                <AgentAvatar src={colors.avatar} alt={`${agent.name} 头像`} size={28} className="w-full h-full" />
               </div>
               <div className="min-w-0">
                 <p className={`text-[13px] font-bold truncate ${isHighlighted ? 'text-accent' : 'text-ink'}`}>{agent.name}</p>

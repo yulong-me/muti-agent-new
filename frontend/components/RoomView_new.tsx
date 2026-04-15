@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import ReactMarkdown from 'react-markdown'
@@ -10,15 +10,14 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { io, type Socket } from 'socket.io-client'
 import {
-  Menu, X, Plus, Download, MessageSquare,
-  ChevronDown, ChevronUp, BrainCircuit, Settings, Moon, Sun, UserPlus,
+  Menu, Download, ChevronDown, BrainCircuit, Settings, Moon, Sun, UserPlus, Users, X,
 } from 'lucide-react'
 import {
   AGENT_COLORS, DEFAULT_AGENT_COLOR, STATE_LABELS,
-  mdComponents, extractMentions,
+  mdComponents, extractMentions, TIME_FORMATTER,
   type Agent, type Message, type DiscussionState,
 } from '../lib/agents'
-import { debug, error as logError, getDebugLog, telemetry, setRoomId } from '../lib/logger'
+import { error as logError, telemetry, setRoomId } from '../lib/logger'
 import CreateRoomModal from './CreateRoomModal'
 import SettingsModal from './SettingsModal'
 import MentionPicker from './MentionPicker'
@@ -27,6 +26,7 @@ import { RoomListSidebarDesktop, RoomListSidebarMobile } from './RoomListSidebar
 import { AgentPanel } from './AgentPanel'
 import MentionQueue, { type QueuedMention } from './MentionQueue'
 import { AgentInviteDrawer } from './AgentInviteDrawer'
+import { AgentAvatar } from './AgentAvatar'
 
 interface RoomViewProps { roomId?: string; defaultCreateOpen?: boolean }
 
@@ -43,13 +43,15 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'agent' | 'provider'>('agent')
-  const [debugOpen, setDebugOpen] = useState(false)
-  const [debugLogs, setDebugLogs] = useState<{ ts: string; event: string; meta?: Record<string, unknown> }[]>([])
+  // AC-4: mobile agent drawer
+  const [agentDrawerOpen, setAgentDrawerOpen] = useState(false)
   const [userInput, setUserInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
+  // Issue-1: recipient picker
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false)
   const [mentionQueue, setMentionQueue] = useState<QueuedMention[]>([])
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
 
@@ -99,16 +101,19 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
   useEffect(() => { scrollToBottom() }, [messages])
 
-  // Hydration fix for next-themes
+  // AC-1: Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    const maxH = 200
+    const newH = Math.min(ta.scrollHeight, maxH)
+    ta.style.height = `${newH}px`
+    ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden'
+  }, [userInput])
   useEffect(() => setMounted(true), [])
 
-  // Sync debug logs from logger store to state every 500ms
-  useEffect(() => {
-    const sync = () => setDebugLogs(getDebugLog())
-    sync()
-    const interval = setInterval(sync, 500)
-    return () => clearInterval(interval)
-  }, [])
+  // AC-5: debug logs are no longer synced to UI state (panel removed)
 
   // F0043: Set roomId in logger so frontend logs get persisted to logs/{roomId}.log
   useEffect(() => { setRoomId(roomId ?? null) }, [roomId])
@@ -326,9 +331,20 @@ socket.on('agent_status', (data: any) => {
   }, [roomId, agents])
 
   // ─── @mention helpers ────────────────────────────────────────────────────────
-  const filteredAgents = mentionQuery
-    ? agents.filter(a => a.name.toLowerCase().includes(mentionQuery.toLowerCase()))
-    : agents
+  const filteredAgents = useMemo(
+    () => (mentionQuery
+      ? agents.filter(a => a.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+      : agents),
+    [agents, mentionQuery],
+  )
+  const sortedMessages = useMemo(
+    () => [...messages].sort((a, b) => a.timestamp - b.timestamp),
+    [messages],
+  )
+  const currentAgentConfigIds = useMemo(
+    () => agents.map(a => a.configId ?? ''),
+    [agents],
+  )
 
   const openMentionPicker = useCallback((mentionAtIdx: number, query: string) => {
     setMentionPickerOpen(true)
@@ -355,6 +371,19 @@ socket.on('agent_status', (data: any) => {
     document.addEventListener('mousedown', onMouseDown)
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [mentionPickerOpen, closeMentionPicker])
+
+  // Issue-1: close recipient picker on outside click
+  useEffect(() => {
+    if (!recipientPickerOpen) return
+    const onMouseDown = (ev: MouseEvent) => {
+      const target = ev.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('[data-recipient-picker="1"]')) return
+      setRecipientPickerOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [recipientPickerOpen])
 
   const selectMentionAgent = useCallback((agentName: string) => {
     const ta = textareaRef.current
@@ -423,18 +452,15 @@ socket.on('agent_status', (data: any) => {
     setMentionPickerOpen(false)
     setSending(true)
     const content = userInput.trim()
-    const mentionMatch = content.match(/(?:^|\s)[@＠]([^\s@＠]{1,40})/)
-    const mentionName = mentionMatch?.[1]?.trim()
-    const mentionedAgent = mentionName ? agents.find(a => a.name.toLowerCase() === mentionName.toLowerCase()) : undefined
+    // Issue-1: recipient comes ONLY from explicit UI picker — no implicit @mention override
     const managerId = agents.find(a => a.role === 'MANAGER')?.id ?? null
-    const recipientId = mentionedAgent?.id ?? selectedRecipientId ?? managerId
+    const recipientId = selectedRecipientId ?? managerId
     const recipientName = agents.find(a => a.id === recipientId)?.name ?? '主持人'
     telemetry('ui:msg:send', {
       roomId, contentLength: content.length,
       contentSnippet: content.length > 80 ? content.slice(0, 80) + '…' : content,
       toAgentId: recipientId, toAgentName: recipientName,
-      toAgentRole: mentionedAgent ? 'WORKER' : (recipientId === managerId ? 'MANAGER' : 'WORKER'),
-      mentionText: mentionName ?? null,
+      toAgentRole: recipientId === managerId ? 'MANAGER' : 'WORKER',
     })
     setUserInput('')
     try {
@@ -467,7 +493,7 @@ socket.on('agent_status', (data: any) => {
   return (
     <>
       <CreateRoomModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
-      <div className="h-[100dvh] flex bg-bg overflow-hidden text-ink font-sans">
+      <div className="app-islands-shell h-[100dvh] flex overflow-hidden text-ink font-sans">
 
         {/* Left sidebar */}
         <RoomListSidebarDesktop
@@ -505,11 +531,16 @@ socket.on('agent_status', (data: any) => {
         />
 
         {/* Center: Main Discussion */}
-        <div className="flex-1 flex flex-col relative min-w-0">
+        <div className="app-islands-panel flex-1 flex flex-col relative min-w-0">
           {/* Main Header */}
           <div className="h-[60px] md:h-16 bg-nav-bg backdrop-blur-xl border-b border-line px-4 md:px-6 flex items-center justify-between sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <button className="md:hidden p-2 -ml-2 text-ink-soft hover:text-ink" onClick={toggleMobileMenu}>
+              <button
+                type="button"
+                className="md:hidden p-2 -ml-2 text-ink-soft hover:text-ink"
+                onClick={toggleMobileMenu}
+                aria-label="打开讨论历史"
+              >
                 <Menu className="w-5 h-5" />
               </button>
               <h1 className="text-lg font-bold text-ink hidden sm:block">AI 智囊团</h1>
@@ -522,26 +553,40 @@ socket.on('agent_status', (data: any) => {
                 </div>
               )}
               <button
+                type="button"
                 onClick={() => { setSettingsInitialTab('agent'); setSettingsOpen(true) }}
                 className="p-2 text-ink-soft hover:text-ink transition-colors"
-                title="设置"
+                aria-label="打开设置"
               >
                 <Settings className="w-5 h-5" />
               </button>
               {mounted && (
                 <button
+                  type="button"
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                   className="p-2 text-ink-soft hover:text-ink transition-colors"
-                  title={theme === 'dark' ? '切换亮色模式' : '切换暗色模式'}
+                  aria-label={theme === 'dark' ? '切换亮色模式' : '切换暗色模式'}
                 >
                   {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                 </button>
               )}
+              {/* AC-4: Agent panel button — visible on small screens only */}
+              {roomId && (
+                <button
+                  type="button"
+                  onClick={() => setAgentDrawerOpen(true)}
+                  className="md:hidden p-2 text-ink-soft hover:text-accent transition-colors"
+                  aria-label="查看参与 Agent"
+                >
+                  <Users className="w-5 h-5" />
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => setShowInviteDrawer(true)}
                 className="p-2 text-ink-soft hover:text-accent transition-colors"
-                title="邀请专家入群"
->
+                aria-label="邀请专家入群"
+              >
                 <UserPlus className="w-5 h-5" />
               </button>
             </div>
@@ -549,12 +594,14 @@ socket.on('agent_status', (data: any) => {
 
           {/* Message list */}
           <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6 scroll-smooth custom-scrollbar" ref={messagesContainerRef} onScroll={handleScroll}>
-            {([...messages].sort((a, b) => a.timestamp - b.timestamp)).map(msg => {
+            {sortedMessages.map(msg => {
               const isUser = msg.agentRole === 'USER'
               const isSystem = msg.type === 'system'
               const isStreaming = !isUser && !isSystem && (msg.type === 'streaming' || msg.duration_ms === undefined)
               const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
               const agentAvatar = AGENT_COLORS[msg.agentName]?.avatar || DEFAULT_AGENT_COLOR.avatar
+              const mentions = extractMentions(msg.content)
+              const formattedTime = TIME_FORMATTER.format(new Date(msg.timestamp))
 
               if (isUser) {
                 const toRecipient = msg.toAgentId ? agents.find(a => a.id === msg.toAgentId) : null
@@ -564,14 +611,14 @@ socket.on('agent_status', (data: any) => {
                     <div className="w-full max-w-[85%] md:max-w-[70%]">
                       <div className="flex justify-end items-center gap-2 mb-1.5">
                         <span className="text-[11px] text-ink-soft">
-                          {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
+                          {formattedTime}
                         </span>
                         {isStreaming && <span className="text-[11px] text-accent animate-pulse font-medium">● 回答中</span>}
                         <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-accent/20 text-accent">你</span>
                         {toRecipient && toColors && (
                           <span className="text-[11px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: `${toColors.bg}15`, color: toColors.bg }}>
                             <span>→</span>
-                            <img src={toColors.avatar} alt="" className="w-3 h-3 rounded-full" />
+                            <AgentAvatar src={toColors.avatar} alt={`${toRecipient.name} 头像`} size={12} className="w-3 h-3 rounded-full" />
                             {toRecipient.name}
                           </span>
                         )}
@@ -608,7 +655,7 @@ socket.on('agent_status', (data: any) => {
               return (
                 <div key={msg.id} className="group flex gap-3 mb-6 items-start">
                   <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
-                    <img src={agentAvatar} alt={msg.agentName} className="w-full h-full" />
+                    <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={32} className="w-full h-full" />
                   </div>
                   <div className="w-full max-w-[85%] md:max-w-[70%]">
                     <div className="mb-1.5 flex items-center gap-2">
@@ -616,7 +663,7 @@ socket.on('agent_status', (data: any) => {
                         {msg.agentName}
                       </span>
                       <span className="text-[11px] text-ink-soft">
-                        {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
+                        {formattedTime}
                       </span>
                       {isStreaming && (
                         <span className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
@@ -627,10 +674,10 @@ socket.on('agent_status', (data: any) => {
                     <div className="rounded-2xl rounded-tl-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
                       <BubbleSection label="思考过程" icon="brain" content={msg.thinking ?? ''} isStreaming={isStreaming} agentColor={agentColor} />
                       <BubbleSection label="回复" icon="output" content={msg.content} isStreaming={isStreaming} agentColor={agentColor} />
-                      {extractMentions(msg.content).length > 0 && (
+                      {mentions.length > 0 && (
                         <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap" style={{ color: agentColor }}>
                           <span className="opacity-50 mr-0.5">@点名</span>
-                          {extractMentions(msg.content).map(name => (
+                          {mentions.map(name => (
                             <span key={name} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
                               {name}
                             </span>
@@ -670,14 +717,6 @@ socket.on('agent_status', (data: any) => {
 
           {/* Action Area */}
           <div className="bg-nav-bg backdrop-blur-xl border-t border-line px-4 md:px-8 py-4 flex flex-col gap-3">
-            {/* F0050: 发言队列 — 输入框上层 */}
-            {roomId && state !== 'DONE' && (
-              <MentionQueue
-                queue={mentionQueue}
-                agents={agents}
-                streamingAgentIds={streamingAgentIds}
-              />
-            )}
             {state === 'DONE' ? (
               <button
                 type="button"
@@ -688,6 +727,16 @@ socket.on('agent_status', (data: any) => {
               </button>
             ) : roomId ? (
               <div className="flex flex-col gap-2 relative">
+                {/* AC-2: 发言队列 — absolute 定位不挤压输入框 */}
+                {roomId && mentionQueue.length > 0 && (
+                  <div className="absolute bottom-full left-0 right-0 mb-2 z-20">
+                    <MentionQueue
+                      queue={mentionQueue}
+                      agents={agents}
+                      streamingAgentIds={streamingAgentIds}
+                    />
+                  </div>
+                )}
                 {sendError && <div className="text-xs text-red-500 px-1">{sendError}</div>}
                 {mentionPickerOpen && (
                   <MentionPicker
@@ -698,23 +747,68 @@ socket.on('agent_status', (data: any) => {
                     onHighlight={setMentionHighlightIdx}
                   />
                 )}
+                {/* Issue-1: 显式收件人选择器 */}
+                <div className="relative" data-recipient-picker="1">
+                  <button
+                    type="button"
+                    onClick={() => setRecipientPickerOpen(o => !o)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-[12px] text-ink-soft hover:border-accent/40 transition-colors"
+                  >
+                    <span className="text-[11px] text-ink-soft/60">发送给</span>
+                    {(() => {
+                      const rec = agents.find(a => a.id === selectedRecipientId)
+                      const color = rec ? AGENT_COLORS[rec.name]?.bg || DEFAULT_AGENT_COLOR.bg : DEFAULT_AGENT_COLOR.bg
+                      return (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="font-semibold" style={{ color: rec ? color : undefined }}>
+                            {rec ? rec.name : '主持人'}
+                          </span>
+                          <ChevronDown className={`w-3 h-3 text-ink-soft/50 transition-transform ${recipientPickerOpen ? 'rotate-180' : ''}`} />
+                        </>
+                      )
+                    })()}
+                  </button>
+                  {recipientPickerOpen && (
+                    <div className="absolute bottom-full left-0 mb-1.5 bg-bg border border-line rounded-xl shadow-lg py-1 z-30 min-w-[160px]">
+                      {agents.map(agent => {
+                        const isSelected = agent.id === selectedRecipientId
+                        const color = AGENT_COLORS[agent.name]?.bg || DEFAULT_AGENT_COLOR.bg
+                        return (
+                          <button
+                            key={agent.id}
+                            type="button"
+                            onClick={() => { setSelectedRecipientId(agent.id); setRecipientPickerOpen(false) }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-[13px] hover:bg-surface-muted transition-colors ${isSelected ? 'bg-surface-muted font-semibold' : ''}`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                            <span style={{ color: isSelected ? color : undefined }}>{agent.name}</span>
+                            <span className="text-[10px] text-ink-soft/60 ml-auto">{agent.role === 'MANAGER' ? '主持人' : agent.domainLabel}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-3">
                   <textarea
                     ref={textareaRef}
-                    className="flex-1 bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all resize-none h-12 leading-relaxed"
-                    placeholder="输入消息，或 @mention 专家..."
+                    className="app-islands-input flex-1 bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all resize-none min-h-12 max-h-48 leading-relaxed"
+                    placeholder="输入消息，或 @mention 专家…"
                     value={userInput}
+                    onFocus={() => setRecipientPickerOpen(false)}
                     onChange={handleInputChange}
                     onKeyDown={handleInputKeyDown}
                     disabled={sending}
+                    aria-label="输入消息"
                   />
                   <button
                     type="button"
-                    className="bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-deep transition-all disabled:opacity-50 text-[14px] shadow-sm self-end"
+                    className="app-islands-item bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-deep transition-all disabled:opacity-50 text-[14px] shadow-sm self-end"
                     onClick={handleSendMessage}
                     disabled={sending || !userInput.trim()}
                   >
-                    {sending ? '发送中...' : '发送'}
+                    {sending ? '发送中…' : '发送'}
                   </button>
                 </div>
               </div>
@@ -722,23 +816,74 @@ socket.on('agent_status', (data: any) => {
           </div>
         </div>
 
-        {/* Right sidebar: Agents + Debug */}
+        {/* Right sidebar: Agents (desktop) */}
         <AgentPanel
           roomId={roomId}
           agents={agents}
           messages={messages}
           state={state}
-          debugOpen={debugOpen}
-          debugLogs={debugLogs}
-          onToggleDebug={() => setDebugOpen(o => !o)}
         />
 
       </div>
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
+      {/* AC-4: Agent Drawer — mobile only */}
+      {agentDrawerOpen && (
+        <div className="fixed inset-0 z-[200] flex">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAgentDrawerOpen(false)} />
+          <div className="relative z-10 ml-auto w-[280px] h-full bg-surface border-l border-line flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-line">
+              <h2 className="text-[15px] font-bold text-ink">参与 Agent</h2>
+              <button
+                type="button"
+                onClick={() => setAgentDrawerOpen(false)}
+                className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors"
+                aria-label="关闭"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {agents.map(agent => (
+                <div key={agent.id} className="bg-bg border border-line rounded-xl p-3 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <AgentAvatar
+                      src={AGENT_COLORS[agent.name]?.avatar || DEFAULT_AGENT_COLOR.avatar}
+                      alt={`${agent.name} 头像`}
+                      size={32}
+                      className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm overflow-hidden"
+                    />
+                    <div>
+                      <p className="text-[14px] font-bold leading-none mb-1 text-ink">{agent.name}</p>
+                      <p className="text-[11px] text-ink-soft leading-none">
+                        {agent.role === 'MANAGER' ? '主持人' : agent.domainLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-surface-muted px-2 py-1 rounded-md max-w-fit">
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        agent.status === 'thinking' || agent.status === 'waiting'
+                          ? 'bg-emerald-500 animate-pulse shadow-[0_0_4px_rgba(16,185,129,0.5)]'
+                          : 'bg-ink-soft/40'
+                      }`}
+                    />
+                    <span className="text-[11px] font-medium text-ink-soft">
+                      {agent.status === 'thinking' ? '工作中' : agent.status === 'waiting' ? '等待中' : '空闲'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {agents.length === 0 && (
+                <p className="text-[12px] text-ink-soft text-center mt-6">选择讨论室后显示参与者</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {showInviteDrawer && roomId && (
         <AgentInviteDrawer
           roomId={roomId}
-          currentAgentIds={agents.map(a => a.configId ?? '')}
+          currentAgentIds={currentAgentConfigIds}
           onClose={() => setShowInviteDrawer(false)}
           onInvited={() => {}}
         />

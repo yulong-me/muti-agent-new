@@ -1,4 +1,4 @@
-import ReactMarkdown, { type Components } from 'react-markdown'
+import { type Components } from 'react-markdown'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -52,6 +52,7 @@ export const AGENT_COLORS: Record<string, { bg: string; text: string; avatar: st
 }
 
 export const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=agent&backgroundColor=c0aede' }
+export const TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -157,10 +157,13 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
 
       {/* 弹窗 */}
       <div className="relative z-10 bg-bg rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-line"
-           style={{ maxHeight: '70vh' }}>
+           style={{ maxHeight: '70vh' }}
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="directory-browser-title">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-line flex-shrink-0">
-          <h2 className="text-base font-bold text-ink">选择工作目录</h2>
+          <h2 id="directory-browser-title" className="text-base font-bold text-ink">选择工作目录</h2>
           <button
             onClick={onCancel}
             className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface rounded-lg transition-colors"
@@ -231,7 +234,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
                       setMkdirError(null)
                     }
                   }}
-                  placeholder="文件夹名称..."
+                  placeholder="文件夹名称…"
                   className="flex-1 text-sm px-2 py-1 rounded border border-accent/30 bg-bg/80 text-ink placeholder:text-ink-soft/50 focus:outline-none focus:ring-1 focus:ring-accent"
                 />
                 <button
@@ -256,7 +259,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
 
           {isLoading && (
             <div className="flex items-center justify-center py-8">
-              <span className="text-xs text-ink-soft animate-pulse">Loading...</span>
+              <span className="text-xs text-ink-soft animate-pulse">Loading…</span>
             </div>
           )}
 
@@ -299,12 +302,14 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
         <div className="px-5 py-3 border-t border-line space-y-2 flex-shrink-0">
           <div className="flex gap-2">
             <TerminalIcon />
+            <label htmlFor="directory-browser-path" className="sr-only">输入路径</label>
             <input
+              id="directory-browser-path"
               type="text"
               value={pathInput}
               onChange={e => setPathInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handlePathSubmit() }}
-              placeholder="输入路径..."
+              placeholder="输入路径…"
               className="flex-1 text-xs px-3 py-2 rounded-lg border border-line bg-surface text-ink placeholder:text-ink-soft/50 focus:outline-none focus:ring-1 focus:ring-accent"
             />
             {pathInput.trim() && (

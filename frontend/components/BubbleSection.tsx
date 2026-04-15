@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { ChevronRight, ChevronDown, BrainCircuit } from 'lucide-react'
 import { AGENT_COLORS, DEFAULT_AGENT_COLOR, extractMentions, mdComponents, type Message } from '../lib/agents'
+import { AgentAvatar } from './AgentAvatar'
 
 /** 将 hex 色值转为带 alpha 的 rgba 字符串（参考 clowder-ai hexToRgba） */
 function hexToRgba(hex: string, alpha: number): string {
@@ -31,8 +32,9 @@ export function BubbleSection({
   isStreaming,
   agentColor,
 }: BubbleSectionProps) {
+  // Issue-3: thinking defaults collapsed; output defaults expanded; no auto-expand on streaming
   const [isExpanded, setIsExpanded] = useState(icon === 'output')
-  const effectiveExpanded = isExpanded || isStreaming
+  const effectiveExpanded = isExpanded
   const lineCount = content.split('\n').length
   const isEmpty = !content.trim()
 
@@ -46,10 +48,14 @@ export function BubbleSection({
   )
 
   const statusText = isEmpty
-    ? '等待输出...'
+    ? '等待输出…'
     : isStreaming
-    ? `${lineCount} 行 · 输出中...`
-    : `${lineCount} 行`
+    ? icon === 'brain'
+      ? `${lineCount} 行 · 输出中（折叠）`
+      : `${lineCount} 行 · 输出中`
+    : effectiveExpanded
+    ? `${lineCount} 行`
+    : `${lineCount} 行 · 点击展开`
 
   const streamingCursor = isStreaming ? (
     <span className="inline-block w-1.5 h-3.5 bg-current animate-pulse ml-1.5 rounded-sm opacity-60 align-middle" />
@@ -127,7 +133,7 @@ export function MessageBubble({ msg, isStreaming, agentColor, agentAvatar }: Mes
       {/* Avatar */}
       <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden ring-2"
            style={{ backgroundColor: isUser ? agentColor : 'transparent', boxShadow: isUser ? undefined : `0 0 0 2px ${agentBubbleBorder}` }}>
-        <img src={agentAvatar} alt="" className="w-full h-full" />
+        <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={36} className="w-full h-full" />
       </div>
 
       {/* Bubble */}

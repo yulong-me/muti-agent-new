@@ -61,7 +61,7 @@ export default function CreateRoomModal({
 }) {
   const [allAgents, setAllAgents] = useState<AgentConfig[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
-  const topic = '自由讨论'
+  const [topic, setTopic] = useState('')
   const [selectedManager, setSelectedManager] = useState<string>('host')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -91,6 +91,7 @@ export default function CreateRoomModal({
       setActiveTag(null)
       setError('')
       setWorkspacePath('')
+      setTopic('')
     }
   }, [isOpen])
 
@@ -121,7 +122,7 @@ export default function CreateRoomModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic,
+          topic: topic.trim() || `未命名讨论 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
           managerId: selectedManager,
           workerIds: workers.filter(a => selected.has(a.id)).map(a => a.id),
           ...(workspacePath.trim() ? { workspacePath: workspacePath.trim() } : {}),
@@ -157,7 +158,7 @@ export default function CreateRoomModal({
       />
       <div
         role="dialog"
-        aria-modal
+        aria-modal="true"
         aria-label="发起新讨论"
         className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
       >
@@ -174,6 +175,19 @@ export default function CreateRoomModal({
             <button onClick={onClose} aria-label="关闭" className="p-2 text-ink-soft hover:text-ink hover:bg-surface rounded-full transition-colors">
               <X className="w-5 h-5" aria-hidden/>
             </button>
+          </div>
+
+          {/* Discussion Topic */}
+          <div className="mb-5">
+            <p className="text-[12px] font-bold text-ink-soft uppercase tracking-wide mb-2">讨论主题</p>
+            <input
+              type="text"
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              placeholder="例如：比较 Claude Code 和 OpenCode 的协作策略…"
+              className="w-full bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/50 focus:outline-none focus:border-accent/50 transition-colors"
+              maxLength={100}
+            />
           </div>
 
           {/* Manager Selection */}
@@ -216,6 +230,7 @@ export default function CreateRoomModal({
               value={workspacePath}
               onChange={setWorkspacePath}
               placeholder="/Users/yulong/work/my-project"
+              inputLabel="工作目录"
             />
             <p className="text-[11px] text-ink-soft/60 mt-1.5">留空则使用默认临时工作区，agent 将在该目录下读写文件</p>
           </div>
@@ -262,7 +277,7 @@ export default function CreateRoomModal({
 
         {/* Worker Grid */}
         {loadingAgents ? (
-          <div className="text-center py-10 text-ink-soft text-sm">加载 Agent 配置...</div>
+          <div className="text-center py-10 text-ink-soft text-sm">加载 Agent 配置…</div>
         ) : filteredWorkers.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-ink-soft text-sm mb-3">该领域暂无专家</p>
@@ -351,7 +366,7 @@ export default function CreateRoomModal({
           disabled={submitting || selected.size < 1}
         >
           <Play className="w-4 h-4 fill-current" aria-hidden/>
-          {submitting ? '创建中...' : '加入讨论'}
+          {submitting ? '创建中…' : '加入讨论'}
         </button>
       </div>
       </div>

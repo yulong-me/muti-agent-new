@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { AGENT_COLORS, DEFAULT_AGENT_COLOR, type Agent } from '../lib/agents'
+import { AgentAvatar } from './AgentAvatar'
 
 export interface QueuedMention {
   agentId: string
@@ -30,7 +31,7 @@ export default function MentionQueue({ queue, agents, streamingAgentIds }: Menti
   if (queue.length === 0) return null
 
   return (
-    <div className="px-4 md:px-8 py-2 border-b border-line bg-surface/60 backdrop-blur-sm">
+    <div className="px-4 md:px-8 py-2 bg-surface/80 backdrop-blur-sm rounded-xl border border-line shadow-sm">
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider shrink-0">
           发言队列
@@ -57,7 +58,7 @@ export default function MentionQueue({ queue, agents, streamingAgentIds }: Menti
                     : 'bg-gray-400'
                 }`}
               />
-              <img src={colors.avatar} alt="" className="w-4 h-4 rounded-full shrink-0" />
+              <AgentAvatar src={colors.avatar} alt={`${item.agentName} 头像`} size={16} className="w-4 h-4 rounded-full shrink-0" />
               <span className="whitespace-nowrap">
                 {item.agentName}
                 {isStreaming ? ' · 发言中' : ' · 等待中'}

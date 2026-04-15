@@ -9,6 +9,7 @@ import {
   type Agent,
   type DiscussionState,
 } from '../lib/agents'
+import { AgentAvatar } from './AgentAvatar'
 
 interface SidebarRoom {
   id: string
@@ -86,7 +87,6 @@ function RoomItem({
         </div>
       ) : (
         <div
-          onClick={onClick}
           className={`p-3.5 rounded-xl mb-2 cursor-pointer transition-colors border group ${
             isActive ? 'bg-surface-muted border-line' : 'border-transparent hover:bg-surface-muted/50'
           }`}
@@ -94,7 +94,15 @@ function RoomItem({
           <div className="flex items-start justify-between gap-2">
             <p className="text-[14px] font-medium text-ink truncate flex-1 flex items-center gap-2">
               <MessageSquare className="w-3.5 h-3.5 opacity-60 flex-shrink-0" />
-              {room.topic}
+              <button
+                type="button"
+                onClick={onClick}
+                className="truncate text-left"
+                aria-pressed={isActive}
+                aria-label={`进入讨论：${room.topic}`}
+              >
+                {room.topic}
+              </button>
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">
               <span
@@ -107,9 +115,10 @@ function RoomItem({
                 {room.state === 'RUNNING' ? '进行中' : '已完成'}
               </span>
               <button
+                type="button"
                 onClick={handleDelete}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-ink-soft hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 transition-all"
-                title="删除"
+                aria-label={`删除讨论：${room.topic}`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -118,9 +127,10 @@ function RoomItem({
           {lastRecipient && lastRecipientColors && (
             <div className="mt-1.5 flex items-center gap-1 ml-5.5">
               <span className="text-[10px] text-ink-soft">正在和</span>
-              <img
+              <AgentAvatar
                 src={lastRecipientColors.avatar}
-                alt=""
+                alt={`${lastRecipient.name} 头像`}
+                size={14}
                 className="w-3.5 h-3.5 rounded-full"
               />
               <span className="text-[10px] font-medium" style={{ color: lastRecipientColors.bg }}>
@@ -150,13 +160,13 @@ export function RoomListSidebarDesktop({
   onDeleteRoom,
 }: Omit<RoomListSidebarProps, 'mobileMenuOpen' | 'onToggleMobileMenu' | 'onCloseMobileMenu'>) {
   return (
-    <div className="hidden md:flex w-[280px] bg-surface border-r border-line flex-col z-20">
+    <div className="app-islands-panel hidden md:flex w-[280px] bg-surface border-r border-line flex-col z-20">
       <div className="p-5 border-b border-line flex items-center justify-between">
         <h2 className="text-[15px] font-bold text-ink">讨论历史</h2>
         <button
           onClick={onNewRoom}
-          className="w-8 h-8 rounded-full bg-surface-muted flex items-center justify-center text-ink hover:text-accent hover:bg-line transition-colors"
-          title="发起讨论"
+          className="app-islands-item w-8 h-8 rounded-full bg-surface-muted flex items-center justify-center text-ink hover:text-accent hover:bg-line transition-colors"
+          aria-label="发起讨论"
         >
           <Plus className="w-4 h-4" />
         </button>
@@ -200,7 +210,7 @@ export function RoomListSidebarMobile({
   return (
     <div className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onToggleMobileMenu}>
       <div
-        className="w-[80%] max-w-[300px] h-full bg-surface border-r border-line flex flex-col"
+        className="app-islands-panel w-[80%] max-w-[300px] h-full bg-surface border-r border-line flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-5 border-b border-line flex items-center justify-between">

@@ -5,6 +5,19 @@
 @tailwind utilities;
 
 @layer base {
+  .monaco-workbench,
+  .app-islands-shell {
+    --islands-panel-radius: 24px;
+    --islands-widget-radius: 14px;
+    --islands-input-radius: 12px;
+    --islands-item-radius: 6px;
+    --islands-panel-gap: 8px;
+    --islands-panel-top: 8px;
+    --islands-bg-canvas: #121216;
+    --islands-bg-surface: #181a1d;
+    background-color: var(--islands-bg-canvas) !important;
+  }
+
   :root {
     --bg: #f8f2ed;
     --surface: #ffffff;
@@ -19,6 +32,7 @@
     --radius-lg: 20px;
     --radius-md: 14px;
     --radius-sm: 9px;
+    color-scheme: light;
   }
 
   .dark {
@@ -31,6 +45,11 @@
     --nav-bg: rgba(29, 26, 23, 0.88);
     --accent: #ff835f;
     --accent-deep: #e65c46;
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
   }
 }
 
@@ -43,6 +62,25 @@
 body {
   background: var(--bg);
   color: var(--ink);
+  font-family: 'Manrope', system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
+  text-wrap: balance;
+}
+
+button,
+a,
+input,
+textarea {
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 75%, transparent);
+  outline-offset: 2px;
 }
 
 /* Custom Scrollbar for sleek look */
@@ -85,4 +123,124 @@ body {
 }
 .prose code {
   font-size: 0.875em;
+}
+
+.app-islands-shell {
+  position: relative;
+  min-height: 100dvh;
+  padding: var(--islands-panel-top);
+  gap: var(--islands-panel-gap);
+  overflow: hidden;
+  --bg: rgba(13, 15, 19, 0.82);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-muted: rgba(255, 255, 255, 0.03);
+  --line: rgba(255, 255, 255, 0.08);
+  --nav-bg: rgba(20, 22, 27, 0.52);
+  --ink: #eceff3;
+  --ink-soft: rgba(236, 239, 243, 0.62);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(88, 116, 255, 0.16), transparent 24%),
+    radial-gradient(circle at 82% 14%, rgba(148, 96, 255, 0.12), transparent 22%),
+    radial-gradient(circle at 52% 100%, rgba(66, 184, 131, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01) 24%, rgba(255,255,255,0)),
+    var(--islands-bg-canvas);
+}
+
+.app-islands-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.04), transparent 22%, transparent 78%, rgba(255,255,255,0.02)),
+    radial-gradient(circle at top left, rgba(255,255,255,0.05), transparent 28%);
+  opacity: 0.72;
+}
+
+.app-islands-panel {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03) 38%, rgba(255,255,255,0.015)),
+    rgba(19, 21, 27, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--islands-panel-radius);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.02),
+    0 18px 44px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+}
+
+.app-islands-panel > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+.app-islands-panel > :last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+.app-islands-panel::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025) 38%, transparent 72%);
+  opacity: 0.78;
+}
+
+.app-islands-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.03),
+    inset 0 8px 18px rgba(255,255,255,0.02);
+}
+
+.app-islands-widget {
+  border-radius: var(--islands-widget-radius);
+}
+
+.app-islands-input {
+  border-radius: var(--islands-input-radius);
+}
+
+.app-islands-item {
+  border-radius: var(--islands-item-radius);
+}
+
+.app-islands-shell .bg-surface {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+}
+
+.app-islands-shell .bg-surface-muted {
+  background-color: rgba(255, 255, 255, 0.025) !important;
+}
+
+.app-islands-shell .bg-nav-bg {
+  background-color: rgba(18, 20, 26, 0.48) !important;
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.app-islands-shell .app-islands-input,
+.app-islands-shell input,
+.app-islands-shell textarea {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 8px 24px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
 }

@@ -9,19 +9,28 @@ interface DirectoryPickerProps {
   onChange: (path: string) => void
   placeholder?: string
   className?: string
+  inputLabel?: string
 }
 
 /**
  * 目录路径输入框 + 浏览按钮（参考 clowder-ai LinkedRootsManager + DirectoryBrowser 风格）。
  * "浏览" 打开 web 目录导航弹窗。
  */
-export function DirectoryPicker({ value, onChange, placeholder = '/Users/.../project', className = '' }: DirectoryPickerProps) {
+export function DirectoryPicker({
+  value,
+  onChange,
+  placeholder = '/Users/.../project',
+  className = '',
+  inputLabel = '目录路径',
+}: DirectoryPickerProps) {
   const [showBrowser, setShowBrowser] = useState(false)
 
   return (
     <>
       <div className="flex gap-2">
+        <label htmlFor="directory-picker-input" className="sr-only">{inputLabel}</label>
         <input
+          id="directory-picker-input"
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
