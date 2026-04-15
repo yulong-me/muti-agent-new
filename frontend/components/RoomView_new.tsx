@@ -127,7 +127,15 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     setSelectedRecipientId(null)
     setMentionQueue([])
     setStreamingAgentIds(new Set())
+    // Reset all streaming refs so previous room's in-flight messages don't bleed in
+    streamingMessagesRef.current.clear()
+    streamingThinkingRef.current.clear()
+    streamingCountRef.current = 0
+    streamingAgentIdsRef.current.clear()
+    userScrolledRef.current = false
+    setShowScrollBtn(false)
   }, [roomId])
+
 
   useEffect(() => { agentsRef.current = agents }, [agents])
 
