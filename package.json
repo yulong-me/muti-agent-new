@@ -2,7 +2,7 @@
   "name": "muti-agent-f001",
   "private": true,
   "scripts": {
-    "dev": "lsof -ti:7001 | xargs kill -9 2>/dev/null; lsof -ti:7002 | xargs kill -9 2>/dev/null; concurrently -k -n \"backend,frontend\" -c \"blue,green\" \"pnpm --dir backend dev\" \"pnpm --dir frontend dev\"",
+    "dev": "node scripts/dev.mjs",
     "dev:backend": "pnpm --dir backend dev",
     "dev:frontend": "pnpm --dir frontend dev",
     "install:all": "pnpm -r install"
