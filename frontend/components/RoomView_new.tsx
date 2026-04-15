@@ -117,6 +117,18 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
   // F0043: Set roomId in logger so frontend logs get persisted to logs/{roomId}.log
   useEffect(() => { setRoomId(roomId ?? null) }, [roomId])
+
+  // Bug fix: reset all per-room state on roomId change so old data never bleeds through
+  useEffect(() => {
+    setMessages([])
+    setAgents([])
+    setState('RUNNING')
+    setReport('')
+    setSelectedRecipientId(null)
+    setMentionQueue([])
+    setStreamingAgentIds(new Set())
+  }, [roomId])
+
   useEffect(() => { agentsRef.current = agents }, [agents])
 
   // ─── Socket ──────────────────────────────────────────────────────────────────

@@ -66,7 +66,7 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
 
   if (!editing) {
     return (
-      <tr className="border-b border-line hover:bg-surface-muted/50 transition-colors group">
+      <tr className="border-b border-line hover:bg-white/[0.03] transition-colors group">
         <td className="px-4 py-3.5">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shadow-sm flex-shrink-0"
@@ -88,7 +88,7 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
         <td className="px-4 py-3.5">
           <div className="flex flex-wrap gap-1">
             {agent.tags.map(t => (
-              <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-md bg-surface border border-line text-ink-soft">{t}</span>
+              <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-ink-soft">{t}</span>
             ))}
             {agent.tags.length === 0 && <span className="text-[11px] text-ink-soft/40">—</span>}
           </div>
@@ -101,8 +101,8 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
             {saved && <span className="text-[11px] text-emerald-500 flex items-center gap-1 mr-1" aria-live="polite"><CheckCircle2 className="w-3 h-3" aria-hidden/>已保存</span>}
             {isHost ? <span className="text-[11px] text-ink-soft/40 mr-2">—</span> : (
               <>
-                <button onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden/></button>
-                <button onClick={() => onDeleteRequest(agent)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden/></button>
+                <button onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden/></button>
+                <button onClick={() => onDeleteRequest(agent)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden/></button>
               </>
             )}
           </div>
@@ -112,7 +112,7 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
   }
 
   return (
-    <tr className="border-b border-line bg-surface/80">
+    <tr className="border-b border-line bg-white/[0.03]">
       <td colSpan={5} className="px-4 py-4">
         <div className="flex flex-col gap-4">
           <span className="text-[13px] font-bold text-ink">{agent.name} <span className="text-ink-soft font-normal ml-1">编辑中…</span></span>
@@ -131,31 +131,31 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
               <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">标签（逗号分隔）</label>
               <input value={form.tags.join(', ')}
                 onChange={e => field('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))}
-                className="w-full bg-bg border border-line rounded-lg px-3 py-1.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"/>
+                className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50"/>
             </div>
             <div>
               <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">推理</label>
               <button onClick={() => opt('thinking', !form.providerOpts.thinking)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.providerOpts.thinking ? 'bg-accent' : 'bg-line'}`}>
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.providerOpts.thinking ? 'bg-accent' : 'bg-white/10'}`}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.providerOpts.thinking ? 'translate-x-6' : 'translate-x-1'}`}/>
               </button>
             </div>
             <div>
               <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">角色标签</label>
               <input value={form.roleLabel} onChange={e => field('roleLabel', e.target.value)}
-                className="w-full bg-bg border border-line rounded-lg px-3 py-1.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"/>
+                className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50"/>
             </div>
           </div>
           <div>
             <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">System Prompt</label>
             <textarea value={form.systemPrompt} onChange={e => field('systemPrompt', e.target.value)} rows={2}
-              className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent resize-none font-mono"/>
+              className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono"/>
           </div>
-          {saveError && <p className="text-[12px] text-red-500 bg-red-500/10 px-3 py-1.5 rounded-lg">{saveError}</p>}
+          {saveError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{saveError}</p>}
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={handleCancel} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors">取消</button>
+            <button type="button" onClick={handleCancel} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
             <button type="button" onClick={handleSave} disabled={saving}
-              className="px-4 py-1.5 text-[12px] font-bold bg-ink text-bg rounded-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5">
+              className="px-4 py-1.5 text-[12px] font-bold bg-ink text-bg rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5">
               <Save className="w-3.5 h-3.5" aria-hidden/> {saving ? '保存中…' : '保存'}
             </button>
           </div>
@@ -241,7 +241,7 @@ function ProviderDetail({ provider, onUpdate }: { provider: ProviderConfig; onUp
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-[11px] text-accent hover:text-accent-deep flex items-center gap-1 transition-colors"
+              className="text-[11px] text-accent hover:text-accent transition-colors"
             >
               <Edit2 className="w-3 h-3" aria-hidden/> 编辑
             </button>
@@ -254,15 +254,15 @@ function ProviderDetail({ provider, onUpdate }: { provider: ProviderConfig; onUp
               value={editCliPath}
               onChange={e => setEditCliPath(e.target.value)}
               placeholder="claude"
-              className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-[12px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+              className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
-            {saveError && <p className="text-[11px] text-red-500">{saveError}</p>}
+            {saveError && <p className="text-[11px] text-red-400">{saveError}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={saving}
-                className="flex-1 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors flex items-center justify-center gap-1"
+                className="flex-1 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors flex items-center justify-center gap-1"
               >
                 <XCircle className="w-3.5 h-3.5" aria-hidden/> 取消
               </button>
@@ -270,14 +270,14 @@ function ProviderDetail({ provider, onUpdate }: { provider: ProviderConfig; onUp
                 type="button"
                 onClick={handleSave}
                 disabled={saving || editCliPath === provider.cliPath}
-                className="flex-1 py-1.5 text-[12px] font-bold bg-accent text-white rounded-lg hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center justify-center gap-1"
+                className="flex-1 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center justify-center gap-1"
               >
                 <Save className="w-3.5 h-3.5" aria-hidden/> {saving ? '保存中…' : '保存'}
               </button>
             </div>
           </div>
         ) : (
-          <p className="text-[12px] text-ink font-mono bg-bg border border-line rounded-lg px-3 py-2">{provider.cliPath}</p>
+          <p className="text-[12px] text-ink font-mono settings-input rounded-xl px-3 py-2">{provider.cliPath}</p>
         )}
       </div>
       <button type="button" onClick={handleTest} disabled={testing}
@@ -352,10 +352,10 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   function ConfirmDeleteDialog({ agent, onConfirm, onCancel }: { agent: AgentConfig; onConfirm: () => void; onCancel: () => void }) {
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-        <div className="bg-surface rounded-2xl border border-line shadow-2xl p-6 w-full max-w-xs mx-4">
+        <div className="settings-surface rounded-2xl shadow-2xl p-6 w-full max-w-xs mx-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-              <Trash2 className="w-5 h-5 text-red-500" />
+              <Trash2 className="w-5 h-5 text-red-400" />
             </div>
             <div>
               <h3 className="text-[15px] font-bold text-ink">确认删除</h3>
@@ -364,7 +364,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
           </div>
           <p className="text-[13px] text-ink mb-5">确定要删除 Agent <span className="font-bold">{agent.name}</span> 吗？</p>
           <div className="flex gap-3">
-            <button onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
+            <button onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
             <button onClick={onConfirm} className="flex-1 px-4 py-2 text-[13px] font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">删除</button>
           </div>
         </div>
@@ -393,84 +393,84 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
     <>
       <button ref={backdropRef} aria-label="关闭" className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity cursor-default" onClick={onClose}/>
       <div className="fixed inset-0 z-50 flex justify-end">
-        <div className="w-full md:w-[640px] h-full bg-bg border-l border-line shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="w-full md:w-[640px] h-full settings-panel relative flex flex-col animate-in slide-in-from-right duration-300">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-line bg-surface/80 backdrop-blur-xl">
-            <div className="flex gap-1 bg-surface border border-line rounded-xl p-1">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-line settings-nav shrink-0">
+            <div className="flex gap-1 settings-surface rounded-xl p-1">
               <button onClick={() => setTab('agent')}
-                className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'agent' ? 'bg-bg shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
+                className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'agent' ? 'shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
                 <Bot className="w-3.5 h-3.5" aria-hidden/>Agent
               </button>
               <button onClick={() => setTab('provider')}
-                className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'provider' ? 'bg-bg shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
+                className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'provider' ? 'shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
                 <Server className="w-3.5 h-3.5" aria-hidden/>CLI 连接
               </button>
             </div>
-            <button onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-surface rounded-full transition-colors">
+            <button onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-white/5 rounded-full transition-colors">
               <X className="w-4 h-4" aria-hidden/>
             </button>
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
             {loading ? (
               <div className="flex justify-center items-center h-40"><span className="text-ink-soft text-[13px] animate-pulse">加载中…</span></div>
             ) : tab === 'agent' ? (
-              <div className="space-y-4">
+              <>
                 {/* Add form — above table */}
                 {addOpen ? (
-                  <div className="bg-surface rounded-2xl border border-dashed border-line p-5 space-y-3">
+                  <div className="settings-surface rounded-xl p-5 space-y-3">
                     <p className="text-[13px] font-bold text-ink flex items-center gap-1.5"><Plus className="w-4 h-4 text-accent" aria-hidden/>新增 Agent</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label htmlFor="add-agent-id" className="block text-[11px] font-bold text-ink-soft uppercase mb-1">ID</label>
+                        <label htmlFor="add-agent-id" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">ID</label>
                         <input id="add-agent-id" value={addForm.id} onChange={e => setAddForm(f => ({ ...f, id: e.target.value }))}
-                          className="w-full bg-bg border border-line rounded-lg px-3 py-1.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" placeholder="my-agent"/>
+                          className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-ink-soft/40" placeholder="my-agent"/>
                       </div>
                       <div>
-                        <label htmlFor="add-agent-name" className="block text-[11px] font-bold text-ink-soft uppercase mb-1">名称</label>
+                        <label htmlFor="add-agent-name" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">名称</label>
                         <input id="add-agent-name" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                          className="w-full bg-bg border border-line rounded-lg px-3 py-1.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" placeholder="小明"/>
+                          className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-ink-soft/40" placeholder="小明"/>
                       </div>
                       <div>
-                        <label htmlFor="add-agent-role" className="block text-[11px] font-bold text-ink-soft uppercase mb-1">角色标签</label>
+                        <label htmlFor="add-agent-role" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">角色标签</label>
                         <input id="add-agent-role" value={addForm.roleLabel} onChange={e => setAddForm(f => ({ ...f, roleLabel: e.target.value }))}
-                          className="w-full bg-bg border border-line rounded-lg px-3 py-1.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" placeholder="研究员"/>
+                          className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-ink-soft/40" placeholder="研究员"/>
                       </div>
                       <div>
-                        <label htmlFor="add-agent-provider" className="block text-[11px] font-bold text-ink-soft uppercase mb-1">Provider</label>
+                        <label htmlFor="add-agent-provider" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">Provider</label>
                         <select id="add-agent-provider" value={addForm.provider} onChange={e => setAddForm(f => ({ ...f, provider: e.target.value as ProviderName }))}
-                          className="w-full bg-bg border border-line rounded-lg px-3 py-1.5 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+                          className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 appearance-none">
                           {(Object.keys(PROVIDER_LABELS) as ProviderName[]).map(p => <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>)}
                         </select>
                       </div>
                     </div>
                     <div>
-                      <label htmlFor="add-agent-prompt" className="block text-[11px] font-bold text-ink-soft uppercase mb-1">System Prompt</label>
+                      <label htmlFor="add-agent-prompt" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">System Prompt</label>
                       <textarea id="add-agent-prompt" value={addForm.systemPrompt} onChange={e => setAddForm(f => ({ ...f, systemPrompt: e.target.value }))} rows={2}
-                        className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent resize-none font-mono"/>
+                        className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono"/>
                     </div>
-                    {addError && <p className="text-[12px] text-red-500 bg-red-500/10 px-3 py-1.5 rounded-lg">{addError}</p>}
+                    {addError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{addError}</p>}
                     <div className="flex gap-2 justify-end">
-                      <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors">取消</button>
+                      <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
                       <button type="submit" onClick={handleAddAgent} disabled={saving}
-                        className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-lg hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
+                        className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
                         <Plus className="w-3.5 h-3.5" aria-hidden/>{saving ? '创建中…' : '创建'}
                       </button>
                     </div>
                   </div>
                 ) : (
                   <button type="button" onClick={() => setAddOpen(true)}
-                    className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-line rounded-xl hover:border-accent hover:text-accent transition-colors flex items-center justify-center gap-2">
+                    className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-white/10 rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2">
                     <Plus className="w-4 h-4" aria-hidden/>新增 Agent
                   </button>
                 )}
 
                 {/* Table */}
-                <div className="bg-surface rounded-2xl border border-line overflow-hidden">
+                <div className="settings-surface rounded-xl overflow-hidden">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-line bg-surface-muted/50">
+                      <tr className="border-b border-line bg-white/[0.02]">
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">名称</th>
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">Provider</th>
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">标签</th>
@@ -478,40 +478,40 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase text-right">操作</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-bg">
+                    <tbody>
                       {agents.map(a => <AgentRow key={a.id} agent={a} onSave={handleAgentSave} onDeleteRequest={setPendingDelete} saving={saving}/>)}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="space-y-4">
+              <>
                 {/* Provider list */}
                 <div className="flex flex-col gap-2">
                   {Object.values(providers).map(p => (
                     <button key={p.name} onClick={() => setSelProvider(p.name)}
-                      className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 ${selProvider === p.name ? 'bg-surface border-2 border-accent shadow-sm' : 'bg-surface border-2 border-transparent hover:border-line'}`}>
+                      className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 ${selProvider === p.name ? 'settings-surface border-2 border-accent shadow-sm' : 'settings-surface border-2 border-transparent hover:border-white/15'}`}>
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.name === 'claude-code' ? '#0071E3' : '#7C3AED' }}/>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-bold text-ink truncate">{p.label}</p>
                         <p className="text-[11px] text-ink-soft font-mono truncate">{p.name}</p>
                       </div>
                       {p.lastTestResult && (p.lastTestResult.success
-                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" aria-hidden/>
-                        : <X className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden/>)}
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" aria-hidden/>
+                        : <X className="w-4 h-4 text-red-400 flex-shrink-0" aria-hidden/>)}
                     </button>
                   ))}
                 </div>
                 {/* Provider detail */}
                 {currentProvider && (
-                  <div className="bg-surface rounded-2xl border border-line p-5">
+                  <div className="settings-surface rounded-xl p-5">
                     <ProviderDetail
                       provider={currentProvider}
                       onUpdate={(updated) => setProviders(prev => ({ ...prev, [updated.name]: updated }))}
                     />
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
