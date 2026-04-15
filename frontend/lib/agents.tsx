@@ -11,6 +11,8 @@ export interface Agent {
   name: string
   domainLabel: string
   status: 'idle' | 'thinking' | 'waiting' | 'done'
+  /** Reference to agent config ID in agentsRepo — used for invite logic */
+  configId?: string
 }
 
 export interface Message {
@@ -100,6 +102,12 @@ export const mdComponents: Components = {
   li: ({ children }) => <li className="mb-0.5">{children}</li>,
   blockquote: ({ children }) => <blockquote className="border-l-2 border-line pl-3 my-2 italic text-ink-soft">{children}</blockquote>,
   a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline break-all">{children}</a>,
-  pre: ({ children }) => <pre className="dark:bg-[#1e1e1e] dark:text-[#d4d4d4] bg-[#f5f5f5] text-[#333] rounded-lg p-3 overflow-x-auto text-xs font-mono my-2">{children}</pre>,
-  code: ({ children }) => <code className="bg-surface-muted text-ink rounded px-1.5 py-0.5 text-[0.85em] font-mono border border-line">{children}</code>,
+  pre: ({ children }) => <pre className="bg-surface-muted text-ink rounded-lg p-3 overflow-x-auto text-xs font-mono my-2">{children}</pre>,
+  code: ({ children }) => <code className="bg-surface-muted/70 text-ink rounded px-1.5 py-0.5 text-[0.85em] font-mono">{children}</code>,
+  table: ({ children }) => <table className="w-full border-collapse text-[13px] my-2 min-w-0">{children}</table>,
+  thead: ({ children }) => <thead className="bg-surface-muted">{children}</thead>,
+  tbody: ({ children }) => <tbody className="divide-y divide-line">{children}</tbody>,
+  tr: ({ children }) => <tr className="hover:bg-surface-muted/30 transition-colors">{children}</tr>,
+  th: ({ children }) => <th className="border border-line px-3 py-1.5 text-left font-semibold text-ink whitespace-nowrap">{children}</th>,
+  td: ({ children }) => <td className="border border-line px-3 py-1.5 text-ink whitespace-nowrap">{children}</td>,
 }

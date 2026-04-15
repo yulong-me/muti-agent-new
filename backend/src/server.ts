@@ -6,6 +6,7 @@ import { roomsRouter } from './routes/rooms.js';
 import { agentsRouter } from './routes/agents.js';
 import providersRouter from './routes/providers.js';
 import { logsRouter } from './routes/logs.js';
+import { browseRouter } from './routes/browse.js';
 import { store } from './store.js';
 import { log } from './log.js';
 import { initDB, roomsRepo } from './db/index.js';
@@ -46,6 +47,7 @@ app.use('/api/rooms', roomsRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/providers', providersRouter);
 app.use('/api/logs', logsRouter);
+app.use('/api/browse', browseRouter);
 
 // ── Debug endpoint ──────────────────────────────────────────────────────────
 app.get('/api/debug', (_req, res) => {

@@ -11,7 +11,7 @@ import remarkBreaks from 'remark-breaks'
 import { io, type Socket } from 'socket.io-client'
 import {
   Menu, X, Plus, Download, MessageSquare,
-  ChevronDown, ChevronUp, BrainCircuit, Settings, Moon, Sun,
+  ChevronDown, ChevronUp, BrainCircuit, Settings, Moon, Sun, UserPlus,
 } from 'lucide-react'
 import {
   AGENT_COLORS, DEFAULT_AGENT_COLOR, STATE_LABELS,
@@ -26,6 +26,7 @@ import { BubbleSection } from './BubbleSection'
 import { RoomListSidebarDesktop, RoomListSidebarMobile } from './RoomListSidebar'
 import { AgentPanel } from './AgentPanel'
 import MentionQueue, { type QueuedMention } from './MentionQueue'
+import { AgentInviteDrawer } from './AgentInviteDrawer'
 
 interface RoomViewProps { roomId?: string; defaultCreateOpen?: boolean }
 
@@ -63,8 +64,11 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'RUNNING' as DiscussionState, agents: [] as Agent[] })
-const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
+  const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
   const streamingThinkingRef = useRef<Map<string, string>>(new Map())
+
+  // F007: invite drawer
+  const [showInviteDrawer, setShowInviteDrawer] = useState(false)
   const userScrolledRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const streamingCountRef = useRef(0)
@@ -230,9 +234,21 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
       }
     })
 
-    socket.on('agent_status', (data: any) => {
+socket.on('agent_status', (data: any) => {
       if (data.roomId !== roomId) return
       setAgents(prev => prev.map(a => a.id === data.agentId ? { ...a, status: data.status as Agent['status'] } : a))
+    })
+
+    // F007: agent joined room
+    socket.on('room:agent-joined', (data: any) => {
+      if (data.roomId !== roomId) return
+      // 更新 agent 列表
+      setAgents(data.agents as Agent[])
+      // 追加系统消息（去重）
+      setMessages(prev => {
+        if (prev.some(m => m.id === data.systemMessage.id)) return prev
+        return [...prev, data.systemMessage as Message]
+      })
     })
 
     return () => { socket.disconnect(); socketRef.current = null }
@@ -521,6 +537,13 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
                   {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                 </button>
               )}
+              <button
+                onClick={() => setShowInviteDrawer(true)}
+                className="p-2 text-ink-soft hover:text-accent transition-colors"
+                title="邀请专家入群"
+>
+                <UserPlus className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
@@ -528,7 +551,8 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
           <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6 scroll-smooth custom-scrollbar" ref={messagesContainerRef} onScroll={handleScroll}>
             {([...messages].sort((a, b) => a.timestamp - b.timestamp)).map(msg => {
               const isUser = msg.agentRole === 'USER'
-              const isStreaming = !isUser && (msg.type === 'streaming' || msg.duration_ms === undefined)
+              const isSystem = msg.type === 'system'
+              const isStreaming = !isUser && !isSystem && (msg.type === 'streaming' || msg.duration_ms === undefined)
               const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
               const agentAvatar = AGENT_COLORS[msg.agentName]?.avatar || DEFAULT_AGENT_COLOR.avatar
 
@@ -566,6 +590,16 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
                           </ReactMarkdown>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                )
+              }
+
+              if (isSystem) {
+                return (
+                  <div key={msg.id} className="flex justify-center mb-3">
+                    <div className="text-xs px-4 py-2 rounded-lg bg-surface/60 border border-line text-ink-soft max-w-[85%] text-center">
+                      {msg.content}
                     </div>
                   </div>
                 )
@@ -701,6 +735,14 @@ const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
 
       </div>
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsInitialTab} />
+      {showInviteDrawer && roomId && (
+        <AgentInviteDrawer
+          roomId={roomId}
+          currentAgentIds={agents.map(a => a.configId ?? '')}
+          onClose={() => setShowInviteDrawer(false)}
+          onInvited={() => {}}
+        />
+      )}
     </>
   )
 }

@@ -31,12 +31,13 @@ const PROVIDER_COLORS: Record<ProviderName, string> = {
 
 // ── Agent Row ──────────────────────────────────────────────────────────────────
 
-function AgentRow({ agent, onSave, onDelete, saving }: {
-  agent: AgentConfig; onSave: (a: AgentConfig) => void; onDelete: (id: string) => void; saving: boolean
+function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
+  agent: AgentConfig; onSave: (a: AgentConfig) => Promise<void>; onDeleteRequest: (agent: AgentConfig) => void; saving: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<AgentConfig>(agent)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => { if (!editing) setForm(agent) }, [agent, editing])
 
@@ -46,9 +47,18 @@ function AgentRow({ agent, onSave, onDelete, saving }: {
   function opt(k: string, v: unknown) {
     setForm(f => ({ ...f, providerOpts: { ...f.providerOpts, [k]: v } }))
   }
-  function handleSave() {
-    onSave(form); setEditing(false); setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  async function handleSave() {
+    setSaveError('')
+    try {
+      await onSave(form)
+      setEditing(false); setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setSaveError((err as Error).message || '保存失败')
+    }
+  }
+  function handleCancel() {
+    setEditing(false); setForm(agent); setSaveError('')
   }
 
   const isHost = agent.role === 'MANAGER'
@@ -92,7 +102,7 @@ function AgentRow({ agent, onSave, onDelete, saving }: {
             {isHost ? <span className="text-[11px] text-ink-soft/40 mr-2">—</span> : (
               <>
                 <button onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden/></button>
-                <button onClick={() => onDelete(agent.id)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden/></button>
+                <button onClick={() => onDeleteRequest(agent)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden/></button>
               </>
             )}
           </div>
@@ -141,8 +151,9 @@ function AgentRow({ agent, onSave, onDelete, saving }: {
             <textarea value={form.systemPrompt} onChange={e => field('systemPrompt', e.target.value)} rows={2}
               className="w-full bg-bg border border-line rounded-lg px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent resize-none font-mono"/>
           </div>
+          {saveError && <p className="text-[12px] text-red-500 bg-red-500/10 px-3 py-1.5 rounded-lg">{saveError}</p>}
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setEditing(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors">取消</button>
+            <button type="button" onClick={handleCancel} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors">取消</button>
             <button type="button" onClick={handleSave} disabled={saving}
               className="px-4 py-1.5 text-[12px] font-bold bg-ink text-bg rounded-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5">
               <Save className="w-3.5 h-3.5" aria-hidden/> {saving ? '保存中…' : '保存'}
@@ -214,6 +225,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   const [selProvider, setSelProvider] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<AgentConfig | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState({ id: '', name: '', roleLabel: '', provider: 'claude-code' as ProviderName, systemPrompt: '', tags: [] as string[] })
   const [addError, setAddError] = useState('')
@@ -241,17 +253,40 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
     }).catch(() => setLoading(false))
   }, [isOpen])
 
-  function handleAgentSave(updated: AgentConfig) {
+  function handleAgentSave(updated: AgentConfig): Promise<void> {
     setSaving(true)
-    fetch(`${API}/api/agents/${updated.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-      .then(r => r.json()).then(a => {
+    return fetch(`${API}/api/agents/${updated.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      .then(async res => {
+        const a = await res.json() as AgentConfig & {error?: string}
+        if (!res.ok) throw new Error(a.error ?? '保存失败')
         setAgents(prev => prev.map(x => x.id === a.id ? a : x)); setSaving(false)
-      }).catch(() => setSaving(false))
+      }).catch(e => { console.error(e); setSaving(false); throw e })
   }
   function handleAgentDelete(id: string) {
-    if (!confirm('确认删除？')) return
     fetch(`${API}/api/agents/${id}`, { method: 'DELETE' })
       .then(r => { if (r.ok) setAgents(prev => prev.filter(a => a.id !== id)) })
+  }
+  function ConfirmDeleteDialog({ agent, onConfirm, onCancel }: { agent: AgentConfig; onConfirm: () => void; onCancel: () => void }) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="bg-surface rounded-2xl border border-line shadow-2xl p-6 w-full max-w-xs mx-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+              <Trash2 className="w-5 h-5 text-red-500" />
+            </div>
+            <div>
+              <h3 className="text-[15px] font-bold text-ink">确认删除</h3>
+              <p className="text-[12px] text-ink-soft">此操作不可恢复</p>
+            </div>
+          </div>
+          <p className="text-[13px] text-ink mb-5">确定要删除 Agent <span className="font-bold">{agent.name}</span> 吗？</p>
+          <div className="flex gap-3">
+            <button onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
+            <button onClick={onConfirm} className="flex-1 px-4 py-2 text-[13px] font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">删除</button>
+          </div>
+        </div>
+      </div>
+    )
   }
   function handleAddAgent() {
     if (!addForm.id || !addForm.name) { setAddError('ID 和名称必填'); return }
@@ -285,7 +320,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
               </button>
               <button onClick={() => setTab('provider')}
                 className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'provider' ? 'bg-bg shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
-                <Server className="w-3.5 h-3.5" aria-hidden/>Provider
+                <Server className="w-3.5 h-3.5" aria-hidden/>CLI 连接
               </button>
             </div>
             <button onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-surface rounded-full transition-colors">
@@ -312,7 +347,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                       </tr>
                     </thead>
                     <tbody className="bg-bg">
-                      {agents.map(a => <AgentRow key={a.id} agent={a} onSave={handleAgentSave} onDelete={handleAgentDelete} saving={saving}/>)}
+                      {agents.map(a => <AgentRow key={a.id} agent={a} onSave={handleAgentSave} onDeleteRequest={setPendingDelete} saving={saving}/>)}
                     </tbody>
                   </table>
                 </div>
@@ -395,6 +430,14 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
           </div>
         </div>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDeleteDialog
+          agent={pendingDelete}
+          onConfirm={() => { handleAgentDelete(pendingDelete.id); setPendingDelete(null) }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </>
   )
 }

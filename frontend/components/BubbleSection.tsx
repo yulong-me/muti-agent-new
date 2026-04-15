@@ -7,6 +7,15 @@ import remarkBreaks from 'remark-breaks'
 import { ChevronRight, ChevronDown, BrainCircuit } from 'lucide-react'
 import { AGENT_COLORS, DEFAULT_AGENT_COLOR, extractMentions, mdComponents, type Message } from '../lib/agents'
 
+/** 将 hex 色值转为带 alpha 的 rgba 字符串（参考 clowder-ai hexToRgba） */
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '')
+  const r = parseInt(clean.substring(0, 2), 16)
+  const g = parseInt(clean.substring(2, 4), 16)
+  const b = parseInt(clean.substring(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 interface BubbleSectionProps {
   label: string
   icon: 'brain' | 'output'
@@ -70,7 +79,7 @@ export function BubbleSection({
           className={`mt-2 ml-2 pl-3.5 border-l-2 text-[14px] leading-relaxed ${
             icon === 'brain'
               ? 'font-mono text-ink-soft bg-surface-muted/50 py-2.5 px-3 rounded-r-lg text-[13px] overflow-x-auto'
-              : 'text-ink py-0.5'
+              : 'text-ink py-0.5 overflow-x-auto'
           }`}
           style={{ borderColor: `${agentColor}40` }}
         >
@@ -96,18 +105,35 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ msg, isStreaming, agentColor, agentAvatar }: MessageBubbleProps) {
   const isUser = msg.agentRole === 'USER'
+  const isSystem = msg.type === 'system'
+
+  // F007: 系统消息居中通知（如 "xxx 加入了讨论"）
+  if (isSystem) {
+    return (
+      <div className="flex justify-center mb-3">
+        <div className="text-xs px-4 py-2 rounded-lg bg-surface/60 border border-line text-ink-soft max-w-[85%] text-center">
+          💬 <span className="font-medium text-ink">{msg.agentName}</span> {msg.content}
+        </div>
+      </div>
+    )
+  }
+
+  // Agent bubble: tinted background + semi-transparent border（参考 clowder-ai）
+  const agentBubbleBg = hexToRgba(agentColor, 0.08)
+  const agentBubbleBorder = hexToRgba(agentColor, 0.28)
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Avatar */}
-      <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
+      <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden ring-2"
+           style={{ backgroundColor: isUser ? agentColor : 'transparent', boxShadow: isUser ? undefined : `0 0 0 2px ${agentBubbleBorder}` }}>
         <img src={agentAvatar} alt="" className="w-full h-full" />
       </div>
 
       {/* Bubble */}
       <div className={`max-w-[75%] min-w-0 flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
         <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold" style={{ color: isUser ? undefined : agentColor }}>
+          <span className="text-[13px] font-semibold" style={{ color: isUser ? agentColor : undefined }}>
             {msg.agentName}
           </span>
           {isStreaming && (
@@ -116,11 +142,16 @@ export function MessageBubble({ msg, isStreaming, agentColor, agentAvatar }: Mes
         </div>
 
         <div
-          className={`rounded-2xl px-4 py-3 text-[14px] leading-relaxed ${
+          className={`border px-4 py-3 text-[14px] leading-relaxed transition-transform hover:-translate-y-0.5 overflow-x-auto ${
             isUser
-              ? 'bg-accent text-white rounded-tr-sm'
-              : 'bg-surface border border-line text-ink rounded-tl-sm'
+              ? 'bg-accent/10 text-ink rounded-2xl rounded-br-sm'
+              : 'text-ink rounded-2xl rounded-tl-sm'
           }`}
+          style={
+            isUser
+              ? { borderColor: hexToRgba(agentColor, 0.25) }
+              : { backgroundColor: agentBubbleBg, borderColor: agentBubbleBorder }
+          }
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}

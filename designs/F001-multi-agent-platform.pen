@@ -876,6 +876,31 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tfmX8",
+                  "name": "agent2Card",
+                  "width": "fill_container",
+                  "fill": "#F5F5F7",
+                  "cornerRadius": 8,
+                  "layout": "vertical",
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Ms8JE",
+                      "name": "agent2Task",
+                      "fill": "#86868B",
+                      "textGrowth": "fixed-width",
+                      "width": 236,
+                      "content": "等待主持人发出辩论指令，准备就经济视角发表观点...",
+                      "lineHeight": 1.5,
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 }
               ]
             },
@@ -930,8 +955,368 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "subpJ",
+                  "name": "agent3Card",
+                  "width": "fill_container",
+                  "fill": "#F5F5F7",
+                  "cornerRadius": 8,
+                  "layout": "vertical",
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "YyL0P",
+                      "name": "agent3Task",
+                      "fill": "#86868B",
+                      "textGrowth": "fixed-width",
+                      "width": 236,
+                      "content": "监控辩论流程，评估各方论据质量，适时介入引导...",
+                      "lineHeight": 1.5,
+                      "fontFamily": "SF Pro Display",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 }
               ]
+            },
+            {
+              "type": "rectangle",
+              "id": "trecD",
+              "name": "sep",
+              "fill": "#E5E5EA",
+              "width": "fill_container",
+              "height": 0
+            },
+            {
+              "type": "frame",
+              "id": "cBZyj",
+              "name": "wsTitle",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "fO0MR",
+                  "name": "wsTitleIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "folder",
+                  "iconFontFamily": "lucide",
+                  "fill": "#86868B"
+                },
+                {
+                  "type": "text",
+                  "id": "paWMT",
+                  "name": "wsTitleText",
+                  "fill": "#1D1D1F",
+                  "content": "工作目录",
+                  "fontFamily": "SF Pro Display",
+                  "fontSize": 16,
+                  "fontWeight": "bold"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "QXe9G",
+              "name": "wsPathBar",
+              "fill": "#FAFAFA",
+              "cornerRadius": 6,
+              "gap": 4,
+              "padding": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Epk59",
+                  "name": "wsPathText",
+                  "fill": "#86868B",
+                  "content": "/Users/yulong/projects/debate-workspace",
+                  "fontFamily": "SF Pro Text",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Dxpoh",
+              "name": "fileTree",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "l43GQ",
+                  "name": "f1",
+                  "fill": "#FAFAFA",
+                  "cornerRadius": 6,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "LDvab",
+                      "name": "f1Icon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "folder",
+                      "iconFontFamily": "lucide",
+                      "fill": "#F59E0B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "QXyDO",
+                      "name": "f1Name",
+                      "fill": "#1D1D1F",
+                      "content": "research",
+                      "fontFamily": "SF Pro Text",
+                      "fontSize": 13,
+                      "fontWeight": "medium"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NygQz",
+                  "name": "fl1",
+                  "fill": "#EFF6FF",
+                  "cornerRadius": 6,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "bFEsT",
+                      "name": "fl1Spacer",
+                      "fill": "#E5E5EA",
+                      "width": 3,
+                      "height": 1
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "csOkm",
+                      "name": "fl1Icon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#2563EB"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZMAMC",
+                      "name": "fl1Name",
+                      "fill": "#2563EB",
+                      "content": "agent_a_notes.md",
+                      "fontFamily": "SF Pro Text",
+                      "fontSize": 13,
+                      "fontWeight": "medium"
+                    },
+                    {
+                      "type": "rectangle",
+                      "cornerRadius": [
+                        0,
+                        3,
+                        3,
+                        0
+                      ],
+                      "id": "5UoP9",
+                      "name": "accentBar",
+                      "fill": "#2563EB",
+                      "width": 3,
+                      "height": 28
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "A6zmX",
+                  "name": "fl2",
+                  "cornerRadius": 6,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "GU8kr",
+                      "name": "fl2Spacer",
+                      "fill": "#E5E5EA",
+                      "width": 14,
+                      "height": 1
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "YMuLp",
+                      "name": "fl2Icon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#86868B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "1xNbv",
+                      "name": "fl2Name",
+                      "fill": "#1D1D1F",
+                      "content": "agent_b_analysis.md",
+                      "fontFamily": "SF Pro Text",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "IZg6j",
+                  "name": "f2",
+                  "fill": "#FAFAFA",
+                  "cornerRadius": 6,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "iJK4V",
+                      "name": "f2Icon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "folder",
+                      "iconFontFamily": "lucide",
+                      "fill": "#F59E0B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "lHzgI",
+                      "name": "f2Name",
+                      "fill": "#1D1D1F",
+                      "content": "sources",
+                      "fontFamily": "SF Pro Text",
+                      "fontSize": 13,
+                      "fontWeight": "medium"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "z4oxs",
+                  "name": "fl3",
+                  "cornerRadius": 6,
+                  "gap": 8,
+                  "padding": [
+                    6,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "uAf7i",
+                      "name": "fl3Spacer",
+                      "fill": "#E5E5EA",
+                      "width": 14,
+                      "height": 1
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "xSZBG",
+                      "name": "fl3Icon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "file-text",
+                      "iconFontFamily": "lucide",
+                      "fill": "#86868B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "qtQbQ",
+                      "name": "fl3Name",
+                      "fill": "#1D1D1F",
+                      "content": "debate_transcript.txt",
+                      "fontFamily": "SF Pro Text",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZXMUZ",
+                  "name": "refreshBtn",
+                  "gap": 6,
+                  "padding": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "grW7m",
+                      "name": "refreshIcon",
+                      "width": 12,
+                      "height": 12,
+                      "iconFontName": "refresh-cw",
+                      "iconFontFamily": "lucide",
+                      "fill": "#86868B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "0rFaY",
+                      "name": "refreshText",
+                      "fill": "#86868B",
+                      "content": "刷新目录",
+                      "fontFamily": "SF Pro Text",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "TGh55",
+              "name": "sectionDivider",
+              "width": "fill_container",
+              "height": 28,
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "UmEwU",
+                  "name": "dividerLine",
+                  "fill": "#E5E5EA",
+                  "width": "fill_container",
+                  "height": 1
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "XKREY",
+              "name": "sepLine",
+              "fill": "#E5E5EA",
+              "width": "fill_container",
+              "height": 1
             }
           ]
         }

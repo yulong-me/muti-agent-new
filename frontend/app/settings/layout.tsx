@@ -34,7 +34,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
               isProviders ? 'text-accent font-bold' : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <Server className="w-3.5 h-3.5" /> Provider 配置
+            <Server className="w-3.5 h-3.5" /> CLI 连接
           </Link>
           <span className="text-line">|</span>
           <Link

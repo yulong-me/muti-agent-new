@@ -50,3 +50,13 @@ export function emitAgentStatus(roomId: string, agentId: string, status: string)
 export function emitUserMessage(roomId: string, message: { id: string; agentRole: string; agentName: string; content: string; timestamp: number; type: string }) {
   getIO().to(roomId).emit('user_message', { roomId, message });
 }
+
+// F007: Emit agent joined — new agent added to room, with system message
+export function emitRoomAgentJoined(
+  roomId: string,
+  agent: { id: string; role: string; name: string; domainLabel: string; configId: string; status: string },
+  systemMessage: { id: string; agentRole: string; agentName: string; content: string; timestamp: number; type: string },
+  agents: { id: string; role: string; name: string; domainLabel: string; configId: string; status: string }[],
+) {
+  getIO().to(roomId).emit('room:agent-joined', { roomId, agent, systemMessage, agents });
+}

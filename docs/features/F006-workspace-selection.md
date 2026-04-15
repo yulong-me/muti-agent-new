@@ -1,9 +1,37 @@
 ---
 feature_ids: [F006]
 related_features: [F0043]
-topics: [workspace, multi-agent]
+topics: [workspace, multi-agent, directory-browser]
 doc_kind: spec
 created: 2026-04-14
+updated: 2026-04-14
+
+## Changelog
+
+- 2026-04-14: 初始版本，包含已实现的后端目录浏览器 API
+
+## 已完成实现
+
+### 后端 API
+- `GET /api/browse` — 目录内容浏览
+- `POST /api/browse/mkdir` — 新建文件夹
+- `POST /api/browse/pick-directory` — macOS 原生文件夹选择器
+
+### 前端组件
+- `DirectoryBrowser.tsx` — web 目录导航弹窗（面包屑 + 列表 + 路径输入 + 新建文件夹）
+- `DirectoryPicker.tsx` — 带"浏览"按钮的路径输入框
+
+## Acceptance Criteria
+
+- [x] AC-1: 创建 Room 时点击"浏览"打开目录浏览器弹窗
+- [x] AC-2: 目录浏览器可层层导航进入子目录
+- [x] AC-3: 面包屑可点击回上级目录
+- [x] AC-4: "选择此目录"按钮将当前路径填入并关闭弹窗
+- [x] AC-5: POST `/api/pick-directory` 调用系统原生文件夹选择器（macOS osascript）
+- [ ] AC-6: 留空时使用默认 `workspaces/room-{id}/`
+- [ ] AC-7: agent CLI cwd 使用 room 绑定的 workspace
+- [ ] AC-8: 工作目录持久化到数据库，重启后保持
+- [ ] AC-9: 路径校验失败时显示明确错误
 ---
 
 # F006: 创建 Room 时可选工作目录
@@ -15,84 +43,143 @@ created: 2026-04-14
 当前每个 Room 的工作目录由系统自动生成在 `workspaces/room-{roomId}/`，用户无法指定。对于有明确工作项目的场景（如代码审查、技术调研），用户希望：
 - 指定已有的工作目录，agent 直接在该目录下操作
 - 避免 agent 在错误的目录下工作
-- 支持跨项目协作（linked workspace）
+- 支持跨项目协作
+
+参考 **clowder-ai** 的 `DirectoryBrowser` 组件：后端 API 读目录，前端渲染可导航的目录树 + 系统原生文件夹选择器。
 
 ## What
 
-### 前端改动（CreateRoomModal）
+### 前端（DirectoryBrowser + DirectoryPicker）
 
-在发起讨论弹窗中增加"工作目录"输入字段：
+**`frontend/components/DirectoryBrowser.tsx`** — 可导航目录树弹窗（参考 clowder-ai `DirectoryBrowser.tsx`）：
 
 ```
-┌─────────────────────────────────┐
-│  发起讨论                        │
-├─────────────────────────────────┤
-│  讨论主题                        │
-│  ┌───────────────────────────┐  │
-│  │ 自由讨论                   │  │
-│  └───────────────────────────┘  │
-│                                 │
-│  工作目录（可选）                 │
-│  ┌───────────────────────────┐  │
-│  │ /Users/.../project        │  │
-│  └───────────────────────────┘  │
-│  留空则自动创建临时工作区          │
-│                                 │
-│        取消        发起讨论      │
-└─────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│  选择工作目录                              │
+│  Home › Documents › my-project        [+] │
+│ ─────────────────────────────────────────│
+│  📁 src                                ›│
+│  📁 tests                              ›│
+│  📁 docs                               ›│
+│  📁 .vscode                            ›│
+│  📁 node_modules                        │
+│ ─────────────────────────────────────────│
+│  /Users/yulong/work/my-project          │
+│  ┌────────────────────────────────────┐ │
+│  │ /Users/yulong/work/...             │ │
+│  └────────────────────────────────────┘ │
+│                  取消    ✓ 选择此目录    │
+└──────────────────────────────────────────┘
 ```
 
-- 输入框支持手动输入绝对路径
-- 提供"浏览"按钮打开系统文件选择器（可选增强）
-- 默认 placeholder 提示"留空则使用默认目录"
-- 输入验证：必须是绝对路径（以 `/` 开头）
+**功能：**
+- 面包屑导航（Home 可点击回根目录）
+- 子目录列表，点击进入下一层
+- 顶部路径输入框，支持手动跳转
+- `[+]` 新建文件夹按钮（POST `/api/browse/mkdir`）
+- `[选择此目录]` 确认当前目录
+- 关闭按钮 / ESC 取消
 
-### 后端改动
+**`frontend/components/DirectoryPicker.tsx`** — 触发器组件：
 
-**POST /api/rooms** 请求体新增可选字段：
+```
+┌──────────────────────────────────┐
+│ /Users/yulong/work/my-project  [浏览] │
+└──────────────────────────────────┘
+```
 
+- 点击"浏览"打开 `DirectoryBrowser` 弹窗
+- 选择后自动填入路径
+- 也可直接手动输入
+
+**`frontend/components/CreateRoomModal.tsx`**：
+- 用 `DirectoryPicker` 替换原来的纯文本输入框
+
+### 后端（参考 clowder-ai `projects.ts`）
+
+**`backend/src/routes/browse.ts`** — 目录浏览器 API：
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/browse` | GET | 列出目录下子目录，支持 `?path=` 指定路径 |
+| `/api/browse/mkdir` | POST | 在指定目录下新建子目录 |
+| `/api/pick-directory` | POST | 调用 macOS `osascript` 打开系统原生文件夹选择器 |
+
+**GET /api/browse?path=/Users/yulong/work/my-project**
+
+响应：
 ```json
 {
-  "topic": "自由讨论",
-  "workspacePath": "/Users/yulong/work/my-project"
+  "current": "/Users/yulong/work/my-project",
+  "name": "my-project",
+  "parent": "/Users/yulong/work",
+  "homePath": "/Users/yulong/work",
+  "entries": [
+    { "name": "src", "path": "/Users/yulong/work/my-project/src", "isDirectory": true },
+    { "name": "tests", "path": "/Users/yulong/work/my-project/tests", "isDirectory": true }
+  ]
 }
 ```
 
-**backend/src/routes/rooms.ts**：
-- 接收 `workspacePath` 参数
-- 若指定：验证路径存在且为目录，写入 `room.workspace`
-- 若留空：使用现有自动生成逻辑 `workspaces/room-{id}/`
+**安全策略（参考 clowder-ai）：**
+- 限制在 `homedir()` 目录下
+- `realpath()` 解析 symlink 后再检查边界，防止逃逸
+- 跳过 `.` 开头的隐藏目录和 `node_modules`
 
-**backend/src/db/repositories/rooms.ts**：
-- `Room` 类型增加可选 `workspace` 字段
-- `create()` 支持传入自定义 workspace
+**POST /api/pick-directory**
+- macOS：`osascript -e 'POSIX path of (choose folder)'`
+- 返回选中的绝对路径
+- 校验是否在 home 目录下
 
-**backend/src/services/workspace.ts**：
-- `ensureWorkspace()` 优先使用 room 绑定的 workspacePath
-- 新增 `validateWorkspacePath()` 做安全检查（防止路径遍历）
+### 已实现（本次之前）
 
-**Agent CLI 调用**：
-- `claudeCode.ts` / `opencode.ts` 使用 room 绑定的 workspace 作为 `cwd`
-- 优先级：room.workspace > 默认 workspaces/room-{id}/
+- [x] `rooms` 表增加 `workspace TEXT` 列
+- [x] `POST /api/rooms` 接收 `workspacePath` 参数
+- [x] `validateWorkspacePath()` 安全校验
+- [x] `ensureWorkspace()` 支持自定义路径
+- [x] `room.workspace` 持久化到数据库
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ CreateRoomModal                                        │
+│   └─ DirectoryPicker (触发器)                           │
+│         └─ DirectoryBrowser (弹窗)                     │
+│               └─ GET /api/browse    ← 后端读目录        │
+│               └─ POST /api/pick-directory ← 系统原生选择 │
+│                                                      │
+│  选择后 → workspacePath 填入 → POST /api/rooms        │
+│                                       ↓              │
+│                              rooms.workspace = 路径     │
+│                                       ↓              │
+│                              ensureWorkspace(roomId,  │
+│                                room.workspace)        │
+│                                       ↓              │
+│                              Agent CLI cwd = workspace  │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Acceptance Criteria
 
-- [ ] AC-1: 创建 Room 时可填入自定义 workspace 路径
-- [ ] AC-2: 留空时使用自动生成的 `workspaces/room-{id}/`
-- [ ] AC-3: agent CLI 的 cwd 指向 room 绑定的 workspace
-- [ ] AC-4: 无效路径（不存在/非目录）给出明确错误提示
-- [ ] AC-5: 工作目录信息持久化到数据库，重启后保持
+- [x] AC-1: 创建 Room 时点击"浏览"打开目录浏览器弹窗
+- [x] AC-2: 目录浏览器可层层导航进入子目录
+- [x] AC-3: 面包屑可点击回上级目录
+- [x] AC-4: "选择此目录"按钮将当前路径填入并关闭弹窗
+- [x] AC-5: POST `/api/browse/pick-directory` 调用系统原生文件夹选择器（macOS osascript），前端 DirectoryBrowser 提供"系统选择器"按钮
+- [ ] AC-6: 留空时使用默认 `workspaces/room-{id}/`
+- [ ] AC-7: agent CLI cwd 使用 room 绑定的 workspace
+- [x] AC-8: 工作目录持久化到数据库，重启后保持（workspace 列已加入 schema + rooms repo）
+- [x] AC-9: 路径校验失败时返回明确 HTTP 状态码（404 目录不存在 / 403 越权或无权访问）
+
+> **安全边界统一**：`validateWorkspacePath()`（POST /api/rooms）与 `validatePath()`（/api/browse）均强制 workspace 必须在 `homedir()` 下，防止 agent 逃逸到系统任意路径。
 
 ## Dependencies
 
-- F0043（可观测性日志）：workspace 路径会写入 debug 日志
+- F0043（可观测性日志）：workspace 路径写入 debug 日志
 
 ## Risk
 
-- 路径遍历安全：必须校验 workspacePath 不含 `../` 等逃逸序列
+- 路径遍历安全：`realpath()` 解析 symlink 后检查边界
+- macOS only：`osascript` 仅 macOS 支持
 - 权限问题：agent 用户需对指定目录有读写权限
-
-## Open Questions
-
-- 是否支持从已有 git worktree 列表中选择？（类 clowder-ai linked roots）
-- 自定义 workspace 的 room 在归档时是否也移动到 `workspaces-archive/`？

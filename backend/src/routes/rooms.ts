@@ -13,7 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
 import { handleUserMessage, routeToAgent } from '../services/stateMachine.js';
-import { roomsRepo, sessionsRepo } from '../db/index.js';
+import { roomsRepo, sessionsRepo, messagesRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
@@ -187,6 +187,70 @@ roomsRouter.patch('/:id/archive', async (req, res) => {
 // GET /api/rooms/archived — 列出已归档讨论室
 roomsRouter.get('/archived', (_req, res) => {
   res.json(roomsRepo.listArchived());
+});
+
+// POST /api/rooms/:id/agents — 运行时追加 WORKER agent 入群（F007）
+roomsRouter.post('/:id/agents', (req, res) => {
+  const { id } = req.params;
+  const { agentId } = req.body as { agentId?: string };
+
+  const room = store.get(id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.state === 'DONE') return res.status(400).json({ error: 'Room 已结束，无法添加成员' });
+
+  if (!agentId) return res.status(400).json({ error: 'agentId required' });
+
+  // 已存在校验
+  if (room.agents.some(a => a.configId === agentId)) {
+    return res.status(400).json({ error: 'Agent 已在讨论中' });
+  }
+
+  const cfg = getAgent(agentId);
+  if (!cfg) return res.status(404).json({ error: `Agent not found: ${agentId}` });
+
+  // 角色校验：仅允许追加 WORKER
+  if (cfg.role !== 'WORKER') {
+    return res.status(400).json({ error: '无法追加 MANAGER 角色' });
+  }
+
+  // 启用状态校验
+  if (!cfg.enabled) {
+    return res.status(400).json({ error: 'Agent 未启用，无法加入讨论' });
+  }
+
+  const newAgent = {
+    id: uuid(),
+    role: 'WORKER' as const,
+    name: cfg.name,
+    domainLabel: cfg.roleLabel,
+    configId: cfg.id,
+    status: 'idle' as const,
+  };
+
+  // 系统消息
+  const systemMsg = {
+    id: uuid(),
+    agentRole: 'WORKER' as const,
+    agentName: cfg.name,
+    content: `${cfg.name} 加入了讨论`,
+    timestamp: Date.now(),
+    type: 'system' as const,
+  };
+
+  room.agents.push(newAgent);
+  room.messages.push(systemMsg);
+  room.updatedAt = Date.now();
+
+  // 持久化
+  roomsRepo.update(id, { agents: room.agents });
+  messagesRepo.insert(id, systemMsg);
+
+  // Socket 广播
+  import('../services/socketEmitter.js').then(({ emitRoomAgentJoined }) => {
+    emitRoomAgentJoined(id, newAgent, systemMsg, room.agents);
+  }).catch(() => { });
+
+  res.json({ room, systemMessage: systemMsg });
 });
 
 // DELETE /api/rooms/archived/:id — 彻底删除已归档讨论室
