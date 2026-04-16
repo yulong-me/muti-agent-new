@@ -363,11 +363,11 @@ socket.on('agent_status', (data: any) => {
     a.click()
   }
 
-  // Default recipient: MANAGER
+  // F013: Default to first WORKER agent (no MANAGER in room after F012)
   useEffect(() => {
     if (!roomId || agents.length === 0) return
-    const manager = agents.find(a => a.role === 'MANAGER')
-    if (manager) setSelectedRecipientId(prev => prev ?? manager.id)
+    const worker = agents.find(a => a.role === 'WORKER')
+    if (worker) setSelectedRecipientId(prev => prev ?? worker.id)
   }, [roomId, agents])
 
   // ─── @mention helpers ────────────────────────────────────────────────────────
@@ -489,6 +489,11 @@ socket.on('agent_status', (data: any) => {
 
   const handleSendMessage = async () => {
     if (!roomId || !userInput.trim() || sending) return
+    // F013: Block send if no recipient selected — open picker instead
+    if (!selectedRecipientId) {
+      setRecipientPickerOpen(true)
+      return
+    }
     setMentionPickerOpen(false)
     setSending(true)
     const content = userInput.trim()
@@ -511,7 +516,12 @@ socket.on('agent_status', (data: any) => {
         const err = await res.text()
         logError('msg:send_error', { roomId, status: res.status, error: err })
         setUserInput(content)
-        setSendError('发送失败，请重试')
+        // F013: 400 means missing target; guide user to pick one
+        if (res.status === 400) {
+          setSendError('请先选择发送对象')
+        } else {
+          setSendError('发送失败，请重试')
+        }
         setTimeout(() => setSendError(null), 4000)
       }
     } catch (e) {
@@ -784,17 +794,17 @@ socket.on('agent_status', (data: any) => {
                   <button
                     type="button"
                     onClick={() => setRecipientPickerOpen(o => !o)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-[12px] text-ink-soft hover:border-accent/40 transition-colors"
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border text-[12px] text-ink-soft hover:border-accent/40 transition-colors ${!selectedRecipientId ? 'border-red-400/50' : 'border-line'}`}
                   >
                     <span className="text-[11px] text-ink-soft/60">发送给</span>
                     {(() => {
                       const rec = agents.find(a => a.id === selectedRecipientId)
-                      const color = rec ? AGENT_COLORS[rec.name]?.bg || DEFAULT_AGENT_COLOR.bg : DEFAULT_AGENT_COLOR.bg
+                      const color = rec ? AGENT_COLORS[rec.name]?.bg || DEFAULT_AGENT_COLOR.bg : '#ef4444'
                       return (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                           <span className="font-semibold" style={{ color: rec ? color : undefined }}>
-                            {rec ? rec.name : '主持人'}
+                            {rec ? rec.name : '请选择'}
                           </span>
                           <ChevronDown className={`w-3 h-3 text-ink-soft/50 transition-transform ${recipientPickerOpen ? 'rotate-180' : ''}`} />
                         </>
@@ -803,7 +813,7 @@ socket.on('agent_status', (data: any) => {
                   </button>
                   {recipientPickerOpen && (
                     <div className="absolute bottom-full left-0 mb-1.5 bg-bg border border-line rounded-xl shadow-lg py-1 z-30 min-w-[160px]">
-                      {agents.map(agent => {
+                      {agents.filter(a => a.role !== 'MANAGER').map(agent => {
                         const isSelected = agent.id === selectedRecipientId
                         const color = AGENT_COLORS[agent.name]?.bg || DEFAULT_AGENT_COLOR.bg
                         return (
@@ -815,7 +825,7 @@ socket.on('agent_status', (data: any) => {
                           >
                             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
                             <span style={{ color: isSelected ? color : undefined }}>{agent.name}</span>
-                            <span className="text-[10px] text-ink-soft/60 ml-auto">{agent.role === 'MANAGER' ? '主持人' : agent.domainLabel}</span>
+                            <span className="text-[10px] text-ink-soft/60 ml-auto">{agent.domainLabel}</span>
                           </button>
                         )
                       })}
@@ -838,7 +848,7 @@ socket.on('agent_status', (data: any) => {
                     type="button"
                     className="app-islands-item bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-deep transition-all disabled:opacity-50 text-[14px] shadow-sm self-end"
                     onClick={handleSendMessage}
-                    disabled={sending || !userInput.trim()}
+                    disabled={sending || !userInput.trim() || !selectedRecipientId}
                   >
                     {sending ? '发送中…' : '发送'}
                   </button>
