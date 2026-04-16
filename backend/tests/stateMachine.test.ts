@@ -51,7 +51,12 @@ vi.mock('../src/services/socketEmitter.js', () => ({
   emitAgentStatus: vi.fn(),
   emitStreamDelta: vi.fn(),
   emitThinkingDelta: vi.fn(),
+  emitRoomErrorEvent: vi.fn(),
   emitUserMessage: vi.fn(),
+}));
+
+vi.mock('../src/services/workspace.js', () => ({
+  ensureWorkspace: vi.fn().mockResolvedValue('/tmp/test-workspace'),
 }));
 
 // 动态导入以获取最新代码
@@ -116,6 +121,98 @@ describe('F004: Manager 路由器', () => {
 
       expect(store.update).toHaveBeenCalled();
       expect(messagesRepo.insert).toHaveBeenCalled();
+    });
+
+    it('专家执行失败时也应该结束 loading 并发出结构化错误事件', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+      const { emitStreamEnd, emitRoomErrorEvent } = await import('../src/services/socketEmitter.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* () {
+        const failure = new Error('cli died');
+        (failure as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
+        throw failure;
+      });
+
+      await expect(routeToAgent('room-1', '@架构师 帮我看看这个方案', 'worker-1')).rejects.toThrow('cli died');
+
+      expect(emitStreamEnd).toHaveBeenCalled();
+      expect(emitRoomErrorEvent).toHaveBeenCalledWith(
+        'room-1',
+        expect.objectContaining({
+          agentId: 'worker-1',
+          agentName: '架构师',
+          code: 'AGENT_PROCESS_EXIT',
+          retryable: true,
+          originalUserContent: '@架构师 帮我看看这个方案',
+        }),
+      );
+      expect(messagesRepo.updateContent).toHaveBeenCalledWith(
+        expect.any(String),
+        '',
+        expect.objectContaining({
+          runError: expect.objectContaining({
+            code: 'AGENT_PROCESS_EXIT',
+            originalUserContent: '@架构师 帮我看看这个方案',
+          }),
+        }),
+      );
+    });
+
+    it('专家启动前置步骤失败时也应该发出可恢复的 orphan 错误事件', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { ensureWorkspace } = await import('../src/services/workspace.js');
+      const { emitStreamStart, emitStreamEnd, emitRoomErrorEvent } = await import('../src/services/socketEmitter.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(ensureWorkspace).mockRejectedValueOnce(new Error('workspace unavailable'));
+
+      await expect(routeToAgent('room-1', '@架构师 帮我看看这个方案', 'worker-1')).rejects.toThrow('workspace unavailable');
+
+      expect(emitStreamStart).not.toHaveBeenCalled();
+      expect(emitStreamEnd).not.toHaveBeenCalled();
+      expect(emitRoomErrorEvent).toHaveBeenCalledWith(
+        'room-1',
+        expect.objectContaining({
+          agentId: 'worker-1',
+          agentName: '架构师',
+          code: 'AGENT_RUNTIME_ERROR',
+          messageId: undefined,
+          originalUserContent: '@架构师 帮我看看这个方案',
+        }),
+      );
     });
   });
 

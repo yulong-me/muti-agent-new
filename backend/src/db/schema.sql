@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS messages (
   temp_msg_id     TEXT,
   -- F0042: 直接路由的接收人 agentId（USER 消息用于显示；可空，兼容旧数据）
   to_agent_id     TEXT,
+  -- F014: persisted structured agent error for reconnect/poll recovery
+  run_error_json  TEXT,
   FOREIGN KEY (room_id) REFERENCES rooms(id)
 );
 

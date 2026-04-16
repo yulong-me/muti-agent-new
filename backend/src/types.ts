@@ -3,6 +3,26 @@ export type DiscussionState = 'RUNNING' | 'DONE';
 // Agent 角色：MANAGER 只调度不执行，WORKER 执行具体任务
 export type AgentRole = 'MANAGER' | 'WORKER';
 export type MessageType = 'system' | 'statement' | 'question' | 'rebuttal' | 'summary' | 'report' | 'user_action' | 'a2a_handoff';
+export type AgentExecutionErrorCode =
+  | 'AGENT_TIMEOUT'
+  | 'AGENT_PROCESS_EXIT'
+  | 'AGENT_PROVIDER_ERROR'
+  | 'AGENT_PARSE_ERROR'
+  | 'AGENT_RUNTIME_ERROR';
+
+export interface AgentRunError {
+  traceId: string;
+  messageId?: string;
+  agentId: string;
+  agentName: string;
+  code: AgentExecutionErrorCode | string;
+  title: string;
+  message: string;
+  retryable: boolean;
+  originalUserContent?: string;
+  toAgentId?: string;
+  toAgentName?: string;
+}
 
 // A2A 上下文 — 追踪调用链和深度
 export interface A2AContext {
@@ -63,6 +83,8 @@ export interface Message {
   };
   /** F0042: 直接路由的接收人 agentId（MANAGER 时为空） */
   toAgentId?: string;
+  /** F014: structured agent execution error persisted for reconnect/poll recovery */
+  runError?: AgentRunError;
 }
 
 export interface DiscussionRoom {

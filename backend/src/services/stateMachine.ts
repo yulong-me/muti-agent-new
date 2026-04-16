@@ -9,7 +9,7 @@
  */
 
 import { store } from '../store.js';
-import { getAgent } from '../config/agentConfig.js';
+import { getAgent, type ProviderName } from '../config/agentConfig.js';
 import { getProvider } from './providers/index.js';
 import type { ClaudeEvent } from './providers/index.js';
 import {
@@ -18,10 +18,11 @@ import {
   emitAgentStatus,
   emitStreamDelta,
   emitThinkingDelta,
+  emitRoomErrorEvent,
   emitUserMessage,
 } from './socketEmitter.js';
 import { HOST_PROMPTS } from '../prompts/host.js';
-import type { Message, Agent, MessageType } from '../types.js';
+import type { Message, Agent, MessageType, AgentExecutionErrorCode, AgentRunError } from '../types.js';
 import { v4 as uuid } from 'uuid';
 import { roomsRepo, messagesRepo } from '../db/index.js';
 import { sessionsRepo } from '../db/index.js';
@@ -105,6 +106,160 @@ function updateAgentStatus(
     agents: room.agents.map(a => (a.id === agentId ? { ...a, status } : a)),
   });
   emitAgentStatus(roomId, agentId, status);
+}
+
+function normalizeAgentExecutionError(err: unknown): {
+  code: AgentExecutionErrorCode;
+  rawMessage: string;
+  title: string;
+  message: string;
+  retryable: boolean;
+} {
+  const rawMessage = err instanceof Error ? err.message : String(err);
+  const taggedCode = (err as Error & { code?: string }).code;
+
+  if (taggedCode === 'AGENT_TIMEOUT') {
+    return {
+      code: 'AGENT_TIMEOUT',
+      rawMessage,
+      title: '响应超时',
+      message: '等待专家的响应超时了，可能他暂时卡住了。你可以重试，或把原问题找回后换个问法再试。',
+      retryable: true,
+    };
+  }
+
+  if (taggedCode === 'AGENT_PROCESS_EXIT') {
+    return {
+      code: 'AGENT_PROCESS_EXIT',
+      rawMessage,
+      title: '服务异常断开',
+      message: '该专家服务刚刚开小差退出了，当前这轮回答没有完整结束。你可以稍后重试。',
+      retryable: true,
+    };
+  }
+
+  if (taggedCode === 'AGENT_PROVIDER_ERROR') {
+    return {
+      code: 'AGENT_PROVIDER_ERROR',
+      rawMessage,
+      title: '上游服务波动',
+      message: '模型服务暂时不稳定，这一轮响应被中断了。稍等片刻再试通常就能恢复。',
+      retryable: true,
+    };
+  }
+
+  if (taggedCode === 'AGENT_PARSE_ERROR') {
+    return {
+      code: 'AGENT_PARSE_ERROR',
+      rawMessage,
+      title: '响应格式异常',
+      message: '解析专家响应时遇到了格式混乱，这一轮没有完整结束。你可以找回原提问后换个问法再试。',
+      retryable: true,
+    };
+  }
+
+  return {
+    code: 'AGENT_RUNTIME_ERROR',
+    rawMessage,
+    title: '执行时遇到问题',
+    message: '专家构思时遇到了点小问题，这次回答没能顺利完成。原提问还可以找回后继续重试。',
+    retryable: true,
+  };
+}
+
+function handleAgentRunFailure(args: {
+  err: unknown;
+  roomId: string;
+  agentId: string;
+  agentName: string;
+  providerName: string;
+  msg?: Message;
+  msgId: string;
+  streamStarted: boolean;
+  accumulated: string;
+  accumulatedThinking: string;
+  requestMeta?: {
+    originalUserContent?: string;
+    toAgentId?: string;
+    toAgentName?: string;
+  };
+}): AgentRunError {
+  const traceId = uuid();
+  const normalized = normalizeAgentExecutionError(args.err);
+  const runError: AgentRunError = {
+    traceId,
+    messageId: args.msgId || undefined,
+    agentId: args.agentId,
+    agentName: args.agentName,
+    code: normalized.code,
+    title: normalized.title,
+    message: normalized.message,
+    retryable: normalized.retryable,
+    originalUserContent: args.requestMeta?.originalUserContent,
+    toAgentId: args.requestMeta?.toAgentId,
+    toAgentName: args.requestMeta?.toAgentName,
+  };
+
+  error('stream.error', {
+    traceId,
+    roomId: args.roomId,
+    agentId: args.agentId,
+    agentName: args.agentName,
+    provider: args.providerName,
+    code: normalized.code,
+    error: normalized.rawMessage,
+  });
+  auditRepo.log('agent:run_failed', normalized.rawMessage, args.agentId, {
+    traceId,
+    roomId: args.roomId,
+    agentName: args.agentName,
+    provider: args.providerName,
+    code: normalized.code,
+    messageId: args.msgId || undefined,
+  });
+
+  if (args.msg) {
+    const r = store.get(args.roomId);
+    if (r) {
+      store.update(args.roomId, {
+        messages: r.messages.map(m =>
+          m.id === args.msg!.id
+            ? {
+                ...m,
+                content: args.accumulated,
+                thinking: args.accumulatedThinking,
+                duration_ms: 0,
+                total_cost_usd: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                runError,
+              }
+            : m,
+        ),
+      });
+    }
+    messagesRepo.updateContent(args.msg.id, args.accumulated, {
+      thinking: args.accumulatedThinking,
+      duration_ms: 0,
+      total_cost_usd: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      runError,
+    });
+  }
+
+  if (args.streamStarted && args.msgId) {
+    emitStreamEnd(args.roomId, args.agentId, args.msgId, {
+      duration_ms: 0,
+      total_cost_usd: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+    });
+    updateAgentStatus(args.roomId, args.agentId, 'idle');
+  }
+  emitRoomErrorEvent(args.roomId, runError);
+
+  return runError;
 }
 
 // ─── Manager 处理用户消息 ───────────────────────────────────────────────────
@@ -224,6 +379,11 @@ export async function routeToAgent(
     target.name,
     'statement',
     'WORKER',
+    {
+      originalUserContent: content,
+      toAgentId: target.id,
+      toAgentName: target.name,
+    },
   );
 
   telemetry('worker:direct:output', {
@@ -371,61 +531,74 @@ async function streamingCallAgent(
   agentName: string,
   msgType: MessageType = 'summary',
   agentRole: 'MANAGER' | 'WORKER' = 'MANAGER',
+  requestMeta?: {
+    originalUserContent?: string;
+    toAgentId?: string;
+    toAgentName?: string;
+  },
 ): Promise<string> {
-  const agentConfig = getAgent(configId);
-  const providerName = agentConfig?.provider ?? 'claude-code';
-  const systemPrompt = agentConfig?.systemPrompt ?? ctx.systemPrompt;
-  const room = store.get(roomId);
-  const workspace = await ensureWorkspace(roomId, room?.workspace);
-  const prompt = `【工作目录】${workspace}
-【角色】${ctx.domainLabel}（${systemPrompt}）
-
-${ctx.userMessage}`;
-
-  const existingSessionId = room?.sessionIds[agentName];
-  const providerOpts: Record<string, unknown> = {
-    ...(agentConfig?.providerOpts ?? {}),
-    sessionId: existingSessionId,
-    workspace,
-    roomId,
-    agentName,
-  };
-
-  const msg = addMessage(roomId, {
-    agentRole,
-    agentName,
-    content: '',
-    type: msgType,
-  });
-  const msgId = msg?.id ?? '';
-
-  // 用户旅程：AI 开始生成
-  info('ai:start', {
-    roomId,
-    agentName,
-    agentRole,
-    provider: providerName,
-    cliPath: (agentConfig?.providerOpts as any)?.cliPath ?? '',
-    promptLength: prompt.length,
-    sessionId: existingSessionId ?? 'new',
-    workspace,
-  });
-  debug('stream.start', { roomId, agentId, agentName, msgId, agentRole });
-  emitStreamStart(roomId, agentId, agentName, Date.now(), msgId, agentRole);
-  updateAgentStatus(roomId, agentId, 'thinking');
-
+  let providerName: ProviderName = 'claude-code';
+  let msg: Message | undefined;
+  let msgId = '';
+  let streamStarted = false;
   let accumulated = '';
   let accumulatedThinking = '';
   let duration_ms = 0;
   let total_cost_usd = 0;
   let input_tokens = 0;
   let output_tokens = 0;
-  let returnedSessionId = existingSessionId ?? '';
+  let returnedSessionId = '';
   let deltaCount = 0;
   let thinkingCount = 0;
 
-  const provider = getProvider(providerName);
   try {
+    const agentConfig = getAgent(configId);
+    providerName = agentConfig?.provider ?? 'claude-code';
+    const systemPrompt = agentConfig?.systemPrompt ?? ctx.systemPrompt;
+    const room = store.get(roomId);
+    const workspace = await ensureWorkspace(roomId, room?.workspace);
+    const prompt = `【工作目录】${workspace}
+【角色】${ctx.domainLabel}（${systemPrompt}）
+
+${ctx.userMessage}`;
+
+    const existingSessionId = room?.sessionIds[agentName];
+    returnedSessionId = existingSessionId ?? '';
+    const providerOpts: Record<string, unknown> = {
+      ...(agentConfig?.providerOpts ?? {}),
+      sessionId: existingSessionId,
+      workspace,
+      roomId,
+      agentName,
+      firstTokenTimeoutMs: 15000,
+      idleTokenTimeoutMs: 15000,
+    };
+
+    msg = addMessage(roomId, {
+      agentRole,
+      agentName,
+      content: '',
+      type: msgType,
+    });
+    msgId = msg?.id ?? '';
+
+    // 用户旅程：AI 开始生成
+    info('ai:start', {
+      roomId,
+      agentName,
+      agentRole,
+      provider: providerName,
+      cliPath: (agentConfig?.providerOpts as any)?.cliPath ?? '',
+      promptLength: prompt.length,
+      sessionId: existingSessionId ?? 'new',
+      workspace,
+    });
+    debug('stream.start', { roomId, agentId, agentName, msgId, agentRole });
+    emitStreamStart(roomId, agentId, agentName, Date.now(), msgId, agentRole);
+    streamStarted = true;
+    updateAgentStatus(roomId, agentId, 'thinking');
+
+    const provider = getProvider(providerName);
     for await (const event of provider(prompt, agentId, providerOpts)) {
       if (event.type === 'delta') {
         deltaCount++;
@@ -443,16 +616,25 @@ ${ctx.userMessage}`;
         output_tokens = event.output_tokens;
         if (event.sessionId) returnedSessionId = event.sessionId;
       } else if (event.type === 'error') {
-        throw new Error(event.message);
+        const providerError = new Error(event.message);
+        (providerError as Error & { code?: string }).code = 'AGENT_PROVIDER_ERROR';
+        throw providerError;
       }
     }
   } catch (err) {
-    error('stream.error', { roomId, agentId, agentName, provider: providerName, error: String(err) });
-    // 确保错误时也发出 stream_end 和 idle，防止 UI 卡在"回答中"
-    if (msgId) {
-      emitStreamEnd(roomId, agentId, msgId, { duration_ms: 0, total_cost_usd: 0, input_tokens: 0, output_tokens: 0 });
-    }
-    updateAgentStatus(roomId, agentId, 'idle');
+    handleAgentRunFailure({
+      err,
+      roomId,
+      agentId,
+      agentName,
+      providerName,
+      msg,
+      msgId,
+      streamStarted,
+      accumulated,
+      accumulatedThinking,
+      requestMeta,
+    });
     throw err;
   }
 

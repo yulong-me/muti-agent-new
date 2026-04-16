@@ -4,6 +4,7 @@
  * Must be initialized by server.ts at startup.
  */
 import type { Server as SocketIOServer } from 'socket.io';
+import type { AgentRunError } from '../types.js';
 
 let _io: SocketIOServer | null = null;
 
@@ -44,6 +45,14 @@ export function emitThinkingDelta(roomId: string, agentId: string, thinking: str
 /** Emit agent status change */
 export function emitAgentStatus(roomId: string, agentId: string, status: string) {
   getIO().to(roomId).emit('agent_status', { roomId, agentId, status });
+}
+
+/** Emit structured room error event for agent execution failures */
+export function emitRoomErrorEvent(
+  roomId: string,
+  error: AgentRunError,
+) {
+  getIO().to(roomId).emit('room_error_event', { roomId, error });
 }
 
 /** Emit user message insertion — frontend inserts immediately without waiting for poll */

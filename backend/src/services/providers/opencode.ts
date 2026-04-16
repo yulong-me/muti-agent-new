@@ -43,6 +43,8 @@ export async function* streamOpenCodeProvider(
   const sessionId = opts.sessionId as string | undefined;
   const roomId = opts.roomId as string | undefined;
   const agentName = opts.agentName as string | undefined;
+  const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 15000);
+  const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 15000);
   // Default all permissions: write, exec, network
 
   // Resolve CLI path (expand ~)
@@ -108,6 +110,65 @@ export async function* streamOpenCodeProvider(
 
   let stderrBuffer = '';
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });
+  let timeoutError: Error | null = null;
+  let sawToken = false;
+  let firstTokenTimer: ReturnType<typeof setTimeout> | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearTimers = () => {
+    if (firstTokenTimer) clearTimeout(firstTokenTimer);
+    if (idleTimer) clearTimeout(idleTimer);
+    firstTokenTimer = null;
+    idleTimer = null;
+  };
+
+  const killForTimeout = (phase: 'first_token' | 'idle') => {
+    if (timeoutError) return;
+    const err = new Error(phase === 'first_token' ? 'Timed out waiting for first token' : 'Timed out waiting for next token');
+    (err as Error & { code?: string; phase?: string }).code = 'AGENT_TIMEOUT';
+    (err as Error & { code?: string; phase?: string }).phase = phase;
+    timeoutError = err;
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      // ignore
+    }
+  };
+
+  const armFirstTokenTimer = () => {
+    if (firstTokenTimeoutMs <= 0) return;
+    if (firstTokenTimer) clearTimeout(firstTokenTimer);
+    firstTokenTimer = setTimeout(() => killForTimeout('first_token'), firstTokenTimeoutMs);
+  };
+
+  const armIdleTimer = () => {
+    if (idleTokenTimeoutMs <= 0) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => killForTimeout('idle'), idleTokenTimeoutMs);
+  };
+
+  const markTokenReceived = () => {
+    if (!sawToken) {
+      sawToken = true;
+      if (firstTokenTimer) clearTimeout(firstTokenTimer);
+      firstTokenTimer = null;
+    }
+    armIdleTimer();
+  };
+
+  const failForParseError = (line: string): never => {
+    clearTimers();
+    const err = new Error(`Malformed provider JSON line: ${line.slice(0, 200)}`);
+    (err as Error & { code?: string }).code = 'AGENT_PARSE_ERROR';
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      // ignore
+    }
+    throw err;
+  };
+
+  armFirstTokenTimer();
 
   // Windows opencode outputs UTF-16LE; normalize to UTF-8 via TextDecoder
   const stdoutStream = toUtf8(proc.stdout!);
@@ -118,13 +179,14 @@ export async function* streamOpenCodeProvider(
     const line = rawLine.trim();
     if (!line) continue;
 
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      if (line.trim()) debug('provider:non_json', { roomId, agentId, agentName, line: line.slice(0, 200) });
-      continue;
-    }
+    const parsed = (() => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        if (line.trim()) debug('provider:non_json', { roomId, agentId, agentName, line: line.slice(0, 200) });
+        return failForParseError(line);
+      }
+    })();
 
     const eventType = parsed.type as string;
     const part = parsed.part as Record<string, unknown> | undefined;
@@ -138,8 +200,10 @@ export async function* streamOpenCodeProvider(
     if (eventType === 'step_start') {
       yield { type: 'start', agentId, timestamp: Date.now(), messageId: (part?.messageID as string) ?? '' };
     } else if (eventType === 'reasoning') {
+      markTokenReceived();
       yield { type: 'thinking_delta', agentId, thinking: (part?.text as string) ?? '' };
     } else if (eventType === 'text') {
+      markTokenReceived();
       yield { type: 'delta', agentId, text: (part?.text as string) ?? '' };
     } else if (eventType === 'step_finish') {
       // Read metadata from the 'part' sub-object (which contains reason/cost/tokens)
@@ -149,6 +213,7 @@ export async function* streamOpenCodeProvider(
       const reason = finishPart.reason as string | undefined;
       // Only emit 'end' when the agent has finished responding (not after tool calls)
       if (reason === 'stop' || reason === 'nostop') {
+        clearTimers();
         yield {
           type: 'end',
           agentId,
@@ -165,18 +230,27 @@ export async function* streamOpenCodeProvider(
   }
 
   await new Promise<void>((resolve, reject) => {
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
+      clearTimers();
+      if (timeoutError) {
+        reject(timeoutError);
+        return;
+      }
       if (code !== 0) {
         const errMsg = stderrBuffer.trim() || `CLI exited with code ${code}`;
         error('provider:call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
-        reject(new Error(errMsg));
+        const err = new Error(signal ? `${errMsg} (signal: ${signal})` : errMsg);
+        (err as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
+        reject(err);
       } else {
         debug('provider:call_end', { roomId, agentId, agentName, duration_ms: Date.now() - start, sessionId: capturedSessionId });
         resolve();
       }
     });
     proc.on('error', (err) => {
+      clearTimers();
       error('provider:error', { roomId, agentId, agentName, error: err.message });
+      (err as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
       reject(err);
     });
   });

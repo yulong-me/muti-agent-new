@@ -59,6 +59,14 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  // F014 Migration: persist structured run errors so reconnect/poll can recover UI state.
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN run_error_json TEXT");
+    log('INFO', 'db:schema:migrate:messages:run_error_json');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   // Soft delete: add deleted_at column to rooms table
   try {
     db.exec("ALTER TABLE rooms ADD COLUMN deleted_at INTEGER");

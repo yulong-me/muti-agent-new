@@ -27,6 +27,8 @@ import { AgentPanel } from './AgentPanel'
 import MentionQueue, { type QueuedMention } from './MentionQueue'
 import { AgentInviteDrawer } from './AgentInviteDrawer'
 import { AgentAvatar } from './AgentAvatar'
+import { ErrorBubble, type AgentRunErrorEvent } from './ErrorBubble'
+import { BubbleErrorBoundary } from './BubbleErrorBoundary'
 
 interface RoomViewProps { roomId?: string; defaultCreateOpen?: boolean }
 
@@ -51,6 +53,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   // F013: selectedRecipientId kept for telemetry only; routing comes from @ mention text
   const [mentionQueue, setMentionQueue] = useState<QueuedMention[]>([])
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
+  const [messageErrorMap, setMessageErrorMap] = useState<Record<string, AgentRunErrorEvent>>({})
+  const [orphanErrors, setOrphanErrors] = useState<AgentRunErrorEvent[]>([])
 
   // @mention picker state
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false)
@@ -124,6 +128,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     setSelectedRecipientId(null)
     setMentionQueue([])
     setStreamingAgentIds(new Set())
+    setMessageErrorMap({})
+    setOrphanErrors([])
     // Reset all streaming refs so previous room's in-flight messages don't bleed in
     streamingMessagesRef.current.clear()
     streamingThinkingRef.current.clear()
@@ -209,6 +215,37 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       }
     })
 
+    socket.on('room_error_event', (data: any) => {
+      if (data.roomId !== roomId) return
+      const roomError = data.error as AgentRunErrorEvent
+      if (roomError.messageId) {
+        setMessageErrorMap(prev => ({ ...prev, [roomError.messageId as string]: roomError }))
+        const streamingMsg = streamingMessagesRef.current.get(roomError.agentId)
+        if (streamingMsg?.id === roomError.messageId) {
+          streamingMessagesRef.current.delete(roomError.agentId)
+          streamingThinkingRef.current.delete(roomError.agentId)
+          streamingAgentIdsRef.current.delete(roomError.agentId)
+          streamingCountRef.current = streamingMessagesRef.current.size
+          setStreamingAgentIds(new Set(streamingAgentIdsRef.current))
+        }
+        setMessages(prev => prev.map(m =>
+          m.id === roomError.messageId
+            ? {
+                ...m,
+                runError: roomError,
+                duration_ms: m.duration_ms ?? 0,
+                total_cost_usd: m.total_cost_usd ?? 0,
+                input_tokens: m.input_tokens ?? 0,
+                output_tokens: m.output_tokens ?? 0,
+                type: m.type === 'streaming' ? 'statement' : m.type,
+              }
+            : m,
+        ))
+      } else {
+        setOrphanErrors(prev => [...prev, roomError])
+      }
+    })
+
     socket.on('stream_end', (data: any) => {
       if (data.roomId !== roomId) return
       streamingCountRef.current = Math.max(0, streamingCountRef.current - 1)
@@ -254,9 +291,11 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         const accumulatedThinking = streamingThinkingRef.current.get(data.agentId)
         setMessages(prev => prev.map(m => m.id === data.id ? { ...msg, thinking: accumulatedThinking ?? msg.thinking, type: m.type !== 'streaming' ? m.type : 'statement' } : m))
       }
+      streamingMessagesRef.current.delete(data.agentId)
+      streamingThinkingRef.current.delete(data.agentId)
     })
 
-socket.on('agent_status', (data: any) => {
+    socket.on('agent_status', (data: any) => {
       if (data.roomId !== roomId) return
       setAgents(prev => prev.map(a => a.id === data.agentId ? { ...a, status: data.status as Agent['status'] } : a))
     })
@@ -337,9 +376,49 @@ socket.on('agent_status', (data: any) => {
         setState(newState)
         setAgents(newAgents)
         setReport(data.report || '')
+        const fetchedMessages = (data.messages || []) as Message[]
+        const fetchedById = new Map(fetchedMessages.map(m => [m.id, m]))
+        let recoveredMissedStreamEnd = false
+        for (const [agentId, streamingMsg] of streamingMessagesRef.current) {
+          const fresh = fetchedById.get(streamingMsg.id)
+          if (fresh && (fresh.runError || fresh.duration_ms !== undefined)) {
+            streamingMessagesRef.current.delete(agentId)
+            streamingThinkingRef.current.delete(agentId)
+            streamingAgentIdsRef.current.delete(agentId)
+            recoveredMissedStreamEnd = true
+          }
+        }
+        if (recoveredMissedStreamEnd) {
+          streamingCountRef.current = streamingMessagesRef.current.size
+          setStreamingAgentIds(new Set(streamingAgentIdsRef.current))
+        }
+        const fetchedErrors = fetchedMessages.filter(m => m.runError)
+        if (fetchedErrors.length > 0) {
+          setMessageErrorMap(prev => {
+            const next = { ...prev }
+            for (const msg of fetchedErrors) {
+              if (msg.runError) next[msg.id] = msg.runError
+            }
+            return next
+          })
+        }
         setMessages(prev => {
-          const existingIds = new Set(prev.map(m => m.id))
-          const merged = [...prev, ...(data.messages || []).filter((m: Message) => !existingIds.has(m.id))]
+          const mergedExisting = prev.map(existing => {
+            const fresh = fetchedById.get(existing.id)
+            if (!fresh) return existing
+            if (fresh.runError || fresh.duration_ms !== undefined || existing.type !== 'streaming') {
+              return {
+                ...existing,
+                ...fresh,
+                type: existing.type === 'streaming' && fresh.duration_ms === undefined && !fresh.runError
+                  ? existing.type
+                  : fresh.type,
+              }
+            }
+            return existing
+          })
+          const existingIds = new Set(mergedExisting.map(m => m.id))
+          const merged = [...mergedExisting, ...fetchedMessages.filter((m: Message) => !existingIds.has(m.id))]
           return merged.sort((a, b) => a.timestamp - b.timestamp)
         })
       } catch {}
@@ -479,11 +558,13 @@ socket.on('agent_status', (data: any) => {
     } else if (e.key === 'Escape') { e.preventDefault(); closeMentionPicker() }
   }, [mentionPickerOpen, filteredAgents, mentionHighlightIdx, selectMentionAgent, closeMentionPicker])
 
-  const handleSendMessage = async () => {
-    if (!roomId || !userInput.trim() || sending) return
+  const sendPreparedContent = useCallback(async (rawContent: string) => {
+    if (!roomId || sending) return
+    const content = rawContent.trim()
+    if (!content) return
     // F013: no @ found — open mention picker at cursor, most-recent first
-    if (extractMentions(userInput).length === 0) {
-      const cursor = textareaRef.current?.selectionStart ?? userInput.length
+    if (extractMentions(content).length === 0) {
+      const cursor = textareaRef.current?.selectionStart ?? content.length
       setMentionStartIdx(cursor)
       setMentionQuery('')
       setMentionHighlightIdx(0)
@@ -492,7 +573,6 @@ socket.on('agent_status', (data: any) => {
     }
     setMentionPickerOpen(false)
     setSending(true)
-    const content = userInput.trim()
     // F013: @ is the single source of truth — derive toAgentId from mention text
     const mentionNames = extractMentions(content)
     const targetName = mentionNames[0] ?? null
@@ -532,7 +612,44 @@ socket.on('agent_status', (data: any) => {
     } finally {
       setSending(false)
     }
-  }
+  }, [agents, roomId, sending])
+
+  const restoreFailedInput = useCallback((content?: string) => {
+    if (!content) return
+    if (userInput.trim()) {
+      setSendError('输入框里还有草稿，先处理当前内容再找回原提问')
+      setTimeout(() => setSendError(null), 4000)
+      textareaRef.current?.focus()
+      return
+    }
+    setUserInput(content)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [userInput])
+
+  const copyFailedPrompt = useCallback(async (content?: string) => {
+    if (!content || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(content)
+    } catch {
+      setSendError('复制失败，请手动重试')
+      setTimeout(() => setSendError(null), 3000)
+    }
+  }, [])
+
+  const retryFailedMessage = useCallback(async (roomError: AgentRunErrorEvent) => {
+    if (!roomError.originalUserContent) return
+    if (userInput.trim()) {
+      setSendError('输入框里还有草稿，先处理当前内容再重试')
+      setTimeout(() => setSendError(null), 4000)
+      textareaRef.current?.focus()
+      return
+    }
+    await sendPreparedContent(roomError.originalUserContent)
+  }, [sendPreparedContent, userInput])
+
+  const handleSendMessage = useCallback(async () => {
+    await sendPreparedContent(userInput)
+  }, [sendPreparedContent, userInput])
   sendMessageRef.current = handleSendMessage
 
   const toggleMobileMenu = () => setMobileMenuOpen(o => !o)
@@ -642,6 +759,8 @@ socket.on('agent_status', (data: any) => {
               const isUser = msg.agentRole === 'USER'
               const isSystem = msg.type === 'system'
               const isStreaming = !isUser && !isSystem && (msg.type === 'streaming' || msg.duration_ms === undefined)
+              const runError = messageErrorMap[msg.id] ?? msg.runError
+              const hasOutput = Boolean(msg.content.trim() || msg.thinking?.trim())
               const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
               const agentAvatar = AGENT_COLORS[msg.agentName]?.avatar || DEFAULT_AGENT_COLOR.avatar
               const mentions = extractMentions(msg.content)
@@ -668,16 +787,18 @@ socket.on('agent_status', (data: any) => {
                         )}
                       </div>
                       <div className="rounded-2xl rounded-tr-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkBreaks]}
-                          components={{
-                            ...mdComponents,
-                            p: ({ children }) => <p className="mb-2 last:mb-0 text-ink">{children}</p>,
-                            a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 opacity-90 hover:opacity-100 text-accent">{children}</a>,
-                          }}
-                        >
-                          {msg.content}
-                        </ReactMarkdown>
+                        <BubbleErrorBoundary agentName={msg.agentName}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                            components={{
+                              ...mdComponents,
+                              p: ({ children }) => <p className="mb-2 last:mb-0 text-ink">{children}</p>,
+                              a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 opacity-90 hover:opacity-100 text-accent">{children}</a>,
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        </BubbleErrorBoundary>
                       </div>
                     </div>
                   </div>
@@ -689,6 +810,34 @@ socket.on('agent_status', (data: any) => {
                   <div key={msg.id} className="flex justify-center mb-3">
                     <div className="text-xs px-4 py-2 rounded-lg bg-surface/60 border border-line text-ink-soft max-w-[85%] text-center">
                       {msg.content}
+                    </div>
+                  </div>
+                )
+              }
+
+              if (runError && !hasOutput) {
+                return (
+                  <div key={msg.id} className="group flex gap-3 mb-6 items-start">
+                    <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
+                      <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={32} className="w-full h-full" />
+                    </div>
+                    <div className="w-full max-w-[85%] lg:max-w-[90%]">
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span className="text-[13px] font-bold px-2 py-0.5 rounded-md" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
+                          {msg.agentName}
+                        </span>
+                        <span className="text-[11px] text-ink-soft">
+                          {formattedTime}
+                        </span>
+                      </div>
+                      <ErrorBubble
+                        error={runError}
+                        retryDisabled={sending}
+                        restoreDisabled={Boolean(userInput.trim())}
+                        onRetry={() => void retryFailedMessage(runError)}
+                        onRestore={() => restoreFailedInput(runError.originalUserContent)}
+                        onCopy={() => void copyFailedPrompt(runError.originalUserContent)}
+                      />
                     </div>
                   </div>
                 )
@@ -714,16 +863,30 @@ socket.on('agent_status', (data: any) => {
                       )}
                     </div>
                     <div className="rounded-2xl rounded-tl-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
-                      <BubbleSection label="思考过程" icon="brain" content={msg.thinking ?? ''} isStreaming={isStreaming} agentColor={agentColor} />
-                      <BubbleSection label="回复" icon="output" content={msg.content} isStreaming={isStreaming} agentColor={agentColor} />
-                      {mentions.length > 0 && (
-                        <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap" style={{ color: agentColor }}>
-                          <span className="opacity-50 mr-0.5">@点名</span>
-                          {mentions.map(name => (
-                            <span key={name} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
-                              {name}
-                            </span>
-                          ))}
+                      <BubbleErrorBoundary agentName={msg.agentName}>
+                        <BubbleSection label="思考过程" icon="brain" content={msg.thinking ?? ''} isStreaming={isStreaming} agentColor={agentColor} />
+                        <BubbleSection label="回复" icon="output" content={msg.content} isStreaming={isStreaming} agentColor={agentColor} />
+                        {mentions.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap" style={{ color: agentColor }}>
+                            <span className="opacity-50 mr-0.5">@点名</span>
+                            {mentions.map(name => (
+                              <span key={name} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </BubbleErrorBoundary>
+                      {runError && (
+                        <div className="mt-3">
+                          <ErrorBubble
+                            error={runError}
+                            retryDisabled={sending}
+                            restoreDisabled={Boolean(userInput.trim())}
+                            onRetry={() => void retryFailedMessage(runError)}
+                            onRestore={() => restoreFailedInput(runError.originalUserContent)}
+                            onCopy={() => void copyFailedPrompt(runError.originalUserContent)}
+                          />
                         </div>
                       )}
                     </div>
@@ -739,6 +902,19 @@ socket.on('agent_status', (data: any) => {
                 </div>
               )
             })}
+
+            {orphanErrors.map(roomError => (
+              <div key={roomError.traceId} className="mb-6">
+                <ErrorBubble
+                  error={roomError}
+                  retryDisabled={sending}
+                  restoreDisabled={Boolean(userInput.trim())}
+                  onRetry={() => void retryFailedMessage(roomError)}
+                  onRestore={() => restoreFailedInput(roomError.originalUserContent)}
+                  onCopy={() => void copyFailedPrompt(roomError.originalUserContent)}
+                />
+              </div>
+            ))}
 
             {messages.length === 0 && roomId && (
               <div className="flex flex-col items-center justify-center h-40 text-ink-soft gap-3 opacity-60">

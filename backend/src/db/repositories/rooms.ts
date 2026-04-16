@@ -172,8 +172,8 @@ export const roomsRepo = {
 export const messagesRepo = {
   insert(roomId: string, msg: Message): Message {
     db.prepare(`
-      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id, to_agent_id)
-      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId, @toAgentId)
+      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id, to_agent_id, run_error_json)
+      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId, @toAgentId, @runErrorJson)
     `).run({
       id: msg.id,
       roomId,
@@ -189,6 +189,7 @@ export const messagesRepo = {
       outputTokens: msg.output_tokens ?? null,
       tempMsgId: msg.tempMsgId ?? null,
       toAgentId: msg.toAgentId ?? null,
+      runErrorJson: msg.runError ? JSON.stringify(msg.runError) : null,
     });
     return msg;
   },
@@ -201,7 +202,8 @@ export const messagesRepo = {
         duration_ms = @durationMs,
         total_cost_usd = @totalCostUsd,
         input_tokens = @inputTokens,
-        output_tokens = @outputTokens
+        output_tokens = @outputTokens,
+        run_error_json = @runErrorJson
       WHERE id = @id
     `).run({
       id: messageId,
@@ -211,6 +213,7 @@ export const messagesRepo = {
       totalCostUsd: meta?.total_cost_usd ?? null,
       inputTokens: meta?.input_tokens ?? null,
       outputTokens: meta?.output_tokens ?? null,
+      runErrorJson: meta?.runError ? JSON.stringify(meta.runError) : null,
     });
   },
 
@@ -218,20 +221,32 @@ export const messagesRepo = {
     const rows = db.prepare(
       'SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC'
     ).all(roomId) as Record<string, unknown>[];
-    return rows.map(r => ({
-      id: r.id as string,
-      agentRole: r.agent_role as Message['agentRole'],
-      agentName: r.agent_name as string,
-      content: r.content as string,
-      timestamp: r.timestamp as number,
-      type: r.type as Message['type'],
-      thinking: r.thinking as string | undefined,
-      duration_ms: r.duration_ms as number | undefined,
-      total_cost_usd: r.total_cost_usd as number | undefined,
-      input_tokens: r.input_tokens as number | undefined,
-      output_tokens: r.output_tokens as number | undefined,
-      tempMsgId: r.temp_msg_id as string | undefined,
-      toAgentId: (r.to_agent_id as string) ?? undefined,
-    }));
+    return rows.map(r => {
+      let runError: Message['runError'] | undefined;
+      if (r.run_error_json) {
+        try {
+          runError = JSON.parse(r.run_error_json as string) as Message['runError'];
+        } catch {
+          runError = undefined;
+        }
+      }
+
+      return {
+        id: r.id as string,
+        agentRole: r.agent_role as Message['agentRole'],
+        agentName: r.agent_name as string,
+        content: r.content as string,
+        timestamp: r.timestamp as number,
+        type: r.type as Message['type'],
+        thinking: r.thinking as string | undefined,
+        duration_ms: r.duration_ms as number | undefined,
+        total_cost_usd: r.total_cost_usd as number | undefined,
+        input_tokens: r.input_tokens as number | undefined,
+        output_tokens: r.output_tokens as number | undefined,
+        tempMsgId: r.temp_msg_id as string | undefined,
+        toAgentId: (r.to_agent_id as string) ?? undefined,
+        runError,
+      };
+    });
   },
 };

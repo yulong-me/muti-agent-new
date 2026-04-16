@@ -20,6 +20,8 @@ export async function* streamClaudeCodeProvider(
   const sessionId = opts.sessionId as string | undefined;
   const roomId = opts.roomId as string | undefined;
   const agentName = opts.agentName as string | undefined;
+  const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 15000);
+  const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 15000);
   // Default all permissions: write, exec, network
 
   // Resolve CLI path (expand ~)
@@ -79,6 +81,65 @@ export async function* streamClaudeCodeProvider(
 
   let stderrBuffer = '';
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });
+  let timeoutError: Error | null = null;
+  let sawToken = false;
+  let firstTokenTimer: ReturnType<typeof setTimeout> | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearTimers = () => {
+    if (firstTokenTimer) clearTimeout(firstTokenTimer);
+    if (idleTimer) clearTimeout(idleTimer);
+    firstTokenTimer = null;
+    idleTimer = null;
+  };
+
+  const killForTimeout = (phase: 'first_token' | 'idle') => {
+    if (timeoutError) return;
+    const err = new Error(phase === 'first_token' ? 'Timed out waiting for first token' : 'Timed out waiting for next token');
+    (err as Error & { code?: string; phase?: string }).code = 'AGENT_TIMEOUT';
+    (err as Error & { code?: string; phase?: string }).phase = phase;
+    timeoutError = err;
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      // ignore
+    }
+  };
+
+  const armFirstTokenTimer = () => {
+    if (firstTokenTimeoutMs <= 0) return;
+    if (firstTokenTimer) clearTimeout(firstTokenTimer);
+    firstTokenTimer = setTimeout(() => killForTimeout('first_token'), firstTokenTimeoutMs);
+  };
+
+  const armIdleTimer = () => {
+    if (idleTokenTimeoutMs <= 0) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => killForTimeout('idle'), idleTokenTimeoutMs);
+  };
+
+  const markTokenReceived = () => {
+    if (!sawToken) {
+      sawToken = true;
+      if (firstTokenTimer) clearTimeout(firstTokenTimer);
+      firstTokenTimer = null;
+    }
+    armIdleTimer();
+  };
+
+  const failForParseError = (line: string): never => {
+    clearTimers();
+    const err = new Error(`Malformed provider JSON line: ${line.slice(0, 200)}`);
+    (err as Error & { code?: string }).code = 'AGENT_PARSE_ERROR';
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      // ignore
+    }
+    throw err;
+  };
+
+  armFirstTokenTimer();
 
   const rl = createInterface({ input: proc.stdout!, crlfDelay: Infinity });
   let inThinkingBlock = false;
@@ -88,12 +149,13 @@ export async function* streamClaudeCodeProvider(
     const line = rawLine.trim();
     if (!line) continue;
 
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
+    const parsed = (() => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return failForParseError(line);
+      }
+    })();
 
     const eventType = parsed.type as string;
 
@@ -115,14 +177,17 @@ export async function* streamClaudeCodeProvider(
       } else if (subType === 'content_block_delta') {
         const delta = event.delta as Record<string, unknown>;
         if (delta.type === 'text_delta') {
+          markTokenReceived();
           yield { type: 'delta', agentId, text: delta.text as string };
         } else if (delta.type === 'thinking_delta') {
+          markTokenReceived();
           yield { type: 'thinking_delta', agentId, thinking: delta.thinking as string };
         }
       } else if (subType === 'content_block_stop') {
         inThinkingBlock = false;
       }
     } else if (eventType === 'result') {
+      clearTimers();
       const result = parsed as Record<string, unknown>;
       const usage = (result.usage as Record<string, number>) || {};
       const modelUsage = ((result.modelUsage as Record<string, Record<string, unknown>>) || {});
@@ -140,18 +205,27 @@ export async function* streamClaudeCodeProvider(
   }
 
   await new Promise<void>((resolve, reject) => {
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
+      clearTimers();
+      if (timeoutError) {
+        reject(timeoutError);
+        return;
+      }
       if (code !== 0) {
         const errMsg = stderrBuffer.trim() || `CLI exited with code ${code}`;
         error('provider:call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
-        reject(new Error(errMsg));
+        const err = new Error(signal ? `${errMsg} (signal: ${signal})` : errMsg);
+        (err as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
+        reject(err);
       } else {
         debug('provider:call_end', { roomId, agentId, agentName, duration_ms: Date.now() - start, sessionId: capturedSessionId });
         resolve();
       }
     });
     proc.on('error', (err) => {
+      clearTimers();
       error('provider:error', { roomId, agentId, agentName, error: err.message });
+      (err as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
       reject(err);
     });
   });

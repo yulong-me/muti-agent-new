@@ -15,6 +15,20 @@ export interface Agent {
   configId?: string
 }
 
+export interface AgentRunErrorEvent {
+  traceId: string
+  messageId?: string
+  agentId: string
+  agentName: string
+  code: 'AGENT_TIMEOUT' | 'AGENT_PROCESS_EXIT' | 'AGENT_PROVIDER_ERROR' | 'AGENT_PARSE_ERROR' | 'AGENT_RUNTIME_ERROR' | string
+  title: string
+  message: string
+  retryable: boolean
+  originalUserContent?: string
+  toAgentId?: string
+  toAgentName?: string
+}
+
 export interface Message {
   id: string
   agentRole: AgentRole | 'USER'
@@ -28,6 +42,7 @@ export interface Message {
   input_tokens?: number
   output_tokens?: number
   toAgentId?: string
+  runError?: AgentRunErrorEvent
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
