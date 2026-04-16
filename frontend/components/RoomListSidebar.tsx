@@ -93,17 +93,22 @@ function RoomItem({
         </div>
       )}
 
-      {/* Card — single semantic button, clean keyboard navigation */}
-      <button
-        type="button"
+      {/* Card — <div role="button"> to allow inner <button> children (no nested interactive elements) */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
         onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onClick()
+          }
           if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault()
             handleDelete(e)
           }
         }}
-        className={`w-full text-left p-3.5 rounded-xl transition-colors border group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
+        className={`w-full text-left p-3.5 rounded-xl transition-colors border group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 cursor-pointer select-none ${
           isActive
             ? 'bg-white/[0.06] border-white/[0.10]'
             : 'border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]'
@@ -123,20 +128,18 @@ function RoomItem({
             }`}>
               {room.state === 'RUNNING' ? '进行中' : '已完成'}
             </span>
-            {/* Overflow menu: delete on desktop hover + always on mobile */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowDeleteConfirm(true)
-                }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-ink-soft/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                aria-label={`删除讨论：${room.topic}`}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            {/* Delete — always visible */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowDeleteConfirm(true)
+              }}
+              className="p-1 rounded-md text-ink-soft/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              aria-label={`删除讨论：${room.topic}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
@@ -148,7 +151,7 @@ function RoomItem({
                 <div
                   key={i}
                   className="w-4 h-4 rounded-full border border-white/20 flex items-center justify-center text-[9px] font-bold text-white/80"
-                                    style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+                  style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
                 >
                   {i + 1}
                 </div>
@@ -170,14 +173,14 @@ function RoomItem({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowWorkspace(v => !v) }}
-              className="text-[10px] text-ink-soft/40 hover:text-ink-soft/70 transition-colors truncate max-w-[120px]"
+              className={`text-[10px] text-ink-soft/40 hover:text-ink-soft/70 transition-colors ${showWorkspace ? 'whitespace-normal break-all max-w-[200px]' : 'truncate max-w-[120px]'}`}
               title={showWorkspace ? undefined : room.workspace}
             >
               {showWorkspace ? room.workspace : workspaceShort}
             </button>
           )}
         </div>
-      </button>
+      </div>
     </div>
   )
 }

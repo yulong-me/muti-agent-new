@@ -96,10 +96,10 @@ interface SidebarRoom {
 - [x] AC-2: 列表时间显示使用 `updatedAt`，不再是 `createdAt`
 - [x] AC-3: 卡片摘要展示参与专家列表（数字圆圈 + "N 位专家"），不再展示"正在和 X 对话"
 - [x] AC-4: 删除确认改为 overlay 叠加态（`position: absolute inset-0 z-10`），不内联替换卡片，不造成列表位置跳动
-- [x] AC-5: 键盘操作：`Delete`/`Backspace` 触发删除确认；删除按钮 `group-hover:opacity-100` 始终键盘可达（tabindex）
-- [x] AC-6: 触屏场景：删除入口在 overflow menu 内始终可见（不再仅 hover 显示）
-- [x] AC-7: 工作目录：点击展开完整路径（`showWorkspace` toggle），桌面 hover + 移动端均可用
-- [x] AC-8: 列表展示 `preview` 字段（前 80 字有效消息），由后端 `listSidebar()` 预计算，前端轮询 30s 刷新
+- [x] AC-5: 键盘操作：`Delete`/`Backspace` 触发删除确认；`Enter`/`Space` 触发进入；外层用 `<div role="button" tabindex={0}>`（非 `<button>` 嵌套），保证可访问性
+- [x] AC-6: 触屏场景：删除按钮始终可见（移除了 `opacity-0 group-hover:opacity-100`），移动端无障碍
+- [x] AC-7: 工作目录：点击展开完整路径（`showWorkspace` toggle），展开时用 `whitespace-normal break-all max-w-[200px]` 替代 `truncate max-w-[120px]`，确保完整显示
+- [x] AC-8: 列表展示 `preview` 字段（前 80 字有效消息），由后端 `listSidebar()` 预计算（过滤 `agent_role != 'MANAGER'`），前端轮询 30s 刷新
 
 ## Proposed File Changes
 
