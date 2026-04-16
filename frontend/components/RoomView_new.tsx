@@ -48,8 +48,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
-  // Issue-1: recipient picker
-  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false)
+  // F013: selectedRecipientId kept for telemetry only; routing comes from @ mention text
   const [mentionQueue, setMentionQueue] = useState<QueuedMention[]>([])
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
 
@@ -407,18 +406,7 @@ socket.on('agent_status', (data: any) => {
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [mentionPickerOpen, closeMentionPicker])
 
-  // Issue-1: close recipient picker on outside click
-  useEffect(() => {
-    if (!recipientPickerOpen) return
-    const onMouseDown = (ev: MouseEvent) => {
-      const target = ev.target as HTMLElement | null
-      if (!target) return
-      if (target.closest('[data-recipient-picker="1"]')) return
-      setRecipientPickerOpen(false)
-    }
-    document.addEventListener('mousedown', onMouseDown)
-    return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [recipientPickerOpen])
+  // F013: no standalone recipient picker — @ mention picker handles all routing
 
   const selectMentionAgent = useCallback((agentName: string) => {
     const ta = textareaRef.current
@@ -484,9 +472,10 @@ socket.on('agent_status', (data: any) => {
 
   const handleSendMessage = async () => {
     if (!roomId || !userInput.trim() || sending) return
-    // F013: Block send if no @ mention in content — open picker to insert one
+    // F013: Block send if no @ mention — message must target an expert
     if (extractMentions(userInput).length === 0) {
-      setRecipientPickerOpen(true)
+      setSendError('请输入 @专家 来指定发送对象')
+      setTimeout(() => setSendError(null), 4000)
       return
     }
     setMentionPickerOpen(false)
@@ -788,45 +777,6 @@ socket.on('agent_status', (data: any) => {
                     onHighlight={setMentionHighlightIdx}
                   />
                 )}
-                {/* F013: @ insert helper — opens picker to insert @专家 into message */}
-                <div className="relative" data-recipient-picker="1">
-                  <button
-                    type="button"
-                    onClick={() => setRecipientPickerOpen(o => !o)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-[12px] text-ink-soft hover:border-accent/40 transition-colors"
-                  >
-                    <span className="text-[11px] text-ink-soft/60">插入 @</span>
-                    <ChevronDown className={`w-3 h-3 text-ink-soft/50 transition-transform ${recipientPickerOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {recipientPickerOpen && (
-                    <div className="absolute bottom-full left-0 mb-1.5 bg-bg border border-line rounded-xl shadow-lg py-1 z-30 min-w-[160px]">
-                      {agents.filter(a => a.role !== 'MANAGER').map(agent => {
-                        const color = AGENT_COLORS[agent.name]?.bg || DEFAULT_AGENT_COLOR.bg
-                        return (
-                          <button
-                            key={agent.id}
-                            type="button"
-                            onClick={() => {
-                              // F013: insert @name at cursor, update selectedRecipientId for telemetry/display
-                              const ta = textareaRef.current
-                              const cursor = ta?.selectionStart ?? userInput.length
-                              const newInput = userInput.slice(0, cursor) + '@' + agent.name + ' ' + userInput.slice(cursor)
-                              setUserInput(newInput)
-                              setSelectedRecipientId(agent.id)
-                              setRecipientPickerOpen(false)
-                              ta?.focus()
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] hover:bg-surface-muted transition-colors"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-                            <span>{agent.name}</span>
-                            <span className="text-[10px] text-ink-soft/60 ml-auto">{agent.domainLabel}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
                 <div className="flex gap-3">
                   <textarea
                     ref={textareaRef}
