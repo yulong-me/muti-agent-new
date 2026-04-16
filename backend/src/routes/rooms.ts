@@ -147,8 +147,9 @@ roomsRouter.post('/:id/messages', async (req, res) => {
     return res.status(400).json({ error: 'Target Expert Required: toAgentId is mandatory' });
   }
 
+// F013: toAgentId is non-null (guaranteed above); target exists (404 already returned if not)
   // 异步处理，不阻塞响应
-  routeToAgent(req.params.id, content.trim(), target.id).catch(err => {
+  routeToAgent(req.params.id, content.trim(), target!.id).catch(err => {
     error('route:msg_error', { roomId: req.params.id, error: String(err) });
   });
 

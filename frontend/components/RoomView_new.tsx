@@ -492,13 +492,17 @@ socket.on('agent_status', (data: any) => {
     setMentionPickerOpen(false)
     setSending(true)
     const content = userInput.trim()
-    // Issue-1: recipient comes ONLY from explicit UI picker
-    const recipientId = selectedRecipientId
+    // F013: @ is the single source of truth — derive toAgentId from mention text
+    const mentionNames = extractMentions(content)
+    const targetName = mentionNames[0] ?? null
+    const recipientId = targetName
+      ? agents.find(a => a.name === targetName)?.id ?? null
+      : null
     telemetry('ui:msg:send', {
       roomId, contentLength: content.length,
       contentSnippet: content.length > 80 ? content.slice(0, 80) + '…' : content,
       toAgentId: recipientId,
-      toAgentName: recipientId ? agents.find(a => a.id === recipientId)?.name : null,
+      toAgentName: targetName,
     })
     setUserInput('')
     try {
@@ -513,7 +517,7 @@ socket.on('agent_status', (data: any) => {
         setUserInput(content)
         // F013: 400 means missing target; guide user to pick one
         if (res.status === 400) {
-          setSendError('请先选择发送对象')
+          setSendError('未找到指定专家，请检查 @ 后的名字')
         } else {
           setSendError('发送失败，请重试')
         }
