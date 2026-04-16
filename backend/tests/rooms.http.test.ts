@@ -25,6 +25,7 @@ vi.mock('../src/store.js', () => ({
 vi.mock('../src/db/index.js', () => ({
   roomsRepo: { create: vi.fn(), update: vi.fn() },
   auditRepo: { log: vi.fn() },
+  scenesRepo: { get: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../src/config/agentConfig.js', () => ({

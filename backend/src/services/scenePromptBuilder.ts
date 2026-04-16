@@ -42,8 +42,7 @@ export function buildRoomScopedSystemPrompt(
 
   const scene = scenesRepo.get(room.sceneId);
   if (!scene) {
-    // Fallback: no scene found, use base prompt only
-    return `${basePrompt}\n\n${buildRuntimeContextString(runtime)}`;
+    throw new Error(`Scene not found: ${room.sceneId}`);
   }
 
   const parts: string[] = [];

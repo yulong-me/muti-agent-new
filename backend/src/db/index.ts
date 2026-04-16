@@ -5,6 +5,7 @@ import { sessionsRepo } from './repositories/sessions.js';
 import { auditRepo } from './repositories/audit.js';
 import { agentsRepo } from './repositories/agents.js';
 import { providersRepo } from './repositories/providers.js';
+import { scenesRepo } from './repositories/scenes.js';
 import { log } from '../log.js';
 import fs from 'fs';
 import path from 'path';

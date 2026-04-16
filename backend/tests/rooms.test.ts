@@ -21,6 +21,7 @@ vi.mock('../src/store.js', () => ({
 vi.mock('../src/db/index.js', () => ({
   roomsRepo: { create: vi.fn(), update: vi.fn() },
   auditRepo: { log: vi.fn() },
+  scenesRepo: { get: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../src/config/agentConfig.js', () => ({
@@ -41,8 +42,16 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
 });
 
 describe('F004: Manager 路由器 - rooms 路由', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Default mock for scenesRepo — prevents scenePromptBuilder from throwing on old rooms without sceneId
+    const { scenesRepo } = await import('../src/db/index.js');
+    vi.mocked(scenesRepo.get).mockReturnValue({
+      id: 'roundtable-forum',
+      name: '圆桌论坛',
+      prompt: '圆桌',
+      builtin: true,
+    });
   });
 
   describe('POST /rooms/:id/messages', () => {

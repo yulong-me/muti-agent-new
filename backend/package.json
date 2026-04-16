@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "LOG_LEVEL=debug tsx watch src/server.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
@@ -20,6 +22,7 @@
     "@types/node": "^20.10.0",
     "@types/uuid": "^9.0.7",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.4"
   }
 }

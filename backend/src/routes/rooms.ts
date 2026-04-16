@@ -13,7 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
 import { routeToAgent, generateReportInline } from '../services/stateMachine.js';
-import { roomsRepo, sessionsRepo, messagesRepo } from '../db/index.js';
+import { roomsRepo, sessionsRepo, messagesRepo, scenesRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
@@ -39,6 +39,12 @@ roomsRouter.post('/', async (req, res) => {
   };
 
   const workerIds: string[] = rawWorkerIds ?? [];
+
+  // F016: Validate sceneId if provided
+  const effectiveSceneId = sceneId ?? 'roundtable-forum';
+  if (sceneId !== undefined && !scenesRepo.get(effectiveSceneId)) {
+    return res.status(400).json({ error: `Scene not found: ${sceneId}` });
+  }
 
   // F006: Validate custom workspace path if provided
   if (workspacePath) {
@@ -85,7 +91,7 @@ roomsRouter.post('/', async (req, res) => {
     agents: workerEntries, // F012: no MANAGER in room
     messages: [],
     workspace: workspacePath,
-    sceneId: sceneId ?? 'roundtable-forum', // F016: default scene
+    sceneId: effectiveSceneId, // F016: validated above
     createdAt: Date.now(),
     updatedAt: Date.now(),
     sessionIds: {},

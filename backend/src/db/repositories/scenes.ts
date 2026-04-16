@@ -86,7 +86,7 @@ export const scenesRepo = {
         UPDATE scenes SET name = @name, description = @description, prompt = @prompt WHERE id = @id
       `).run({
         id,
-        name: input.name ?? existing.name,
+        name: (input.name && input.name.trim()) ? input.name.trim() : existing.name,
         description: input.description ?? existing.description ?? null,
         prompt: input.prompt ?? existing.prompt,
       });

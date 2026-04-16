@@ -392,10 +392,13 @@ function SceneRow({ scene, onUpdate, onDelete }: {
     setSaveError('')
     setSaving(true)
     try {
+      // Builtin scenes: omit name from payload (backend rejects renaming builtin)
+      const payload: Record<string, string> = { description: form.description, prompt: form.prompt };
+      if (canEditName) payload.name = form.name;
       const res = await fetch(`${API}/api/scenes/${scene.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const err = await res.json()

@@ -72,6 +72,11 @@ scenesRouter.put('/:id', (req, res) => {
     return res.status(403).json({ code: 'BUILTIN_NAME_LOCKED', error: 'Cannot rename builtin scene' });
   }
 
+  // P2-5: reject empty name (but allow omitting it via undefined)
+  if (name !== undefined && !name.trim()) {
+    return res.status(400).json({ error: 'name cannot be empty' });
+  }
+
   if (prompt !== undefined && !prompt.trim()) {
     return res.status(400).json({ error: 'prompt cannot be empty' });
   }
