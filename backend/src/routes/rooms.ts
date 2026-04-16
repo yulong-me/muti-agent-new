@@ -25,6 +25,11 @@ roomsRouter.get('/', (_req, res) => {
   res.json(roomsRepo.list());
 });
 
+// GET /api/rooms/sidebar — 轻量列表，用于侧边栏导航（不含全量 messages）
+roomsRouter.get('/sidebar', (_req, res) => {
+  res.json(roomsRepo.listSidebar());
+});
+
 // POST /api/rooms — 创建讨论室
 roomsRouter.post('/', async (req, res) => {
   const { managerId: rawManagerId, workerIds: rawWorkerIds, workspacePath } = req.body as {

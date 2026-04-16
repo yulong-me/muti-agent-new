@@ -37,9 +37,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [messages, setMessages] = useState<Message[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [report, setReport] = useState<string>('')
-  const [rooms, setRooms] = useState<{ id: string; topic: string; createdAt: number; state: DiscussionState }[]>([])
-  const [roomsAgentsMap, setRoomsAgentsMap] = useState<Record<string, Agent[]>>({})
-  const [roomsLastToAgentMap, setRoomsLastToAgentMap] = useState<Record<string, string | undefined>>({})
+  const [rooms, setRooms] = useState<{ id: string; topic: string; createdAt: number; updatedAt: number; state: DiscussionState; workspace?: string; preview?: string; agentCount: number }[]>([])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'agent' | 'provider'>('agent')
@@ -288,22 +286,42 @@ socket.on('agent_status', (data: any) => {
   }, [roomId])
 
   // ─── Room list ───────────────────────────────────────────────────────────────
+  // F011: load from /api/rooms/sidebar (lightweight, no full messages) + 30s polling
   useEffect(() => {
     telemetry('room:list:load')
-    fetch(`${API}/api/rooms`).then(r => r.ok ? r.json() : []).then((data: any[]) => {
-      setRooms(data.map((room: any) => ({ id: room.id, topic: room.topic, createdAt: room.createdAt, state: room.state as DiscussionState })))
-      const agentsMap: Record<string, Agent[]> = {}
-      const toAgentMap: Record<string, string | undefined> = {}
-      for (const room of data) {
-        agentsMap[room.id] = room.agents || []
-        const lastUserMsg = [...(room.messages || [])].reverse().find((m: Message) => m.agentRole === 'USER')
-        toAgentMap[room.id] = lastUserMsg?.toAgentId
-      }
-      setRoomsAgentsMap(agentsMap)
-      setRoomsLastToAgentMap(toAgentMap)
-    }).catch(e => logError('room:list_error', { error: String(e) }))
+    fetch(`${API}/api/rooms/sidebar`).then(r => r.ok ? r.json() : []).then((data: any[]) => {
+      setRooms(data.map((room: any) => ({
+        id: room.id,
+        topic: room.topic,
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+        state: room.state as DiscussionState,
+        workspace: room.workspace,
+        preview: room.preview,
+        agentCount: room.agentCount,
+      })))
+    })
   }, [])
 
+  // F011: poll room list every 30s to keep updatedAt and preview fresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch(`${API}/api/rooms/sidebar`).then(r => r.ok ? r.json() : []).then((data: any[]) => {
+        setRooms(data.map((room: any) => ({
+          id: room.id,
+          topic: room.topic,
+          createdAt: room.createdAt,
+          updatedAt: room.updatedAt,
+          state: room.state as DiscussionState,
+          workspace: room.workspace,
+          preview: room.preview,
+          agentCount: room.agentCount,
+        })))
+      })
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
+    
   // ─── Polling ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!roomId) return
@@ -521,8 +539,6 @@ socket.on('agent_status', (data: any) => {
         <RoomListSidebarDesktop
           rooms={rooms}
           currentRoomId={roomId}
-          roomsAgentsMap={roomsAgentsMap}
-          roomsLastToAgentMap={roomsLastToAgentMap}
           onNewRoom={() => setIsCreateModalOpen(true)}
           onSelectRoom={id => router.push(`/room/${id}`)}
           onDeleteRoom={async (id) => {
@@ -537,8 +553,6 @@ socket.on('agent_status', (data: any) => {
         <RoomListSidebarMobile
           rooms={rooms}
           currentRoomId={roomId}
-          roomsAgentsMap={roomsAgentsMap}
-          roomsLastToAgentMap={roomsLastToAgentMap}
           onNewRoom={() => setIsCreateModalOpen(true)}
           onSelectRoom={id => router.push(`/room/${id}`)}
           onDeleteRoom={async (id) => {

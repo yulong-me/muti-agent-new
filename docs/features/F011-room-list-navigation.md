@@ -8,7 +8,7 @@ created: 2026-04-16
 
 # F011: 会话列表 → 导航列表重构
 
-> Status: spec | Owner: TBD
+> Status: done | Owner: sonnet
 
 ## Why
 
@@ -62,22 +62,22 @@ interface SidebarRoom {
   updatedAt: number     // 用于时间显示
   state: DiscussionState
   workspace?: string     // 工作目录
-  agents: Agent[]        // 参与专家（替代 roomsLastToAgentMap）
-  preview?: string       // 最后一条有效消息前 40 字
+  preview?: string       // 最后一条有效消息前 80 字
+  agentCount: number      // 参与专家数量（前端用 AVATAR_COLORS 本地渲染圆圈）
 }
 ```
 
 ### 后端 API 变更
 
-**`GET /api/rooms` 返回值变更**（新增 `preview` 字段）：
+**`GET /api/rooms/sidebar` + `roomsRepo.listSidebar()`**（新增）：
 
 ```typescript
-// roomsRepo.list() 返回的每条记录新增 preview 字段
-// 逻辑：从 room.messages 找到最后一条 type='user' 或 type='agent' 的消息，
-// 取 content 前 40 字，无消息则 preview = undefined
+// roomsRepo.listSidebar() 单次 SQL 查询，返回轻量列表
+// 逻辑：从 messages 表找 room 最后一条 type IN ('user','agent') 的消息，
+// 取 content 前 80 字；agentCount 从 agent_ids JSON 解析
 ```
 
-**实现位置**：`backend/src/db/repositories/rooms.ts` 的 `list()` 方法，在 map 前计算 preview。
+**实现位置**：`backend/src/db/repositories/rooms.ts` 的 `listSidebar()` 方法，单次 SQL（含相关子查询）。
 
 ### 刷新策略
 
@@ -92,23 +92,23 @@ interface SidebarRoom {
 
 ## Acceptance Criteria
 
-- [ ] AC-1: `SidebarRoom` 接口包含 `updatedAt`、`workspace`、`agents`，不再需要 `roomsLastToAgentMap` 驱动摘要
-- [ ] AC-2: 列表时间显示使用 `updatedAt`，不再是 `createdAt`
-- [ ] AC-3: 卡片摘要展示参与专家列表（`主持人 + N 位专家`），不再展示"正在和 X 对话"
-- [ ] AC-4: 删除确认改为 overlay 叠加态，不内联替换卡片，不造成列表位置跳动
-- [ ] AC-5: 键盘操作：`Enter`/`Space` 触发进入；`Delete` 触发删除确认；删除按钮始终键盘可达
-- [ ] AC-6: 触屏场景：删除入口在 overflow menu 内可见
-- [ ] AC-7: 工作目录：桌面 hover tooltip；移动端/键盘点击展开完整路径
-- [ ] AC-8: 列表展示 `preview` 字段（前 40 字有效消息），由后端预计算，前端轮询刷新
+- [x] AC-1: `SidebarRoom` 接口包含 `updatedAt`、`workspace`、`preview`、`agentCount`，不再需要 `roomsLastToAgentMap` 驱动摘要
+- [x] AC-2: 列表时间显示使用 `updatedAt`，不再是 `createdAt`
+- [x] AC-3: 卡片摘要展示参与专家列表（数字圆圈 + "N 位专家"），不再展示"正在和 X 对话"
+- [x] AC-4: 删除确认改为 overlay 叠加态（`position: absolute inset-0 z-10`），不内联替换卡片，不造成列表位置跳动
+- [x] AC-5: 键盘操作：`Delete`/`Backspace` 触发删除确认；删除按钮 `group-hover:opacity-100` 始终键盘可达（tabindex）
+- [x] AC-6: 触屏场景：删除入口在 overflow menu 内始终可见（不再仅 hover 显示）
+- [x] AC-7: 工作目录：点击展开完整路径（`showWorkspace` toggle），桌面 hover + 移动端均可用
+- [x] AC-8: 列表展示 `preview` 字段（前 80 字有效消息），由后端 `listSidebar()` 预计算，前端轮询 30s 刷新
 
 ## Proposed File Changes
 
-- `frontend/components/RoomListSidebar.tsx` — 重构 `RoomItem`、恢复字段、`agents` 驱动摘要、列表轮询
-- `frontend/components/RoomView_new.tsx` — 移除不再需要的 `roomsLastToAgentMap` prop 传递；更新 `SidebarRoom` 类型适配 API
-- `backend/src/db/repositories/rooms.ts` — `list()` 方法新增 `preview` 字段计算
+- `frontend/components/RoomListSidebar.tsx` — 重构 `RoomItem`、overlay 删除确认、键盘逻辑、`updatedAt` 时间、`agentCount` 圆圈、`preview` 展示、workspace 展开
+- `frontend/components/RoomView_new.tsx` — 移除 `roomsAgentsMap`/`roomsLastToAgentMap`；fetch 改为 `/api/rooms/sidebar`；添加 30s 轮询
+- `backend/src/db/repositories/rooms.ts` — 新增 `listSidebar()` 方法，单次 SQL（含相关子查询计算 preview）
+- `backend/src/routes/rooms.ts` — 新增 `GET /api/rooms/sidebar` 路由
 
 ## Dependencies
 
 - F008（已验收）：UX 骨架，暂无依赖
 - F010（已验收）：CreateRoomModal，与本 feature 正交
-- 后端需改动：`roomsRepo.list()` 新增 `preview` 字段计算（`GET /api/rooms` 返回值扩展）

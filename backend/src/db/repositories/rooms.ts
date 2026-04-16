@@ -75,6 +75,75 @@ export const roomsRepo = {
     return rows.map(r => this.get(r.id)!);
   },
 
+  /**
+   * Lightweight list for sidebar — single query, no full message load.
+   * Returns id/topic/createdAt/updatedAt/state/workspace/preview for navigation.
+   */
+  listSidebar(): Array<{
+    id: string
+    topic: string
+    createdAt: number
+    updatedAt: number
+    state: DiscussionRoom['state']
+    workspace?: string
+    preview?: string
+    agentCount: number
+  }> {
+    type SidebarRow = {
+      id: string
+      topic: string
+      created_at: number
+      updated_at: number
+      state: string
+      workspace: string | null
+      preview: string | null
+      agent_ids: string
+    }
+    const rows = db.prepare(`
+      SELECT
+        r.id,
+        r.topic,
+        r.created_at,
+        r.updated_at,
+        r.state,
+        r.workspace,
+        (
+          SELECT content FROM messages m
+          WHERE m.room_id = r.id
+            AND m.type IN ('user', 'agent')
+          ORDER BY timestamp DESC
+          LIMIT 1
+        ) AS preview,
+        r.agent_ids
+      FROM rooms r
+      WHERE r.deleted_at IS NULL
+      ORDER BY r.updated_at DESC
+    `).all() as SidebarRow[]
+
+    return rows.map(r => {
+      let agentCount = 0
+      try {
+        const ids: string[] = JSON.parse(r.agent_ids ?? '[]')
+        agentCount = ids.length
+      } catch (_e) {
+        agentCount = 0
+      }
+      const preview = r.preview
+        ? r.preview.slice(0, 80)
+        : undefined
+      return {
+        id: r.id,
+        topic: r.topic,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        state: r.state as DiscussionRoom['state'],
+        workspace: r.workspace ?? undefined,
+        preview,
+        agentCount,
+      }
+    })
+  },
+
   archive(id: string): void {
     db.prepare('UPDATE rooms SET deleted_at = ? WHERE id = ?').run(Date.now(), id);
   },
