@@ -4,9 +4,8 @@
  * Uses Node's built-in http module to make real HTTP requests against
  * a real Express server. No supertest needed.
  *
- * The vi.mock declarations apply at module scope, so store.get mock
- * (set in each test via vi.mocked().mockReturnValue) works for the
- * route handler code that imports the store.
+ * P2-fix: If server.listen(0) fails (EPERM/EACCES in restricted envs),
+ * all tests in this suite are skipped gracefully rather than hard-failing.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -41,7 +40,7 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
     addUserMessage: vi.fn(),
     handleUserMessage: vi.fn(),
     generateReport: vi.fn(),
-    // Must return a Promise so .catch() in the route handler doesn't fail
+    // Must resolve so .catch() in the route handler doesn't throw on undefined
     routeToAgent: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -57,13 +56,43 @@ function makeApp() {
   return app;
 }
 
+// P2-fix: one-time port availability check at module level.
+// If binding fails (EPERM/EACCES in sandboxed envs), all tests are skipped.
+const _probeServer = http.createServer(makeApp());
+let _boundPort = 0;
+
+const _bound = await new Promise<boolean>((resolve) => {
+  _probeServer.on('error', (err: NodeJS.ErrnoException) => {
+    resolve(err.code === 'EACCES' || err.code === 'EPERM' ? false : (() => { throw err; })());
+  });
+  _probeServer.listen(0, () => {
+    const addr = _probeServer.address();
+    _boundPort = typeof addr === 'object' && addr !== null ? addr.port : 0;
+    _probeServer.close();
+    resolve(true);
+  });
+});
+
+const _skipIfNoPort = _bound ? it : it.skip;
+
 describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
   let server: http.Server;
+  let serverPort = 0;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     server = http.createServer(makeApp());
-    // Use port 0 to let the OS pick an available port
-    server.listen(0);
+    serverPort = _boundPort;
+
+    // In case port probe was skipped (bound=false), start server anyway and
+    // let tests fail with connection-refused; the suite-level skip above is
+    // the primary safeguard.
+    await new Promise<void>((resolve) => {
+      server.listen(0, () => {
+        const addr = server.address();
+        serverPort = typeof addr === 'object' && addr !== null ? addr.port : 0;
+        resolve();
+      });
+    });
   });
 
   afterAll(() => {
@@ -76,12 +105,10 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
 
   function postJson(path: string, body: object): Promise<{ status: number; data: Record<string, unknown> }> {
     return new Promise((resolve) => {
-      const addr = server.address();
-      const port = typeof addr === 'object' && addr !== null ? addr.port : 3001;
       const bodyStr = JSON.stringify(body);
       const options: http.RequestOptions = {
-        hostname: 'localhost',
-        port,
+        hostname: '127.0.0.1',
+        port: serverPort,
         path,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) },
@@ -102,7 +129,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     });
   }
 
-  it('returns 409 ROOM_BUSY when agent status is thinking', async () => {
+  _skipIfNoPort('returns 409 ROOM_BUSY when agent status is thinking', async () => {
     const mockRoom = {
       id: 'room-busy',
       topic: 'Test',
@@ -131,7 +158,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     expect(result.data).toHaveProperty('code', 'ROOM_BUSY');
   });
 
-  it('does NOT return 409 when room is idle (status is idle)', async () => {
+  _skipIfNoPort('does NOT return 409 when room is idle (status is idle)', async () => {
     const mockRoom = {
       id: 'room-idle',
       topic: 'Test',
@@ -159,7 +186,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     expect(result.status).toBe(200);
   });
 
-  it('returns 404 when room does not exist', async () => {
+  _skipIfNoPort('returns 404 when room does not exist', async () => {
     vi.mocked(store.get).mockReturnValue(undefined);
 
     const result = await postJson('/api/rooms/nonexistent/messages', {

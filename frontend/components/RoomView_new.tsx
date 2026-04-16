@@ -686,7 +686,12 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     }
   }, [])
 
-  // F015: drain the outgoing queue when room becomes idle
+  // F015: drain the outgoing queue when room becomes idle.
+  // Only sends ONE item per invocation; subsequent items are handled by
+  // the next stream_end / room_error / poll idle trigger.
+  // This prevents the 300ms delay heuristic from being a concurrency gate —
+  // even if two drains fire in the same idle window, the backend 409 guard
+  // (or a subsequent busy state) will stop the second from racing past.
   const drainQueue = useCallback(async () => {
     if (isDrainingRef.current) return
     if (outgoingQueueRef.current.length === 0) return
@@ -694,46 +699,41 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
     isDrainingRef.current = true
     try {
-      while (outgoingQueueRef.current.length > 0) {
-        const item = outgoingQueueRef.current[0]
-        dispatchingRef.current = item.id
+      const item = outgoingQueueRef.current[0]
+      if (!item) return
 
-        setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'dispatching' } : i))
+      dispatchingRef.current = item.id
+      setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'dispatching' } : i))
 
-        try {
-          const res = await fetch(`${API}/api/rooms/${roomId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: item.content, toAgentId: item.toAgentId }),
-          })
-          if (res.status === 409) {
-            // Room still busy — stop draining, item stays queued
-            dispatchingRef.current = null
-            setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'queued' } : i))
-            break
-          }
-          if (!res.ok) {
-            // Non-409 failure — remove failed item, continue with next
-            const next = outgoingQueueRef.current.filter(i => i.id !== item.id)
-            outgoingQueueRef.current = next
-            dispatchingRef.current = null
-            setOutgoingQueue(next)
-            continue
-          }
-          // Success — remove from queue and continue
-          const remaining = outgoingQueueRef.current.filter(i => i.id !== item.id)
-          outgoingQueueRef.current = remaining
-          dispatchingRef.current = null
-          setOutgoingQueue(remaining)
-          // F015 P1-fix: give the backend time to mark agent as busy before sending next.
-          // Without this, two POSTs can arrive before either agent is marked busy,
-          // allowing concurrent execution which violates AC-3.
-          await new Promise(resolve => setTimeout(resolve, 300))
-        } catch {
+      try {
+        const res = await fetch(`${API}/api/rooms/${roomId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: item.content, toAgentId: item.toAgentId }),
+        })
+        if (res.status === 409) {
+          // Room still busy — stop draining, item stays queued
           dispatchingRef.current = null
           setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'queued' } : i))
-          break
+          return
         }
+        if (!res.ok) {
+          // Non-409 failure — remove failed item, stop drain cycle
+          const next = outgoingQueueRef.current.filter(i => i.id !== item.id)
+          outgoingQueueRef.current = next
+          dispatchingRef.current = null
+          setOutgoingQueue(next)
+          return
+        }
+        // Success — remove from queue. Next drain is triggered by
+        // stream_end / room_error / poll idle; don't loop here.
+        const remaining = outgoingQueueRef.current.filter(i => i.id !== item.id)
+        outgoingQueueRef.current = remaining
+        dispatchingRef.current = null
+        setOutgoingQueue(remaining)
+      } catch {
+        dispatchingRef.current = null
+        setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'queued' } : i))
       }
     } finally {
       isDrainingRef.current = false
