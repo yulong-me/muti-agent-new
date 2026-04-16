@@ -16,6 +16,7 @@ import {
   AGENT_COLORS, DEFAULT_AGENT_COLOR, STATE_LABELS,
   mdComponents, extractMentions, TIME_FORMATTER,
   type Agent, type Message, type DiscussionState,
+  type OutgoingQueueItem,
 } from '../lib/agents'
 import { error as logError, telemetry, setRoomId } from '../lib/logger'
 import CreateRoomModal from './CreateRoomModal'
@@ -25,6 +26,7 @@ import { BubbleSection } from './BubbleSection'
 import { RoomListSidebarDesktop, RoomListSidebarMobile } from './RoomListSidebar'
 import { AgentPanel } from './AgentPanel'
 import MentionQueue, { type QueuedMention } from './MentionQueue'
+import OutgoingMessageQueue from './OutgoingMessageQueue'
 import { AgentInviteDrawer } from './AgentInviteDrawer'
 import { AgentAvatar } from './AgentAvatar'
 import { ErrorBubble, type AgentRunErrorEvent } from './ErrorBubble'
@@ -55,6 +57,12 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
   const [messageErrorMap, setMessageErrorMap] = useState<Record<string, AgentRunErrorEvent>>({})
   const [orphanErrors, setOrphanErrors] = useState<AgentRunErrorEvent[]>([])
+
+  // F015: outgoing message queue state
+  const [outgoingQueue, setOutgoingQueue] = useState<OutgoingQueueItem[]>([])
+  const outgoingQueueRef = useRef<OutgoingQueueItem[]>([])
+  const dispatchingRef = useRef<string | null>(null)
+  const isDrainingRef = useRef(false)
 
   // @mention picker state
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false)
@@ -244,6 +252,11 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       } else {
         setOrphanErrors(prev => [...prev, roomError])
       }
+      // F015: trigger queue drain when last streaming agent finishes
+      const stillStreaming = streamingAgentIdsRef.current.size
+      if (stillStreaming === 0) {
+        setTimeout(() => drainQueue(), 100)
+      }
     })
 
     socket.on('stream_end', (data: any) => {
@@ -293,6 +306,11 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       }
       streamingMessagesRef.current.delete(data.agentId)
       streamingThinkingRef.current.delete(data.agentId)
+      // F015: trigger queue drain when last streaming agent finishes
+      const stillStreaming = streamingAgentIdsRef.current.size
+      if (stillStreaming === 0) {
+        setTimeout(() => drainQueue(), 100)
+      }
     })
 
     socket.on('agent_status', (data: any) => {
@@ -470,6 +488,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     [agents],
   )
 
+  // F015: room is busy when any agent is streaming or has thinking/waiting status
+  const isRoomBusy = streamingAgentIds.size > 0 || agents.some(a => a.status === 'thinking' || a.status === 'waiting')
+
   const openMentionPicker = useCallback((mentionAtIdx: number, query: string) => {
     setMentionPickerOpen(true)
     setMentionQuery(query)
@@ -572,13 +593,18 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       return
     }
     setMentionPickerOpen(false)
-    setSending(true)
     // F013: @ is the single source of truth — derive toAgentId from mention text
     const mentionNames = extractMentions(content)
     const targetName = mentionNames[0] ?? null
     const recipientId = targetName
       ? agents.find(a => a.name === targetName)?.id ?? null
       : null
+    // F015: if room is busy, enqueue instead of sending immediately
+    if (isRoomBusy) {
+      enqueueMessage(content, recipientId!, targetName!)
+      return
+    }
+    setSending(true)
     telemetry('ui:msg:send', {
       roomId, contentLength: content.length,
       contentSnippet: content.length > 80 ? content.slice(0, 80) + '…' : content,
@@ -595,6 +621,12 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       if (!res.ok) {
         const err = await res.text()
         logError('msg:send_error', { roomId, status: res.status, error: err })
+        // F015: 409 means room became busy concurrently — enqueue the message
+        if (res.status === 409) {
+          setSending(false)
+          enqueueMessage(content, recipientId!, targetName!)
+          return
+        }
         setUserInput(content)
         // F013: 400 means missing target; guide user to pick one
         if (res.status === 400) {
@@ -635,6 +667,91 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       setTimeout(() => setSendError(null), 3000)
     }
   }, [])
+
+  // F015: drain the outgoing queue when room becomes idle
+  const drainQueue = useCallback(async () => {
+    if (isDrainingRef.current) return
+    if (outgoingQueueRef.current.length === 0) return
+    if (dispatchingRef.current !== null) return
+
+    isDrainingRef.current = true
+    try {
+      while (outgoingQueueRef.current.length > 0) {
+        const item = outgoingQueueRef.current[0]
+        dispatchingRef.current = item.id
+
+        setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'dispatching' } : i))
+
+        try {
+          const res = await fetch(`${API}/api/rooms/${roomId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: item.content, toAgentId: item.toAgentId }),
+          })
+          if (res.status === 409) {
+            // Room still busy — stop draining, item stays queued
+            dispatchingRef.current = null
+            setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'queued' } : i))
+            break
+          }
+          if (!res.ok) {
+            // Non-409 failure — remove failed item, continue with next
+            const next = outgoingQueueRef.current.filter(i => i.id !== item.id)
+            outgoingQueueRef.current = next
+            dispatchingRef.current = null
+            setOutgoingQueue(next)
+            continue
+          }
+          // Success — remove from queue and continue
+          const remaining = outgoingQueueRef.current.filter(i => i.id !== item.id)
+          outgoingQueueRef.current = remaining
+          dispatchingRef.current = null
+          setOutgoingQueue(remaining)
+        } catch {
+          dispatchingRef.current = null
+          setOutgoingQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'queued' } : i))
+          break
+        }
+      }
+    } finally {
+      isDrainingRef.current = false
+    }
+  }, [roomId])
+
+  // F015: enqueue a message when room is busy
+  const enqueueMessage = useCallback((content: string, toAgentId: string, toAgentName: string) => {
+    const item: OutgoingQueueItem = {
+      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      content,
+      toAgentId,
+      toAgentName,
+      createdAt: Date.now(),
+      status: 'queued',
+    }
+    outgoingQueueRef.current = [...outgoingQueueRef.current, item]
+    setOutgoingQueue([...outgoingQueueRef.current])
+  }, [])
+
+  // F015: cancel a queued item (remove without sending)
+  const cancelQueuedItem = useCallback((itemId: string) => {
+    const next = outgoingQueueRef.current.filter(i => i.id !== itemId)
+    outgoingQueueRef.current = next
+    setOutgoingQueue(next)
+  }, [])
+
+  // F015: recall last queued item back to input box
+  const recallQueuedItem = useCallback((itemId: string) => {
+    if (userInput.trim()) return
+    const item = outgoingQueueRef.current.find(i => i.id === itemId)
+    if (!item) return
+    const next = outgoingQueueRef.current.filter(i => i.id !== itemId)
+    outgoingQueueRef.current = next
+    setOutgoingQueue(next)
+    setUserInput(item.content)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [userInput])
 
   const retryFailedMessage = useCallback(async (roomError: AgentRunErrorEvent) => {
     if (!roomError.originalUserContent) return
@@ -945,6 +1062,19 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               </button>
             ) : roomId ? (
               <div className="flex flex-col gap-2 relative">
+                {/*
+                 * F015: User outgoing queue — displayed above MentionQueue.
+                 * MentionQueue = who will speak (Agent speaking queue).
+                 * OutgoingMessageQueue = what the user wants to send (user sending queue).
+                 */}
+                <OutgoingMessageQueue
+                  items={outgoingQueue}
+                  dispatchingId={dispatchingRef.current}
+                  onCancel={cancelQueuedItem}
+                  onRecall={recallQueuedItem}
+                  inputHasDraft={userInput.trim().length > 0}
+                  agents={agents}
+                />
                 {/* AC-2: 发言队列 — absolute 定位不挤压输入框 */}
                 {roomId && mentionQueue.length > 0 && (
                   <div className="absolute bottom-full left-0 right-0 mb-2 z-20">
