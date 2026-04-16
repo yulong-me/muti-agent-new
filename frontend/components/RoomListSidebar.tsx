@@ -214,12 +214,12 @@ export function RoomListSidebarMobile({
   if (!mobileMenuOpen) return null
 
   return (
-    <div className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onToggleMobileMenu}>
+    <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl" onClick={onToggleMobileMenu}>
       <div
-        className="app-islands-panel w-[80%] max-w-[300px] h-full bg-surface border-r border-line flex flex-col"
+        className="app-islands-panel w-[80%] max-w-[300px] h-full bg-surface border-r border-white/[0.08] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-line flex items-center justify-between">
+        <div className="p-5 border-b border-white/[0.06] flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-ink">讨论历史</h2>
           <button
             onClick={onCloseMobileMenu}

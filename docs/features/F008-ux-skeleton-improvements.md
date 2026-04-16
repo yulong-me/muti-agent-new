@@ -10,13 +10,13 @@ created: 2026-04-15
 
 **Feature:** F008 — `docs/features/F008-ux-skeleton-improvements.md`
 **Goal:** 修复当前系统的核心输入、空间布局、阅读心流和架构信息等骨架级 UX 问题，提升大屏阅读体验与小屏可用性。
-**Acceptance Criteria:** 
-- [ ] AC-1: 底部输入框实现自动高度适应（Auto-resize），并具有最大高度限制和内部滚动条。
-- [ ] AC-2: 优化 `MentionQueue` 渲染位置（移至输入框内部或重构绝对定位），消除输入区的视觉跳动。
-- [ ] AC-3: 扩展大屏下消息气泡的最大宽度限制，防止大段代码过早折行。
-- [ ] AC-4: 小屏幕设备下，Agent 面板不应直接隐藏，可通过 Drawer 或菜单调出。
-- [ ] AC-5: 剥离 `AgentPanel` 底部原生的 Debug 日志，将其转移至独立的设置或单独的控制台入口，降低认知负担。
-- [ ] AC-6: 确保大模型“思考过程” (Thinking) 默认折叠，以避免干扰阅读心流（仅在流式生成或明确点击时展开）。
+**Acceptance Criteria:**
+- [x] AC-1: 底部输入框实现自动高度适应（Auto-resize），并具有最大高度限制和内部滚动条。
+- [x] AC-2: 优化 `MentionQueue` 渲染位置（移至输入框内部或重构绝对定位），消除输入区的视觉跳动。
+- [x] AC-3: 扩展大屏下消息气泡的最大宽度限制，防止大段代码过早折行。
+- [x] AC-4: 小屏幕设备下，Agent 面板不应直接隐藏，可通过 Drawer 或菜单调出。
+- [x] AC-5: 剥离 `AgentPanel` 底部原生的 Debug 日志，将其转移至独立的设置或单独的控制台入口，降低认知负担。
+- [x] AC-6: 确保大模型”思考过程” (Thinking) 默认折叠，以避免干扰阅读心流（仅在流式生成或明确点击时展开）。
 **Architecture:** 
 - 采用 React 现有的组件组合，针对 `RoomView_new.tsx` 中的 `<textarea>` 替换为支持自动增长尺寸的组件或手写原生 JS 计算。
 - 重构 `AgentPanel` 为响应式：大屏侧边栏，小屏 Drawer（复用现有的 Drawer 模式）。
@@ -402,7 +402,7 @@ created: 2026-04-15
 
 ### Goal
 
-让设置面板成为主讨论界面的同一视觉系统延伸，而不是独立的后台样式页。
+让所有窗口级浮层成为主讨论界面的同一视觉系统延伸，而不是各自保留旧的后台/弹窗样式页。
 
 ### Scope
 
@@ -413,6 +413,11 @@ created: 2026-04-15
 **Secondary Files**
 
 - `frontend/components/SettingsDrawer.tsx`
+- `frontend/components/CreateRoomModal.tsx`
+- `frontend/components/AgentInviteDrawer.tsx`
+- `frontend/components/DirectoryBrowser.tsx`
+- `frontend/components/RoomView_new.tsx`（mobile agent drawer）
+- `frontend/components/RoomListSidebar.tsx`（mobile menu）
 - `frontend/app/globals.css`
 
 **Visual Reference**
@@ -448,6 +453,46 @@ created: 2026-04-15
 
 - 设置抽屉整体看起来像右侧延展出的同系统面板。
 - 抽屉开合后，不会出现一眼可见的背景材质断层。
+
+#### Task A2: 统一所有窗口级壳层
+
+**Target**
+
+- `frontend/components/CreateRoomModal.tsx`
+- `frontend/components/AgentInviteDrawer.tsx`
+- `frontend/components/DirectoryBrowser.tsx`
+- `frontend/components/RoomView_new.tsx`
+- `frontend/components/RoomListSidebar.tsx`
+- `frontend/components/SettingsModal.tsx`（含 `ConfirmDeleteDialog`）
+
+**What to change**
+
+- 统一所有“窗口级容器”的外壳样式，不允许有的还是旧版纯色卡片，有的是 islands glass。
+- 包括：
+  - 新讨论弹窗
+  - 邀请专家弹窗
+  - 目录浏览器弹窗
+  - 设置抽屉
+  - 删除确认弹窗
+  - mobile Agent Drawer
+  - mobile 房间侧边栏菜单
+
+**Recommended approach**
+
+- 为窗口级容器定义明确的统一规则：
+  - 外壳都从同一套 panel shell 派生
+  - 遮罩层的黑度、blur 强度一致
+  - 圆角、边框、阴影处于同一体系
+- 如有必要，在 `globals.css` 新增统一辅助类，例如：
+  - `app-islands-overlay`
+  - `app-islands-dialog`
+  - `app-islands-drawer`
+- 但这些类必须是 `app-islands` 的窗口层扩展，不是新主题。
+
+**Acceptance**
+
+- 所有窗口级浮层打开时，用户都能感知为同一套产品系统。
+- 不再出现“主界面是 islands / glass，弹窗还是旧版后台卡片”的断层。
 
 #### Task B: 设置 Header 与主界面 Header 对齐
 
@@ -559,9 +604,37 @@ created: 2026-04-15
 - `globals.css` 中不存在第二套独立设置主题系统。
 - 设置面板样式来源可以追溯到同一组 islands 设计语言。
 
+#### Task F: 统一浮层内部 header / footer / body 分层
+
+**Target**
+
+- `frontend/components/CreateRoomModal.tsx`
+- `frontend/components/AgentInviteDrawer.tsx`
+- `frontend/components/DirectoryBrowser.tsx`
+- `frontend/components/SettingsModal.tsx`
+
+**What to change**
+
+- 不仅统一外壳，还要统一浮层内部三段式结构：
+  - Header
+  - Scrollable body
+  - Footer / action area
+- 当前一些窗口只改了外层圆角，但 header / footer 仍然保留旧层级，导致看起来像半套主题。
+
+**Recommended approach**
+
+- Header 统一使用更轻的 nav/surface 层。
+- Body 统一作为内容层，避免局部纯色块突兀。
+- Footer / action bar 与 header 属于同一结构语言，避免视觉上像后贴的横条。
+
+**Acceptance**
+
+- 窗口内部结构层次一致，不再出现“外壳像 islands，内容像旧面板”的混搭。
+
 ### Reviewer Checklist
 
 - [ ] 设置抽屉外壳与主界面 panel 属于同一材质系统。
+- [ ] 新讨论、邀请专家、目录浏览器、删除确认、mobile drawer/menu 全部接入同一窗口风格。
 - [ ] 设置 header 与主聊天 header 的风格连续。
 - [ ] 设置内容卡片不再混用 glass 与旧版 dashboard 卡片语言。
 - [ ] 设置中的输入框、按钮、hover/focus 状态与主界面统一。

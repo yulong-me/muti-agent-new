@@ -94,7 +94,7 @@ export function extractMentions(content: string): string[] {
 // ─── Markdown components (shared) ───────────────────────────────────────────
 
 export const mdComponents: Components = {
-  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  p: ({ children }) => <p className="mb-2 last:mb-0 break-words">{children}</p>,
   h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3 text-ink first:mt-0">{children}</h1>,
   h2: ({ children }) => <h2 className="text-sm font-bold mb-2 mt-3 text-ink first:mt-0">{children}</h2>,
   h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 text-ink first:mt-0">{children}</h3>,

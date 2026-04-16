@@ -351,7 +351,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   }
   function ConfirmDeleteDialog({ agent, onConfirm, onCancel }: { agent: AgentConfig; onConfirm: () => void; onCancel: () => void }) {
     return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl">
         <div className="settings-surface rounded-2xl shadow-2xl p-6 w-full max-w-xs mx-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -391,11 +391,11 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
 
   return (
     <>
-      <button ref={backdropRef} aria-label="关闭" className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity cursor-default" onClick={onClose}/>
+      <button ref={backdropRef} aria-label="关闭" className="fixed inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl z-40 transition-opacity cursor-default" onClick={onClose}/>
       <div className="fixed inset-0 z-50 flex justify-end">
         <div className="w-full md:w-[640px] h-full settings-panel relative flex flex-col animate-in slide-in-from-right duration-300">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-line settings-nav shrink-0">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] settings-nav shrink-0">
             <div className="flex gap-1 settings-surface rounded-xl p-1">
               <button onClick={() => setTab('agent')}
                 className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'agent' ? 'shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
@@ -406,7 +406,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                 <Server className="w-3.5 h-3.5" aria-hidden/>CLI 连接
               </button>
             </div>
-            <button onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-white/5 rounded-full transition-colors">
+            <button onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-full transition-colors">
               <X className="w-4 h-4" aria-hidden/>
             </button>
           </div>

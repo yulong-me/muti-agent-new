@@ -94,20 +94,21 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* 遮罩 */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl" onClick={onClose} />
 
       {/* 弹窗 */}
-      <div className="relative z-10 bg-bg rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-line"
+      
+      <div className="relative z-10 app-window-shell rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
            style={{ maxHeight: '70vh' }}
            role="dialog"
            aria-modal="true"
            aria-labelledby="agent-invite-title">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-line flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] flex-shrink-0">
           <h2 id="agent-invite-title" className="text-base font-bold text-ink">邀请专家入群</h2>
           <button
             onClick={onClose}
-            className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface rounded-lg transition-colors"
+            className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-lg transition-colors"
             aria-label="关闭"
           >
             <X className="w-4 h-4" />
@@ -115,7 +116,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
         </div>
 
         {/* 搜索框 */}
-        <div className="px-4 py-3 border-b border-line flex-shrink-0">
+        <div className="px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-soft" />
             <label htmlFor="agent-invite-search" className="sr-only">搜索专家</label>
@@ -126,7 +127,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="搜索专家…"
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-bg border border-line text-[14px] text-ink placeholder:text-ink-soft/50 focus:outline-none focus:border-accent/50 transition-colors"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
             />
           </div>
         </div>
@@ -134,7 +135,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
         {/* 列表 */}
         <div className="flex-1 overflow-y-auto px-2 py-2 min-h-0">
           {inviteError && (
-            <div className="px-3 py-2 mb-1 text-xs text-red-500 bg-red-50 rounded-lg">{inviteError}</div>
+            <div className="px-3 py-2 mb-1 text-xs text-red-400 bg-red-500/10 rounded-lg">{inviteError}</div>
           )}
 
           {loading && (
@@ -144,7 +145,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
           )}
 
           {error && (
-            <div className="px-3 py-2 text-xs text-red-500">{error}</div>
+            <div className="px-3 py-2 text-xs text-red-400">{error}</div>
           )}
 
           {!loading && !error && filtered.length === 0 && (
@@ -160,7 +161,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
             return (
               <div
                 key={agent.id}
-                className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-surface transition-colors"
+                className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/[0.04] transition-colors"
               >
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
@@ -178,12 +179,12 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
                   type="button"
                   onClick={() => handleInvite(agent.id)}
                   disabled={isInviting || isDone}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
+                  className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-colors flex-shrink-0 ${
                     isDone
-                      ? 'bg-green-100 text-green-700 cursor-default'
+                      ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
                       : isInviting
                         ? 'bg-accent/50 text-white cursor-wait'
-                        : 'bg-accent hover:bg-accent/80 text-white'
+                        : 'bg-accent hover:bg-accent-deep text-white'
                   }`}
                 >
                   {isDone ? '已邀请' : isInviting ? '邀请中…' : '邀请'}
@@ -194,11 +195,11 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-line flex-shrink-0 flex justify-end">
+        <div className="px-4 py-3 border-t border-white/[0.06] flex-shrink-0 flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-xl border border-line text-ink-soft text-sm font-medium transition-colors hover:bg-surface hover:text-ink"
+            className="px-5 py-2 rounded-xl border border-white/[0.08] text-ink-soft text-sm font-medium transition-colors hover:bg-white/[0.06] hover:text-ink"
           >
             关闭
           </button>

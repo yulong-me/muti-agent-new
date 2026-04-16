@@ -310,7 +310,9 @@ socket.on('agent_status', (data: any) => {
     const poll = async () => {
       try {
         const res = await fetch(`${API}/api/rooms/${roomId}/messages`)
-        if (!res.ok) return
+        if (!res.ok) {
+          return
+        }
         const data = await res.json()
         const newState = data.state || 'RUNNING'
         const newAgents = data.agents || []
@@ -628,7 +630,7 @@ socket.on('agent_status', (data: any) => {
                 const toColors = toRecipient ? AGENT_COLORS[toRecipient.name] || DEFAULT_AGENT_COLOR : null
                 return (
                   <div key={msg.id} className="flex justify-end gap-3 mb-6 items-start">
-                    <div className="w-full max-w-[85%] md:max-w-[70%]">
+                    <div className="w-full max-w-[85%] lg:max-w-[90%]">
                       <div className="flex justify-end items-center gap-2 mb-1.5">
                         <span className="text-[11px] text-ink-soft">
                           {formattedTime}
@@ -644,18 +646,16 @@ socket.on('agent_status', (data: any) => {
                         )}
                       </div>
                       <div className="rounded-2xl rounded-tr-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
-                        <div className="text-[14px] break-words leading-relaxed text-ink">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkBreaks]}
-                            components={{
-                              ...mdComponents,
-                              p: ({ children }) => <p className="mb-2 last:mb-0 text-ink">{children}</p>,
-                              a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 opacity-90 hover:opacity-100 text-accent">{children}</a>,
-                            }}
-                          >
-                            {msg.content}
-                          </ReactMarkdown>
-                        </div>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkBreaks]}
+                          components={{
+                            ...mdComponents,
+                            p: ({ children }) => <p className="mb-2 last:mb-0 text-ink">{children}</p>,
+                            a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 opacity-90 hover:opacity-100 text-accent">{children}</a>,
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
                       </div>
                     </div>
                   </div>
@@ -677,7 +677,7 @@ socket.on('agent_status', (data: any) => {
                   <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
                     <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={32} className="w-full h-full" />
                   </div>
-                  <div className="w-full max-w-[85%] md:max-w-[70%]">
+                  <div className="w-full max-w-[85%] lg:max-w-[90%]">
                     <div className="mb-1.5 flex items-center gap-2">
                       <span className="text-[13px] font-bold px-2 py-0.5 rounded-md" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
                         {msg.agentName}
@@ -849,14 +849,14 @@ socket.on('agent_status', (data: any) => {
       {/* AC-4: Agent Drawer — mobile only */}
       {agentDrawerOpen && (
         <div className="fixed inset-0 z-[200] flex">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAgentDrawerOpen(false)} />
-          <div className="relative z-10 ml-auto w-[280px] h-full bg-surface border-l border-line flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between px-4 py-4 border-b border-line">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl" onClick={() => setAgentDrawerOpen(false)} />
+          <div className="relative z-10 ml-auto w-[280px] h-full app-window-shell border-l flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-white/[0.06]">
               <h2 className="text-[15px] font-bold text-ink">参与 Agent</h2>
               <button
                 type="button"
                 onClick={() => setAgentDrawerOpen(false)}
-                className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors"
+                className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-lg transition-colors"
                 aria-label="关闭"
               >
                 <X className="w-4 h-4" />
@@ -864,7 +864,7 @@ socket.on('agent_status', (data: any) => {
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
               {agents.map(agent => (
-                <div key={agent.id} className="bg-bg border border-line rounded-xl p-3 shadow-sm">
+                <div key={agent.id} className="app-window-surface rounded-xl p-3">
                   <div className="flex items-center gap-3 mb-2.5">
                     <AgentAvatar
                       src={AGENT_COLORS[agent.name]?.avatar || DEFAULT_AGENT_COLOR.avatar}
@@ -879,7 +879,7 @@ socket.on('agent_status', (data: any) => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-surface-muted px-2 py-1 rounded-md max-w-fit">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md max-w-fit" style={{background:"rgba(255,255,255,0.025)"}}>
                     <span
                       className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                         agent.status === 'thinking' || agent.status === 'waiting'

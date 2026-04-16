@@ -21,10 +21,10 @@ export default function MentionPicker({ agents, query, highlightIndex, onSelect,
   return (
     <div
       data-mention-picker="1"
-      className="absolute z-50 bg-surface border border-line rounded-xl shadow-2xl overflow-hidden"
+      className="absolute z-50 bg-surface backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden"
       style={{ left: 0, bottom: 'calc(100% + 6px)', minWidth: 220, maxWidth: 280 }}
     >
-      <div className="px-3 py-1.5 bg-surface-muted border-b border-line">
+      <div className="px-3 py-1.5 bg-white/[0.04] border-b border-white/[0.06]">
         <span className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider">选择专家</span>
       </div>
       <div className="max-h-48 overflow-y-auto custom-scrollbar">
