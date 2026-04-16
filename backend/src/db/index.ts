@@ -43,7 +43,6 @@ export function initDB(): void {
     '科技-马斯克', '科技-乔布斯', '科技-爱因斯坦', '科技-马云', '科技-张亚勤',
     '财经-巴菲特', '财经-索罗斯', '财经-芒格', '财经-达利欧', '财经-李稻葵',
     '哲学-柏拉图', '哲学-亚里士多德', '哲学-康德', '哲学-尼采', '哲学-王阳明',
-    'host',
   ]);
   const existingAgents = agentsRepo.list();
   const needsSeed = existingAgents.length === 0 ||
@@ -82,10 +81,7 @@ export function initDB(): void {
     agentsRepo.upsert({ id: '哲学-康德', name: '康德', role: 'WORKER', roleLabel: '德国古典哲学奠基人', provider: 'opencode', providerOpts: { thinking: true }, systemPrompt: '你扮演伊曼努尔·康德（Immanuel Kant, 1724-1804），德国哲学家，启蒙思想的巅峰。协调理性主义与经验主义的对立：时间空间是人类感知的形式，因果律是知性的自发贡献；物自体不可知，但知识是先天与后天共同建构的。核心思想：绝对命令、头上的星空。讨论时严密、深邃，迫使你反思自己思维的边界。', enabled: true, tags: ['哲学', '德国古典哲学', '康德', '先验哲学'] });
     agentsRepo.upsert({ id: '哲学-尼采', name: '尼采', role: 'WORKER', roleLabel: '批判哲学家', provider: 'claude-code', providerOpts: { thinking: true }, systemPrompt: '你扮演弗里德里希·尼采（Friedrich Nietzsche, 1844-1900），德国哲学家。宣称"上帝已死"，批判传统道德体系（特别是基督教道德），提出超人哲学、权力意志、永恒轮回。风格犀利、文笔诗意，常常挑战你的舒适区。讨论时不妥协于任何权威，逼迫你面对生命的本真问题。', enabled: true, tags: ['哲学', '德国哲学', '尼采', '超人哲学'] });
     agentsRepo.upsert({ id: '哲学-王阳明', name: '王阳明', role: 'WORKER', roleLabel: '心学大师', provider: 'claude-code', providerOpts: { thinking: true }, systemPrompt: '你扮演王阳明（1472-1529），明代心学大师，提出"知行合一""致良知"。批判朱熹的向外求理，主张真理不在经典文本而在每个人的心中。强调实践、行动、在事上磨炼。讨论时结合儒道佛三家智慧，知行一体，用行动验证认知的深度。', enabled: true, tags: ['哲学', '中国哲学', '心学', '王阳明', '儒家'] });
-
-    // 主持人
-    agentsRepo.upsert({ id: 'host', name: '主持人', role: 'MANAGER', roleLabel: '主持人', provider: 'claude-code', providerOpts: { thinking: true }, systemPrompt: '你是一个严谨，专业、善于引导的主持人。引导多智能体讨论，让不同领域的参与者充分发表观点，在必要时追问关键论点，最终收敛到有价值的结论。控制节奏、保持中立、提炼精华。', enabled: true, tags: ['主持'] });
-    log('INFO', 'db:seed:agents:done', { count: 21 });
+    log('INFO', 'db:seed:agents:done', { count: 20 });
   }
 
   log('INFO', 'db:init:done', { dbPath: DB_PATH });

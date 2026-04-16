@@ -17,3 +17,4 @@ created: 2026-04-09
 | F009 | Window Layer Visual Unification | done | TBD | [F009](docs/features/F009-window-layer-visual-unification.md) |
 | F010 | CreateRoomModal UX 优化 | done | 宪宪 | [F010](docs/features/F010-create-room-ux-improvements.md) |
 | F011 | 会话列表 → 导航列表重构 | done | sonnet | [F011](docs/features/F011-room-list-navigation.md) |
+| F012 | 去 MANAGER 化：系统级路由与容错模型 | done | sonnet | [F012](docs/features/F012-decentralized-routing.md) |

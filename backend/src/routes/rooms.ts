@@ -12,7 +12,8 @@ import { error } from '../lib/logger.js';
 import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
-import { handleUserMessage, routeToAgent } from '../services/stateMachine.js';
+import { routeToAgent, generateReportInline } from '../services/stateMachine.js';
+import { info } from '../lib/logger.js';
 import { roomsRepo, sessionsRepo, messagesRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
@@ -146,7 +147,7 @@ roomsRouter.get('/:id/messages', (req, res) => {
   });
 });
 
-// POST /api/rooms/:id/messages — 用户发送消息 → Manager 或直接 Agent 处理
+// POST /api/rooms/:id/messages — 用户发送消息 → 路由前置 + Fallback 拦截
 roomsRouter.post('/:id/messages', async (req, res) => {
   const room = store.get(req.params.id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -159,20 +160,78 @@ roomsRouter.post('/:id/messages', async (req, res) => {
     return res.status(400).json({ error: 'content required' });
   }
 
-  // F0042: toAgentId 验证 — 必须是在这个 room 内的 agent
-  if (toAgentId) {
-    const target = room.agents.find(a => a.id === toAgentId);
-    if (!target) {
-      return res.status(400).json({ error: `Agent not found: ${toAgentId}` });
+  // 目标必须明确
+  const target = toAgentId
+    ? room.agents.find(a => a.id === toAgentId)
+    : null;
+
+  if (toAgentId && !target) {
+    return res.status(400).json({ error: `Agent not found: ${toAgentId}` });
+  }
+
+  // System Dispatcher: 无 toAgentId 时，尝试找最近活跃的 Worker
+  if (!target) {
+    const workers = room.agents.filter(a => a.role === 'WORKER');
+    if (workers.length === 0) {
+      return res.status(400).json({ error: 'Target Expert Required: no experts in this room' });
     }
+    // 找最近一条 WORKER 消息对应的 agent
+    const lastWorkerMsg = [...room.messages]
+      .reverse()
+      .find(m => m.agentRole === 'WORKER');
+    const lastActiveWorker = lastWorkerMsg
+      ? workers.find(w => w.name === lastWorkerMsg.agentName) ?? workers[0]
+      : workers[0];
+
+    if (!lastActiveWorker) {
+      return res.status(400).json({ error: 'Target Expert Required: could not determine routing target' });
+    }
+
+    // 同步路由日志（< 20ms KPI）
+    info('dispatcher:resolve', { roomId: req.params.id, targetAgentId: lastActiveWorker.id, targetAgentName: lastActiveWorker.name, via: 'last_active_worker' });
+
+    // 异步处理，不阻塞响应
+    routeToAgent(req.params.id, content.trim(), lastActiveWorker.id).catch(err => {
+      error('route:msg_error', { roomId: req.params.id, error: String(err) });
+    });
+
+    return res.json({ status: 'ok', routedTo: lastActiveWorker.id });
   }
 
   // 异步处理，不阻塞响应
-  routeToAgent(req.params.id, content.trim(), toAgentId).catch(err => {
+  routeToAgent(req.params.id, content.trim(), target.id).catch(err => {
     error('route:msg_error', { roomId: req.params.id, error: String(err) });
   });
 
   res.json({ status: 'ok' });
+});
+
+// POST /api/rooms/:id/report — 生成报告（无状态，系统级服务）
+roomsRouter.post('/:id/report', async (req, res) => {
+  const room = store.get(req.params.id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  const allContent = room.messages
+    .map(m => `【${m.agentName}】${m.content}`)
+    .join('\n\n');
+
+  if (!allContent.trim()) {
+    return res.status(400).json({ error: 'No messages to generate report from' });
+  }
+
+  // 用第一个 WORKER 作为报告生成的执行者（无状态，系统级角色）
+  const worker = room.agents.find(a => a.role === 'WORKER');
+  if (!worker) {
+    return res.status(400).json({ error: 'No expert available to generate report' });
+  }
+
+  // 同步生成报告（简短操作）
+  const reportOutput = await generateReportInline(room.topic, allContent, worker, req.params.id);
+
+  store.update(req.params.id, { state: 'DONE', report: reportOutput });
+  roomsRepo.update(req.params.id, { state: 'DONE', report: reportOutput });
+
+  res.json({ summary: reportOutput, actionItems: [] });
 });
 
 // PATCH /api/rooms/:id/archive — 归档讨论室（软删除）

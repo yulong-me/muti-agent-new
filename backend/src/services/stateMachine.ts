@@ -69,6 +69,15 @@ export function addUserMessage(
   });
 }
 
+function addSystemMessage(roomId: string, content: string): Message | undefined {
+  return addMessage(roomId, {
+    agentRole: 'WORKER',
+    agentName: '系统',
+    content,
+    type: 'system',
+  });
+}
+
 function appendMessageContent(roomId: string, messageId: string, extra: string) {
   const room = store.get(roomId);
   if (!room) return;
@@ -163,44 +172,22 @@ export async function handleUserMessage(
 // ─── F0042: 直接路由 ───────────────────────────────────────────────────────
 
 /**
- * F0042: 直接路由到指定 Agent
- *
- * - toAgentId === MANAGER → 走 handleUserMessage（主持人路由逻辑）
- * - toAgentId === WORKER → 直接调用 callWorker（跳过主持人分析）
- * - 无 toAgentId → backward compat，走 handleUserMessage
+ * F012: 直接路由到指定 WORKER（路由前置已保证 toAgentId 有效）
+ * 不再经过 MANAGER，不再支持无 toAgentId 的 backward compat 路径
  */
 export async function routeToAgent(
   roomId: string,
   content: string,
-  toAgentId?: string,
+  toAgentId: string,
 ): Promise<void> {
   const room = store.get(roomId);
   if (!room) return;
   if (room.state === 'DONE') return;
 
-  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
-  if (!managerAgent) return;
-
-// 补全用户旅程事件链（人类可读）
   const contentSnippet = content.length > 80 ? content.slice(0, 80) + '…' : content;
   const mentions = scanForA2AMentions(content);
-  info('msg:recv', {
-    roomId,
-    contentLength: content.length,
-    contentSnippet,
-    mentions,
-    toAgentId,
-    managerId: managerAgent.id,
-  });
+  info('msg:recv', { roomId, contentLength: content.length, contentSnippet, mentions, toAgentId });
 
-  // backward compat: 无 toAgentId → 发给主持人
-  if (!toAgentId || toAgentId === managerAgent.id) {
-    debug('route.to', { roomId, toAgentId, toAgentName: managerAgent.name, toAgentRole: 'MANAGER', path: 'handleUserMessage', reason: 'backward_compat' });
-    await handleUserMessage(roomId, content);
-    return;
-  }
-
-  // 直接发给 Worker（跳过主持人分析）
   const target = room.agents.find(a => a.id === toAgentId);
   if (!target) {
     warn('route.fallback', { roomId, toAgentId, reason: 'agent_not_found' });
@@ -208,8 +195,7 @@ export async function routeToAgent(
     return;
   }
   if (target.role !== 'WORKER') {
-    warn('route.fallback', { roomId, toAgentId, toAgentName: target.name, toAgentRole: target.role, reason: 'not_worker_fallback' });
-    await handleUserMessage(roomId, content);
+    warn('route.fallback', { roomId, toAgentId, toAgentName: target.name, toAgentRole: target.role, reason: 'not_worker' });
     return;
   }
   debug('route.to', { roomId, toAgentId, toAgentName: target.name, toAgentRole: 'WORKER', path: 'callWorker' });
@@ -320,7 +306,53 @@ export async function generateReport(roomId: string): Promise<string> {
   roomsRepo.update(roomId, { report });
   telemetry('report:done', { roomId, reportLength: report.length });
 
-  return report;
+return report;
+}
+
+/**
+ * F012: 系统级报告生成（无状态，不依赖 MANAGER）
+ * 使用 room 内的第一个 WORKER 作为执行者
+ */
+export async function generateReportInline(
+  topic: string,
+  allContent: string,
+  worker: Agent,
+  roomId: string,
+): Promise<string> {
+  const prompt = `你是一个专业的讨论主持人。请根据以下讨论内容，输出一份结构化的讨论总结报告。
+
+## 讨论主题
+${topic}
+
+## 讨论内容
+${allContent}
+
+请按以下格式输出：
+1. 核心讨论要点（3-5条）
+2. 各方主要观点
+3. 达成的共识或结论
+4. 待进一步探讨的问题
+
+请用中文输出，语言精炼专业。`;
+
+  telemetry('report:inline:start', { roomId, workerName: worker.name });
+
+  const result = await streamingCallAgent(
+    {
+      domainLabel: '讨论主持人',
+      systemPrompt: '你是一个专业的讨论主持人，擅长整理讨论结论',
+      userMessage: prompt,
+    },
+    roomId,
+    worker.id,
+    worker.configId,
+    worker.name,
+    'report',
+    'WORKER',
+  );
+
+  telemetry('report:inline:done', { roomId, reportLength: result.length });
+  return result;
 }
 
 // ─── 流式调用 ───────────────────────────────────────────────────────────────
@@ -516,9 +548,10 @@ export async function a2aOrchestrate(
 
   telemetry('a2a:detected', { roomId, fromAgentName, mentions, depth: currentDepth });
 
-  // 达深度上限 → 截断，等待用户下一步
+// 达深度上限 → 抛出 System 卡片，不再交给 Manager 收口
   if (currentDepth >= MAX_A2A_DEPTH) {
     telemetry('a2a:depth_limit', { roomId, depth: currentDepth, chain: currentChain });
+    addSystemMessage(roomId, '[系统提醒] 业务内部探讨达到上限，请您介入引导方向');
     return;
   }
 
