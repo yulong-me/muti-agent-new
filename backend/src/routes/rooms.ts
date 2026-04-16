@@ -40,10 +40,10 @@ roomsRouter.post('/', async (req, res) => {
 
   const workerIds: string[] = rawWorkerIds ?? [];
 
-  // F016: Validate sceneId if provided
+  // F016: Validate sceneId — always check effectiveSceneId exists
   const effectiveSceneId = sceneId ?? 'roundtable-forum';
-  if (sceneId !== undefined && !scenesRepo.get(effectiveSceneId)) {
-    return res.status(400).json({ error: `Scene not found: ${sceneId}` });
+  if (!scenesRepo.get(effectiveSceneId)) {
+    return res.status(400).json({ error: `Scene not found: ${effectiveSceneId}` });
   }
 
   // F006: Validate custom workspace path if provided

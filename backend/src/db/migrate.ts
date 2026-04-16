@@ -98,6 +98,8 @@ export function initSchema(): void {
       // 表不存在，直接应用 schema
       db.exec(sql);
       log('INFO', 'db:schema:init');
+      // P1-fix: seed builtin scenes on fresh DB (was skipped by early return)
+      try { ensureBuiltinScenes(); } catch (e) { log('WARN', 'db:scene:seed:failed', { err: String(e) }); }
       return;
     }
 
@@ -105,6 +107,8 @@ export function initSchema(): void {
     if (roomsSchema.sql.includes('RUNNING') && roomsSchema.sql.includes('DONE')) {
       db.exec(sql);
       log('INFO', 'db:schema:migrate:rooms:already_migrated');
+      // P1-fix: seed builtin scenes on already-migrated DB (was skipped by early return)
+      try { ensureBuiltinScenes(); } catch (e) { log('WARN', 'db:scene:seed:failed', { err: String(e) }); }
       return;
     }
 
