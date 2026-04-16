@@ -64,7 +64,7 @@ export default function MentionQueue({ queue, agents, streamingAgentIds }: Menti
                 {isStreaming ? ' · 发言中' : ' · 等待中'}
               </span>
               {item.mentionedBy === 'manager' && (
-                <span className="text-[9px] opacity-60">主持人提名</span>
+                <span className="text-[9px] opacity-60">邀请发言</span>
               )}
             </div>
           )

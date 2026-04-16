@@ -18,3 +18,4 @@ created: 2026-04-09
 | F010 | CreateRoomModal UX 优化 | done | 宪宪 | [F010](docs/features/F010-create-room-ux-improvements.md) |
 | F011 | 会话列表 → 导航列表重构 | done | sonnet | [F011](docs/features/F011-room-list-navigation.md) |
 | F012 | 去 MANAGER 化：系统级路由与容错模型 | done | sonnet | [F012](docs/features/F012-decentralized-routing.md) |
+| F013 | 强制显式路由（Mandatory @-Mention）| done | sonnet | [F013](docs/features/F013-mandatory-mention-routing.md) |

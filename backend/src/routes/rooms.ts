@@ -13,7 +13,6 @@ import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
 import { routeToAgent, generateReportInline } from '../services/stateMachine.js';
-import { info } from '../lib/logger.js';
 import { roomsRepo, sessionsRepo, messagesRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
@@ -143,37 +142,14 @@ roomsRouter.post('/:id/messages', async (req, res) => {
     return res.status(400).json({ error: `Agent not found: ${toAgentId}` });
   }
 
-  // System Dispatcher: 无 toAgentId 时，尝试找最近活跃的 Worker
-  if (!target) {
-    const workers = room.agents.filter(a => a.role === 'WORKER');
-    if (workers.length === 0) {
-      return res.status(400).json({ error: 'Target Expert Required: no experts in this room' });
-    }
-    // 找最近一条 WORKER 消息对应的 agent
-    const lastWorkerMsg = [...room.messages]
-      .reverse()
-      .find(m => m.agentRole === 'WORKER');
-    const lastActiveWorker = lastWorkerMsg
-      ? workers.find(w => w.name === lastWorkerMsg.agentName) ?? workers[0]
-      : workers[0];
-
-    if (!lastActiveWorker) {
-      return res.status(400).json({ error: 'Target Expert Required: could not determine routing target' });
-    }
-
-    // 同步路由日志（< 20ms KPI）
-    info('dispatcher:resolve', { roomId: req.params.id, targetAgentId: lastActiveWorker.id, targetAgentName: lastActiveWorker.name, via: 'last_active_worker' });
-
-    // 异步处理，不阻塞响应
-    routeToAgent(req.params.id, content.trim(), lastActiveWorker.id).catch(err => {
-      error('route:msg_error', { roomId: req.params.id, error: String(err) });
-    });
-
-    return res.json({ status: 'ok', routedTo: lastActiveWorker.id });
+  // F013: toAgentId is mandatory — no implicit fallback
+  if (!toAgentId) {
+    return res.status(400).json({ error: 'Target Expert Required: toAgentId is mandatory' });
   }
 
+// F013: toAgentId is non-null (guaranteed above); target exists (404 already returned if not)
   // 异步处理，不阻塞响应
-  routeToAgent(req.params.id, content.trim(), target.id).catch(err => {
+  routeToAgent(req.params.id, content.trim(), target!.id).catch(err => {
     error('route:msg_error', { roomId: req.params.id, error: String(err) });
   });
 
