@@ -6,6 +6,14 @@ import { X, Bot, Server, CheckCircle2, Trash2, Edit2, Save, Plus, Loader2, Play,
 
 const API = 'http://localhost:7001'
 
+function fmtErr(err: unknown, fallback: string): string {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  if (/did not match the expected pattern/i.test(msg)) {
+    return '浏览器拦截了表单校验（pattern）。请禁用扩展或使用无痕窗口重试。'
+  }
+  return msg || fallback
+}
+
 type ProviderName = 'claude-code' | 'opencode'
 
 interface AgentConfig {
@@ -106,8 +114,8 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
             {saved && <span className="text-[11px] text-emerald-500 flex items-center gap-1 mr-1" aria-live="polite"><CheckCircle2 className="w-3 h-3" aria-hidden/>已保存</span>}
             {isHost ? <span className="text-[11px] text-ink-soft/40 mr-2">—</span> : (
               <>
-                <button onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden/></button>
-                <button onClick={() => onDeleteRequest(agent)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden/></button>
+                <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden/></button>
+                <button type="button" onClick={() => onDeleteRequest(agent)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden/></button>
               </>
             )}
           </div>
@@ -140,7 +148,7 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
             </div>
             <div>
               <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">推理</label>
-              <button onClick={() => opt('thinking', !form.providerOpts.thinking)}
+              <button type="button" onClick={() => opt('thinking', !form.providerOpts.thinking)}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.providerOpts.thinking ? 'bg-accent' : 'bg-white/10'}`}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.providerOpts.thinking ? 'translate-x-6' : 'translate-x-1'}`}/>
               </button>
@@ -395,7 +403,7 @@ function SceneRow({ scene, onUpdate, onDelete }: {
       // Builtin scenes: omit name from payload (backend rejects renaming builtin)
       const payload: Record<string, string> = { description: form.description, prompt: form.prompt };
       if (canEditName) payload.name = form.name;
-      const res = await fetch(`${API}/api/scenes/${scene.id}`, {
+      const res = await fetch(`${API}/api/scenes/${encodeURIComponent(scene.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -408,7 +416,7 @@ function SceneRow({ scene, onUpdate, onDelete }: {
       onUpdate(updated)
       setEditing(false)
     } catch (err) {
-      setSaveError((err as Error).message || '保存失败')
+      setSaveError(fmtErr(err, '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -417,14 +425,14 @@ function SceneRow({ scene, onUpdate, onDelete }: {
   async function handleDelete() {
     setDeleting(true)
     try {
-      const res = await fetch(`${API}/api/scenes/${scene.id}`, { method: 'DELETE' })
+      const res = await fetch(`${API}/api/scenes/${encodeURIComponent(scene.id)}`, { method: 'DELETE' })
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || '删除失败')
       }
       onDelete(scene.id)
     } catch (err) {
-      alert((err as Error).message || '删除失败')
+      alert(fmtErr(err, '删除失败'))
       setDeleting(false)
     }
   }
@@ -479,11 +487,11 @@ function SceneRow({ scene, onUpdate, onDelete }: {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors">
+              <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors">
                 <Edit2 className="w-3.5 h-3.5" aria-hidden/>
               </button>
               {canDelete && (
-                <button onClick={handleDelete} disabled={deleting} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors">
+                <button type="button" onClick={handleDelete} disabled={deleting} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors">
                   {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden/> : <Trash2 className="w-3.5 h-3.5" aria-hidden/>}
                 </button>
               )}
@@ -568,8 +576,8 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
           </div>
           <p className="text-[13px] text-ink mb-5">确定要删除 Agent <span className="font-bold">{agent.name}</span> 吗？</p>
           <div className="flex gap-3">
-            <button onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
-            <button onClick={onConfirm} className="flex-1 px-4 py-2 text-[13px] font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">删除</button>
+            <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+            <button type="button" onClick={onConfirm} className="flex-1 px-4 py-2 text-[13px] font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">删除</button>
           </div>
         </div>
       </div>
@@ -595,26 +603,26 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
 
   return (
     <>
-      <button ref={backdropRef} aria-label="关闭" className="fixed inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl z-40 transition-opacity cursor-default" onClick={onClose}/>
+      <button type="button" ref={backdropRef} aria-label="关闭" className="fixed inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl z-40 transition-opacity cursor-default" onClick={onClose}/>
       <div className="fixed inset-0 z-50 flex justify-end">
         <div className="w-full md:w-[640px] h-full settings-panel relative flex flex-col animate-in slide-in-from-right duration-300">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] settings-nav shrink-0">
             <div className="flex gap-1 settings-surface rounded-xl p-1">
-              <button onClick={() => setTab('agent')}
+              <button type="button" onClick={() => setTab('agent')}
                 className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'agent' ? 'shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
                 <Bot className="w-3.5 h-3.5" aria-hidden/>Agent
               </button>
-              <button onClick={() => setTab('provider')}
+              <button type="button" onClick={() => setTab('provider')}
                 className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'provider' ? 'shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
                 <Server className="w-3.5 h-3.5" aria-hidden/>CLI 连接
               </button>
-              <button onClick={() => setTab('scene')}
+              <button type="button" onClick={() => setTab('scene')}
                 className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 ${tab === 'scene' ? 'shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
                 <BrainCircuit className="w-3.5 h-3.5" aria-hidden/>场景
               </button>
             </div>
-            <button onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-full transition-colors">
+            <button type="button" onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-full transition-colors">
               <X className="w-4 h-4" aria-hidden/>
             </button>
           </div>
@@ -661,7 +669,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                     {addError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{addError}</p>}
                     <div className="flex gap-2 justify-end">
                       <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
-                      <button type="submit" onClick={handleAddAgent} disabled={saving}
+                      <button type="button" onClick={handleAddAgent} disabled={saving}
                         className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
                         <Plus className="w-3.5 h-3.5" aria-hidden/>{saving ? '创建中…' : '创建'}
                       </button>
@@ -708,7 +716,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                 {/* Provider list */}
                 <div className="flex flex-col gap-2">
                   {Object.values(providers).map(p => (
-                    <button key={p.name} onClick={() => setSelProvider(p.name)}
+                    <button type="button" key={p.name} onClick={() => setSelProvider(p.name)}
                       className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 ${selProvider === p.name ? 'settings-surface border-2 border-accent shadow-sm' : 'settings-surface border-2 border-transparent hover:border-white/15'}`}>
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.name === 'claude-code' ? '#0071E3' : '#7C3AED' }}/>
                       <div className="flex-1 min-w-0">
