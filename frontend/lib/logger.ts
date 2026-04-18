@@ -9,6 +9,8 @@
  * - 批量 POST 到后端持久化（logs/{roomId}.log）
  */
 
+import { API_URL } from './api'
+
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
@@ -54,7 +56,7 @@ export function setRoomId(roomId: string | null) {
 }
 
 // ── Backend persistence (batched POST) ───────────────────────────────────────
-const API_BASE = 'http://localhost:7001';
+const API_BASE = API_URL;
 const FLUSH_INTERVAL_MS = 2000;
 const BATCH_MAX = 50;
 

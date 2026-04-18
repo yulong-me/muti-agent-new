@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Play, BrainCircuit, Search, ChevronDown } from 'lucide-react'
 import { DirectoryPicker } from './DirectoryPicker'
+import { API_URL } from '@/lib/api'
 
-const API = 'http://localhost:7001'
-const FRONTEND_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:7001'
+const API = API_URL;
 
 interface AgentConfig {
   id: string
@@ -142,7 +142,7 @@ export default function CreateRoomModal({
     setSubmitting(true)
     setErrors({})
     try {
-      const res = await fetch(`${FRONTEND_API}/api/rooms`, {
+      const res = await fetch(`${API}/api/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

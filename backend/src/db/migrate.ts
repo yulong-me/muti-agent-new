@@ -115,6 +115,14 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  // Seed-once: add app_meta table (stores bootstrap_seed_version to prevent re-seeding on restart)
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    log('INFO', 'db:schema:migrate:app_meta');
+  } catch {
+    // Table already exists — safe to ignore
+  }
+
   // F004 Migration: INIT/RESEARCH/DEBATE/CONVERGING → RUNNING, HOST → MANAGER, AGENT → WORKER
   try {
     const roomsSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='rooms'").get() as { sql: string } | undefined;
@@ -122,8 +130,7 @@ export function initSchema(): void {
       // 表不存在，直接应用 schema
       db.exec(sql);
       log('INFO', 'db:schema:init');
-      // P1-fix: seed builtin scenes on fresh DB (was skipped by early return)
-      try { ensureBuiltinScenes(); } catch (e) { log('WARN', 'db:scene:seed:failed', { err: String(e) }); }
+      // Builtin scene seed is now handled in index.ts's initDB() bootstrap block (protected by app_meta)
       return;
     }
 
@@ -131,8 +138,7 @@ export function initSchema(): void {
     if (roomsSchema.sql.includes('RUNNING') && roomsSchema.sql.includes('DONE')) {
       db.exec(sql);
       log('INFO', 'db:schema:migrate:rooms:already_migrated');
-      // P1-fix: seed builtin scenes on already-migrated DB (was skipped by early return)
-      try { ensureBuiltinScenes(); } catch (e) { log('WARN', 'db:scene:seed:failed', { err: String(e) }); }
+      // Builtin scene seed is now handled in index.ts's initDB() bootstrap block (protected by app_meta)
       return;
     }
 
@@ -206,8 +212,9 @@ export function initSchema(): void {
     }
   }
 
-  // F016: seed builtin scenes — MUST run after all tables are created
-  ensureBuiltinScenes();
+  // NOTE: builtin scene seeding is now handled by ensureBuiltinScenes() in initDB()'s
+  // bootstrap block (protected by app_meta.bootstrap_seed_version). It is NOT called
+  // unconditionally here any more, to avoid resurrecting deleted builtin scenes on restart.
 }
 
 /** Run JSON → DB migration with backup logic */
@@ -429,16 +436,17 @@ export function ensureBuiltinScenes(): void {
     },
   ];
 
-  const upsert = db.prepare(`
+  // Seed-once: INSERT ... WHERE NOT EXISTS — do NOT overwrite user-edited builtin scenes
+  const insertIfNotExists = db.prepare(`
     INSERT INTO scenes (id, name, description, prompt, builtin, max_a2a_depth)
-    VALUES (@id, @name, @description, @prompt, @builtin, @maxA2ADepth)
-    ON CONFLICT(id) DO UPDATE SET prompt = @prompt, description = @description, builtin = @builtin, max_a2a_depth = @maxA2ADepth
+    SELECT @id, @name, @description, @prompt, @builtin, @maxA2ADepth
+    WHERE NOT EXISTS (SELECT 1 FROM scenes WHERE id = @id)
   `);
 
   for (const scene of builtinScenes) {
     try {
-      upsert.run(scene);
-      log('INFO', 'db:scene:seed', { id: scene.id, name: scene.name });
+      insertIfNotExists.run(scene);
+      log('INFO', 'db:scene:seed', { id: scene.id, name: scene.name, action: 'inserted' });
     } catch (err) {
       log('WARN', 'db:scene:seed:failed', { id: scene.id, error: String(err) });
     }

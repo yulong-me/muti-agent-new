@@ -136,7 +136,7 @@ function RoomItem({
                 setShowDeleteConfirm(true)
               }}
               onKeyDown={(e) => { e.stopPropagation() }}
-              className="p-1 rounded-md text-ink-soft/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              className="p-1 rounded-md text-ink-soft/60 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all"
               aria-label={`删除讨论：${room.topic}`}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -163,7 +163,7 @@ function RoomItem({
             </span>
           </div>
           {room.preview && (
-            <p className="text-[12px] text-ink-soft/60 truncate leading-relaxed">{room.preview}</p>
+            <p className="text-[12px] text-ink-soft/60 line-clamp-2 leading-relaxed">{room.preview}</p>
           )}
         </div>
 
@@ -275,6 +275,9 @@ export function RoomListSidebarMobile({
               onDelete={onDeleteRoom}
             />
           ))}
+          {rooms.length === 0 && (
+            <p className="text-xs text-ink-soft/50 text-center mt-6">暂无讨论记录</p>
+          )}
         </div>
       </div>
     </div>

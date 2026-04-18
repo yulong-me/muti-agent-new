@@ -93,6 +93,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 -- Indexes for common query patterns
+-- F016: Seed-once meta table — tracks whether builtin data has been seeded.
+-- Once seeded, system never auto-overwrites user data on restart.
+CREATE TABLE IF NOT EXISTS app_meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);

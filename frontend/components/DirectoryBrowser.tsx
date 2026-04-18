@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import { API_URL } from '@/lib/api'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:7001'
+const API = API_URL;
 
 interface BrowseEntry {
   name: string

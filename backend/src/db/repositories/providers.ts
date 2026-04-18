@@ -43,10 +43,35 @@ export const providersRepo = {
     };
   },
 
+  /**
+   * Upsert — used for explicit user updates (settings page).
+   * Preserves last_tested / last_test_result.
+   */
   upsert(name: string, data: Omit<ProviderConfig, 'name' | 'lastTested' | 'lastTestResult'>): void {
     db.prepare(`
       INSERT OR REPLACE INTO providers (name, label, cli_path, default_model, api_key, base_url, timeout, thinking, last_tested, last_test_result)
       VALUES (@name, @label, @cliPath, @defaultModel, @apiKey, @baseUrl, @timeout, @thinking, NULL, NULL)
+    `).run({
+      name,
+      label: data.label ?? name,
+      cliPath: data.cliPath,
+      defaultModel: data.defaultModel,
+      apiKey: data.apiKey,
+      baseUrl: data.baseUrl,
+      timeout: data.timeout,
+      thinking: data.thinking ? 1 : 0,
+    });
+  },
+
+  /**
+   * Seed-once insert — only inserts if the record does not exist.
+   * Existing provider configs (user-modified api_key, base_url, etc.) are preserved.
+   */
+  insertIfNotExists(name: string, data: Omit<ProviderConfig, 'name' | 'lastTested' | 'lastTestResult'>): void {
+    db.prepare(`
+      INSERT INTO providers (name, label, cli_path, default_model, api_key, base_url, timeout, thinking)
+      SELECT @name, @label, @cliPath, @defaultModel, @apiKey, @baseUrl, @timeout, @thinking
+      WHERE NOT EXISTS (SELECT 1 FROM providers WHERE name = @name)
     `).run({
       name,
       label: data.label ?? name,

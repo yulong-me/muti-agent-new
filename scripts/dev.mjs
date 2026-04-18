@@ -1,15 +1,20 @@
 #!/usr/bin/env node
 /**
  * Cross-platform dev launcher.
- * Kills any processes occupying ports 7001/7002,
- * then starts backend and frontend concurrently.
+ * Kills ports BE_PORT/FE_PORT, starts backend and frontend concurrently.
+ * Passes NEXT_PUBLIC_API_URL=BE_URL so frontend knows where to find the API.
  *
- * Works on macOS, Linux, and Windows (no lsof/kill dependency).
+ * Works on macOS, Linux, and Windows.
  */
 import { execSync, spawn } from 'child_process';
 import { platform } from 'os';
 
-const PORTS = [7001, 7002];
+const BE_PORT = 7001;
+const FE_PORT = 7002;
+const BE_URL  = `http://localhost:${BE_PORT}`;
+const FE_URL  = `http://localhost:${FE_PORT}`;
+
+const PORTS = [BE_PORT, FE_PORT];
 
 function killPort(port) {
   try {
@@ -25,16 +30,36 @@ function killPort(port) {
         try { execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' }); } catch {}
       }
     } else {
-      execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore', shell: true });
+      // SIGTERM first (graceful), then SIGKILL (force). lsof is reliable on macOS/Linux.
+      execSync(
+        `lsof -ti:${port} -t 2>/dev/null | xargs kill -TERM 2>/dev/null; sleep 1; lsof -ti:${port} -t 2>/dev/null | xargs kill -9 2>/dev/null || true`,
+        { stdio: 'ignore', shell: true }
+      );
     }
   } catch {
     // port was not in use — fine
   }
 }
 
+function safeListPids(port) {
+  try {
+    const out = execSync(`lsof -ti:${port} -t 2>/dev/null || true`, { encoding: 'utf8' });
+    const pids = out.trim().split('\n').filter(p => p && /^\d+$/.test(p));
+    return pids;
+  } catch {
+    return [];
+  }
+}
+
 for (const port of PORTS) {
   killPort(port);
-  console.log(`✓ Port ${port} freed`);
+  // Verify port is actually free
+  const pids = safeListPids(port);
+  if (pids.length > 0) {
+    console.log(`⚠ Port ${port} still occupied by PID ${pids.join(', ')} — manual kill may be needed`);
+  } else {
+    console.log(`✓ Port ${port} freed`);
+  }
 }
 
 const isWin = platform() === 'win32';
@@ -47,8 +72,11 @@ function prefix(name, color) {
   return (line) => process.stdout.write(`${color}[${name}]${colors.reset} ${line}\n`);
 }
 
-function startProc(name, cwd, color) {
-  const proc = spawn(npmCmd, ['dev'], { cwd, shell, stdio: ['ignore', 'pipe', 'pipe'] });
+function startProc(name, cwd, color, extraEnv) {
+  const proc = spawn(npmCmd, ['dev'], {
+    cwd, shell, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NEXT_PUBLIC_API_URL: BE_URL, ...extraEnv }
+  });
   const write = prefix(name, color);
   proc.stdout.on('data', d => d.toString().split('\n').filter(Boolean).forEach(write));
   proc.stderr.on('data', d => d.toString().split('\n').filter(Boolean).forEach(write));

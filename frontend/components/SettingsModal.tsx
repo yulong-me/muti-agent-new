@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Bot, Server, CheckCircle2, Trash2, Edit2, Save, Plus, Loader2, Play, XCircle, BrainCircuit } from 'lucide-react'
+import { API_URL } from '@/lib/api'
 
-const API = 'http://localhost:7001'
+const API = API_URL;
 
 function fmtErr(err: unknown, fallback: string): string {
   const msg = err instanceof Error ? err.message : String(err ?? '')
