@@ -21,7 +21,7 @@ function AgentCard({ agent, messages }: { agent: Agent; messages: Message[] }) {
     <div className="bg-bg border border-line rounded-xl p-3 shadow-sm">
       <div className="flex items-center gap-3 mb-2.5">
         <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
-          <AgentAvatar src={colors.avatar} alt={`${agent.name} 头像`} size={32} className="w-full h-full" />
+          <AgentAvatar name={agent.name} color={colors.bg} textColor={colors.text} size={32} className="w-full h-full" />
         </div>
         <div>
           <p className="text-[14px] font-bold leading-none mb-1 text-ink">{agent.name}</p>

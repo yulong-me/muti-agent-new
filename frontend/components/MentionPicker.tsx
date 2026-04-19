@@ -58,7 +58,7 @@ export default function MentionPicker({ agents, highlightIndex, onSelect, onHigh
               role="option"
             >
               <div className="w-7 h-7 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
-                <AgentAvatar src={colors.avatar} alt={`${agent.name} 头像`} size={28} className="w-full h-full" />
+                <AgentAvatar name={agent.name} color={colors.bg} textColor={colors.text} size={28} className="w-full h-full" />
               </div>
               <div className="min-w-0">
                 <p className={`text-[13px] font-bold truncate ${isHighlighted ? 'text-accent' : 'text-ink'}`}>{agent.name}</p>

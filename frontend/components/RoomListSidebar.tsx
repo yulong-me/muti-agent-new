@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, MessageSquare, X, Trash2, MoreHorizontal } from 'lucide-react'
+import { Plus, MessageSquare, X, Trash2, Settings, Moon, Sun } from 'lucide-react'
 import {
   formatRelativeTime,
   type DiscussionState,
@@ -27,6 +27,10 @@ interface RoomListSidebarProps {
   onNewRoom: () => void
   onSelectRoom: (roomId: string) => void
   onDeleteRoom: (roomId: string) => void
+  theme?: string
+  mounted?: boolean
+  onToggleTheme?: () => void
+  onOpenSystemSettings?: () => void
   mobileMenuOpen?: boolean
   onToggleMobileMenu?: () => void
   onCloseMobileMenu?: () => void
@@ -187,6 +191,49 @@ function RoomItem({
   )
 }
 
+function SidebarSystemControls({
+  theme,
+  mounted,
+  onToggleTheme,
+  onOpenSystemSettings,
+  onCloseMobileMenu,
+}: Pick<RoomListSidebarProps, 'theme' | 'mounted' | 'onToggleTheme' | 'onOpenSystemSettings' | 'onCloseMobileMenu'>) {
+  const isDark = theme === 'dark'
+
+  const openSystemSettings = () => {
+    onCloseMobileMenu?.()
+    onOpenSystemSettings?.()
+  }
+
+  return (
+    <div className="shrink-0 border-t border-white/[0.06] p-3 space-y-2">
+      <p className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-ink-soft/50">系统</p>
+      <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 bg-white/[0.03]">
+        <span className="text-[12px] font-medium text-ink-soft">外观</span>
+        {mounted && (
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-white/[0.08] transition-colors"
+            aria-label={isDark ? '切换亮色模式' : '切换暗色模式'}
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            <span>{isDark ? '亮色' : '暗色'}</span>
+          </button>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={openSystemSettings}
+        className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-[12px] font-medium text-ink-soft hover:text-ink hover:bg-white/[0.06] transition-colors"
+      >
+        <span>系统设置</span>
+        <Settings className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
+
 // ─── Desktop sidebar ──────────────────────────────────────────────────────────
 
 export function RoomListSidebarDesktop({
@@ -195,6 +242,10 @@ export function RoomListSidebarDesktop({
   onNewRoom,
   onSelectRoom,
   onDeleteRoom,
+  theme,
+  mounted,
+  onToggleTheme,
+  onOpenSystemSettings,
 }: Omit<RoomListSidebarProps, 'mobileMenuOpen' | 'onToggleMobileMenu' | 'onCloseMobileMenu'>) {
   return (
     <div className="app-islands-panel hidden md:flex w-[280px] bg-surface border-r border-white/[0.08] flex-col z-20">
@@ -222,6 +273,12 @@ export function RoomListSidebarDesktop({
           <p className="text-xs text-ink-soft/50 text-center mt-6">暂无讨论记录</p>
         )}
       </div>
+      <SidebarSystemControls
+        theme={theme}
+        mounted={mounted}
+        onToggleTheme={onToggleTheme}
+        onOpenSystemSettings={onOpenSystemSettings}
+      />
     </div>
   )
 }
@@ -234,6 +291,10 @@ export function RoomListSidebarMobile({
   onNewRoom,
   onSelectRoom,
   onDeleteRoom,
+  theme,
+  mounted,
+  onToggleTheme,
+  onOpenSystemSettings,
   mobileMenuOpen,
   onToggleMobileMenu,
   onCloseMobileMenu,
@@ -279,6 +340,13 @@ export function RoomListSidebarMobile({
             <p className="text-xs text-ink-soft/50 text-center mt-6">暂无讨论记录</p>
           )}
         </div>
+        <SidebarSystemControls
+          theme={theme}
+          mounted={mounted}
+          onToggleTheme={onToggleTheme}
+          onOpenSystemSettings={onOpenSystemSettings}
+          onCloseMobileMenu={onCloseMobileMenu}
+        />
       </div>
     </div>
   )

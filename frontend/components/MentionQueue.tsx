@@ -58,7 +58,7 @@ export default function MentionQueue({ queue, agents, streamingAgentIds }: Menti
                     : 'bg-gray-400'
                 }`}
               />
-              <AgentAvatar src={colors.avatar} alt={`${item.agentName} 头像`} size={16} className="w-4 h-4 rounded-full shrink-0" />
+              <AgentAvatar name={item.agentName} color={colors.bg} textColor={colors.text} size={16} className="w-4 h-4 rounded-full shrink-0" />
               <span className="whitespace-nowrap">
                 {item.agentName}
                 {isStreaming ? ' · 发言中' : ' · 等待中'}

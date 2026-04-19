@@ -11,7 +11,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { io, type Socket } from 'socket.io-client'
 import {
-  Menu, Download, ChevronDown, BrainCircuit, Settings, Moon, Sun, UserPlus, Users, X,
+  Menu, Download, ChevronDown, BrainCircuit, UserPlus, Users, X,
 } from 'lucide-react'
 import {
   AGENT_COLORS, DEFAULT_AGENT_COLOR, STATE_LABELS,
@@ -106,7 +106,15 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [mentionHighlightIdx, setMentionHighlightIdx] = useState(0)
   const [mounted, setMounted] = useState(false)
 
-  const { theme, setTheme } = useTheme()
+  const { theme, resolvedTheme, setTheme } = useTheme()
+  const currentTheme = resolvedTheme ?? theme
+  const toggleTheme = useCallback(() => {
+    setTheme(currentTheme === 'dark' ? 'light' : 'dark')
+  }, [currentTheme, setTheme])
+  const openSystemSettings = useCallback(() => {
+    setSettingsInitialTab('agent')
+    setSettingsOpen(true)
+  }, [])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'RUNNING' as DiscussionState, agents: [] as Agent[] })
@@ -933,6 +941,10 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
             if (id === roomId) router.push('/')
             else setRooms(rooms => rooms.filter(r => r.id !== id))
           }}
+          theme={currentTheme}
+          mounted={mounted}
+          onToggleTheme={toggleTheme}
+          onOpenSystemSettings={openSystemSettings}
         />
 
         {/* Mobile menu overlay */}
@@ -947,6 +959,10 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
             if (id === roomId) router.push('/')
             else setRooms(rooms => rooms.filter(r => r.id !== id))
           }}
+          theme={currentTheme}
+          mounted={mounted}
+          onToggleTheme={toggleTheme}
+          onOpenSystemSettings={openSystemSettings}
           mobileMenuOpen={mobileMenuOpen}
           onToggleMobileMenu={toggleMobileMenu}
           onCloseMobileMenu={() => setMobileMenuOpen(false)}
@@ -993,24 +1009,6 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                   }}
                 />
               )}
-              <button
-                type="button"
-                onClick={() => { setSettingsInitialTab('agent'); setSettingsOpen(true) }}
-                className="p-2 text-ink-soft hover:text-ink transition-colors"
-                aria-label="打开设置"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-              {mounted && (
-                <button
-                  type="button"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="p-2 text-ink-soft hover:text-ink transition-colors"
-                  aria-label={theme === 'dark' ? '切换亮色模式' : '切换暗色模式'}
-                >
-                  {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                </button>
-              )}
               {/* AC-4: Agent panel button — visible on small screens only */}
               {roomId && (
                 <button
@@ -1042,7 +1040,6 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               const runError = messageErrorMap[msg.id] ?? msg.runError
               const hasOutput = Boolean(msg.content.trim() || msg.thinking?.trim())
               const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
-              const agentAvatar = AGENT_COLORS[msg.agentName]?.avatar || DEFAULT_AGENT_COLOR.avatar
               const mentions = extractMentions(msg.content, agents.map(a => a.name))
               // Only show @点名 for agents that are actually in this room.
               // This prevents "phantom routing" where the agent references someone
@@ -1067,7 +1064,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                         {toRecipient && toColors && (
                           <span className="text-[11px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: `${toColors.bg}15`, color: toColors.bg }}>
                             <span>→</span>
-                            <AgentAvatar src={toColors.avatar} alt={`${toRecipient.name} 头像`} size={12} className="w-3 h-3 rounded-full" />
+                            <AgentAvatar name={toRecipient.name} color={toColors.bg} textColor={toColors.text} size={12} className="w-3 h-3 rounded-full" />
                             {toRecipient.name}
                           </span>
                         )}
@@ -1105,7 +1102,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                 return (
                   <div key={msg.id} className="group flex gap-3 mb-6 items-start">
                     <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
-                      <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={32} className="w-full h-full" />
+                      <AgentAvatar name={msg.agentName} color={agentColor} size={32} className="w-full h-full" />
                     </div>
                     <div className="w-full max-w-[85%] lg:max-w-[90%]">
                       <div className="mb-1.5 flex items-center gap-2">
@@ -1132,7 +1129,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               return (
                 <div key={msg.id} className="group flex gap-3 mb-6 items-start">
                   <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
-                    <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={32} className="w-full h-full" />
+                    <AgentAvatar name={msg.agentName} color={agentColor} size={32} className="w-full h-full" />
                   </div>
                   <div className="w-full max-w-[85%] lg:max-w-[90%]">
                     <div className="mb-1.5 flex items-center gap-2">
@@ -1321,8 +1318,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                 <div key={agent.id} className="app-window-surface rounded-xl p-3">
                   <div className="flex items-center gap-3 mb-2.5">
                     <AgentAvatar
-                      src={AGENT_COLORS[agent.name]?.avatar || DEFAULT_AGENT_COLOR.avatar}
-                      alt={`${agent.name} 头像`}
+                      name={agent.name}
+                      color={(AGENT_COLORS[agent.name] || DEFAULT_AGENT_COLOR).bg}
+                      textColor={(AGENT_COLORS[agent.name] || DEFAULT_AGENT_COLOR).text}
                       size={32}
                       className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm overflow-hidden"
                     />

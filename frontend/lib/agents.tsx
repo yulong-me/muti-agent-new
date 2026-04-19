@@ -69,21 +69,21 @@ export const STATE_LABELS: Record<DiscussionState, string> = {
   DONE: '已完成',
 }
 
-export const AGENT_COLORS: Record<string, { bg: string; text: string; avatar: string }> = {
-  主持人: { bg: '#4F46E5', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=host&backgroundColor=b6e3f4' },
-  司马迁: { bg: '#D97706', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=simaqian' },
-  诸葛亮: { bg: '#059669', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=zhugeliang' },
-  李世民: { bg: '#DC2626', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=lishimin' },
-  孔子: { bg: '#4D7C0F', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=confucius' },
-  曹操: { bg: '#9F1239', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=caocao' },
-  马斯克: { bg: '#2563EB', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=musk' },
-  乔布斯: { bg: '#7C3AED', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=jobs' },
-  爱因斯坦: { bg: '#0284C7', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=einstein' },
-  图灵: { bg: '#0D9488', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=turing' },
-  马云: { bg: '#EA580C', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=mayun' },
+export const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
+  主持人: { bg: '#4F46E5', text: '#FFFFFF' },
+  司马迁: { bg: '#D97706', text: '#FFFFFF' },
+  诸葛亮: { bg: '#059669', text: '#FFFFFF' },
+  李世民: { bg: '#DC2626', text: '#FFFFFF' },
+  孔子: { bg: '#4D7C0F', text: '#FFFFFF' },
+  曹操: { bg: '#9F1239', text: '#FFFFFF' },
+  马斯克: { bg: '#2563EB', text: '#FFFFFF' },
+  乔布斯: { bg: '#7C3AED', text: '#FFFFFF' },
+  爱因斯坦: { bg: '#0284C7', text: '#FFFFFF' },
+  图灵: { bg: '#0D9488', text: '#FFFFFF' },
+  马云: { bg: '#EA580C', text: '#FFFFFF' },
 }
 
-export const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=agent&backgroundColor=c0aede' }
+export const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF' }
 export const TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

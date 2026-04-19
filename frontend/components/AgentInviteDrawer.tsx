@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, Search } from 'lucide-react'
-import { getAgentAvatar } from './BubbleSection'
 import { AgentAvatar } from './AgentAvatar'
+import { AGENT_COLORS, DEFAULT_AGENT_COLOR } from '../lib/agents'
 import { API_URL } from '@/lib/api'
 
 const API = API_URL;
@@ -156,7 +156,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
           )}
 
           {!loading && filtered.map(agent => {
-            const avatar = getAgentAvatar(agent.name)
+            const colors = AGENT_COLORS[agent.name] || DEFAULT_AGENT_COLOR
             const isDone = done === agent.id
             const isInviting = invitingId === agent.id
             return (
@@ -166,7 +166,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
               >
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden">
-                  <AgentAvatar src={avatar} alt={`${agent.name} 头像`} size={36} className="w-full h-full" />
+                  <AgentAvatar name={agent.name} color={colors.bg} textColor={colors.text} size={36} className="w-full h-full" />
                 </div>
 
                 {/* Info */}

@@ -106,10 +106,9 @@ interface MessageBubbleProps {
   msg: Message
   isStreaming: boolean
   agentColor: string
-  agentAvatar: string
 }
 
-export function MessageBubble({ msg, isStreaming, agentColor, agentAvatar }: MessageBubbleProps) {
+export function MessageBubble({ msg, isStreaming, agentColor }: MessageBubbleProps) {
   const isUser = msg.agentRole === 'USER'
   const isSystem = msg.type === 'system'
 
@@ -133,7 +132,7 @@ export function MessageBubble({ msg, isStreaming, agentColor, agentAvatar }: Mes
       {/* Avatar */}
       <div className="w-9 h-9 rounded-full flex-shrink-0 shadow-sm overflow-hidden ring-2"
            style={{ backgroundColor: isUser ? agentColor : 'transparent', boxShadow: isUser ? undefined : `0 0 0 2px ${agentBubbleBorder}` }}>
-        <AgentAvatar src={agentAvatar} alt={`${msg.agentName} 头像`} size={36} className="w-full h-full" />
+        <AgentAvatar name={msg.agentName} color={agentColor} size={36} className="w-full h-full" />
       </div>
 
       {/* Bubble */}
@@ -189,8 +188,4 @@ export function MessageBubble({ msg, isStreaming, agentColor, agentAvatar }: Mes
 
 export function getAgentColor(name: string): string {
   return AGENT_COLORS[name]?.bg || DEFAULT_AGENT_COLOR.bg
-}
-
-export function getAgentAvatar(name: string): string {
-  return AGENT_COLORS[name]?.avatar || DEFAULT_AGENT_COLOR.avatar
 }
