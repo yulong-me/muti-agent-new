@@ -30,34 +30,59 @@ import { AgentAvatar } from './AgentAvatar'
 import { ErrorBubble, type AgentRunErrorEvent } from './ErrorBubble'
 import { BubbleErrorBoundary } from './BubbleErrorBoundary'
 
-// F017: A2A depth segmented control
-function DepthSwitcher({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+// F017: A2A depth dropdown
+function DepthSwitcher({ value, onChange, currentDepth, maxDepth }: {
+  value: number | null
+  onChange: (v: number | null) => void
+  currentDepth: number
+  maxDepth: number
+}) {
+  const [open, setOpen] = useState(false)
   const options: { label: string; value: number | null; title: string }[] = [
-    { label: '浅', value: 3, title: '协作深度 3 层' },
-    { label: '中', value: 5, title: '协作深度 5 层（默认）' },
-    { label: '深', value: 10, title: '协作深度 10 层' },
-    { label: '∞', value: 0, title: '无深度限制' },
+    { label: '浅 (3层)', value: 3, title: '协作深度 3 层' },
+    { label: '中 (5层)', value: 5, title: '协作深度 5 层（默认）' },
+    { label: '深 (10层)', value: 10, title: '协作深度 10 层' },
+    { label: '∞ 无限', value: 0, title: '无深度限制' },
   ]
   // null means "inherit scene default" — we treat null as 5 (the scene default) for display
   const effective = value ?? 5
+  // remaining = maxDepth - currentDepth (decrements from maxDepth toward 0)
+  const remaining = maxDepth === 0 ? '∞' : Math.max(0, maxDepth - currentDepth)
 
   return (
-    <div className="flex items-center gap-0.5 px-1 py-0.5 bg-surface-muted rounded-lg" title="A2A 协作深度">
-      {options.map(opt => (
-        <button
-          key={String(opt.value)}
-          type="button"
-          title={opt.title}
-          onClick={() => onChange(opt.value)}
-          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all duration-150 ${
-            effective === opt.value
-              ? 'bg-accent text-white shadow-sm'
-              : 'text-ink-soft hover:text-ink hover:bg-surface-muted/60'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="relative flex items-center" title="A2A 协作深度">
+      {/* Single clickable badge+trigger: A2A N/M ▼ — click anywhere to open dropdown */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-2 py-0.5 bg-surface-muted rounded-lg text-[11px] font-semibold hover:bg-surface-muted/80 transition-colors"
+      >
+        <span className="text-ink-soft">A2A</span>
+        <span className="text-accent font-bold">{remaining}</span>
+        <span className="text-ink-soft">/</span>
+        <span className="text-ink">{maxDepth === 0 ? '∞' : maxDepth}</span>
+        <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {/* Dropdown menu */}
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-surface rounded-lg shadow-lg border border-border overflow-hidden min-w-[120px]">
+          {options.map(opt => (
+            <button
+              key={String(opt.value)}
+              type="button"
+              title={opt.title}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                effective === opt.value
+                  ? 'bg-accent text-white'
+                  : 'text-ink hover:bg-surface-muted'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -88,6 +113,12 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [orphanErrors, setOrphanErrors] = useState<AgentRunErrorEvent[]>([])
   // F017: A2A depth config (null = inherit scene default)
   const [maxA2ADepth, setMaxA2ADepth] = useState<number | null>(null)
+  // F017: current A2A depth and effective max (from poll, but user-selected takes precedence)
+  const [currentA2ADepth, setCurrentA2ADepth] = useState(0)
+  const [effectiveMaxDepth, setEffectiveMaxDepth] = useState(5)
+
+  // F017: displayMax — user-selected depth option takes priority over poll's effectiveMaxDepth
+  const displayMax = maxA2ADepth !== null ? maxA2ADepth : effectiveMaxDepth
 
   // @mention picker state
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false)
@@ -410,6 +441,13 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         // F017: read effective maxA2ADepth from poll response
         if (data.maxA2ADepth !== undefined) {
           setMaxA2ADepth(data.maxA2ADepth)
+        }
+        // F017: read current A2A depth and effective max from poll response
+        if (data.a2aDepth !== undefined) {
+          setCurrentA2ADepth(data.a2aDepth)
+        }
+        if (data.effectiveMaxDepth !== undefined) {
+          setEffectiveMaxDepth(data.effectiveMaxDepth)
         }
         const fetchedMessages = (data.messages || []) as Message[]
         const fetchedById = new Map(fetchedMessages.map(m => [m.id, m]))
@@ -855,16 +893,12 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               <h1 className="text-lg font-bold text-ink hidden sm:block">AI 智囊团</h1>
             </div>
             <div className="flex items-center gap-2 md:gap-4">
-              {roomId && (
-                <div className="hidden sm:flex items-center gap-2 mr-2">
-                  <span className="px-2.5 py-1 bg-surface-muted rounded-full text-[11px] font-semibold text-ink-soft uppercase tracking-wide">状态</span>
-                  <span className="px-3 py-1 bg-accent/10 border border-accent/20 rounded-full text-xs font-bold text-accent">{STATE_LABELS[state]}</span>
-                </div>
-              )}
               {/* F017: A2A depth switcher */}
               {roomId && (
                 <DepthSwitcher
                   value={maxA2ADepth}
+                  currentDepth={currentA2ADepth}
+                  maxDepth={displayMax}
                   onChange={async (newDepth) => {
                     setMaxA2ADepth(newDepth)
                     try {
