@@ -116,6 +116,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   // F017: current A2A depth and effective max (from poll, but user-selected takes precedence)
   const [currentA2ADepth, setCurrentA2ADepth] = useState(0)
   const [effectiveMaxDepth, setEffectiveMaxDepth] = useState(5)
+  // F006: workspace path from poll
+  const [workspace, setWorkspace] = useState<string | undefined>(undefined)
 
   // F017: displayMax — user-selected depth option takes priority over poll's effectiveMaxDepth
   const displayMax = maxA2ADepth !== null ? maxA2ADepth : effectiveMaxDepth
@@ -448,6 +450,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         }
         if (data.effectiveMaxDepth !== undefined) {
           setEffectiveMaxDepth(data.effectiveMaxDepth)
+        }
+        if (data.workspace !== undefined) {
+          setWorkspace(data.workspace)
         }
         const fetchedMessages = (data.messages || []) as Message[]
         const fetchedById = new Map(fetchedMessages.map(m => [m.id, m]))
@@ -1259,6 +1264,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
           agents={agents}
           messages={messages}
           state={state}
+          workspace={workspace}
           isMobileOpen={agentDrawerOpen}
           onMobileClose={() => setAgentDrawerOpen(false)}
         />

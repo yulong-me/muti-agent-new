@@ -69,16 +69,21 @@ browseRouter.get('/', async (req, res) => {
       // 跳过隐藏目录和 node_modules
       if (entry.name.startsWith('.')) continue;
       if (entry.name === 'node_modules') continue;
-      if (!entry.isDirectory()) continue;
 
       const childPath = resolve(validatedPath, entry.name);
-      try {
-        const childReal = await realpath(childPath);
-        // 确保 symlink 也没逃逸
-        if (!childReal.startsWith(homedir() + '/')) continue;
-        dirs.push({ name: entry.name, path: childReal, isDirectory: true });
-      } catch {
-        // 不可访问的子目录跳过
+
+      if (entry.isDirectory()) {
+        // 目录：检查 symlink 不逃逸
+        try {
+          const childReal = await realpath(childPath);
+          if (!childReal.startsWith(homedir() + '/')) continue;
+          dirs.push({ name: entry.name, path: childReal, isDirectory: true });
+        } catch {
+          // 不可访问的子目录跳过
+        }
+      } else {
+        // 文件：直接添加
+        dirs.push({ name: entry.name, path: childPath, isDirectory: false });
       }
     }
 

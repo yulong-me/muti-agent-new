@@ -152,7 +152,10 @@ roomsRouter.get('/:id/messages', (req, res) => {
     messages: room.messages,
     agents: room.agents,
     report: room.report,
-    maxA2ADepth: room.maxA2ADepth, // F017: effective depth (null = inherit scene)
+    maxA2ADepth: room.maxA2ADepth, // F017: room override (null = inherit scene)
+    a2aDepth: room.a2aDepth ?? 0, // F017: current A2A depth
+    effectiveMaxDepth: room.maxA2ADepth !== null ? room.maxA2ADepth : (scenesRepo.get(room.sceneId)?.maxA2ADepth ?? 5), // F017: computed max depth
+    workspace: room.workspace, // F006: workspace path for file browser
   });
 });
 
