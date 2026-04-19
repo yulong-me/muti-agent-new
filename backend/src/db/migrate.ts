@@ -68,6 +68,14 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  // Tool calls are part of replayable agent messages, not transient socket-only state.
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN tool_calls_json TEXT");
+    log('INFO', 'db:schema:migrate:messages:tool_calls_json');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   // Soft delete: add deleted_at column to rooms table
   try {
     db.exec("ALTER TABLE rooms ADD COLUMN deleted_at INTEGER");

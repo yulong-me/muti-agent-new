@@ -26,9 +26,11 @@ describe('builtin scene prompts', () => {
 
     const sceneColumns = db.prepare('PRAGMA table_info(scenes)').all() as Array<{ name: string }>;
     const roomColumns = db.prepare('PRAGMA table_info(rooms)').all() as Array<{ name: string }>;
+    const messageColumns = db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>;
 
     expect(sceneColumns.map(c => c.name)).toContain('max_a2a_depth');
     expect(roomColumns.map(c => c.name)).toContain('max_a2a_depth');
+    expect(messageColumns.map(c => c.name)).toContain('tool_calls_json');
 
     db.close();
   });

@@ -3,6 +3,20 @@ import type { DiscussionRoom, Message } from '../../types.js';
 import { agentsRepo } from './agents.js';
 import { v4 as uuid } from 'uuid';
 
+function stringifyToolCalls(toolCalls: Message['toolCalls']): string | null {
+  return toolCalls && toolCalls.length > 0 ? JSON.stringify(toolCalls) : null;
+}
+
+function parseToolCalls(value: unknown): Message['toolCalls'] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value as string) as Message['toolCalls'];
+    return Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Rooms CRUD */
 export const roomsRepo = {
   create(room: DiscussionRoom): DiscussionRoom {
@@ -178,8 +192,8 @@ export const roomsRepo = {
 export const messagesRepo = {
   insert(roomId: string, msg: Message): Message {
     db.prepare(`
-      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id, to_agent_id, run_error_json)
-      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId, @toAgentId, @runErrorJson)
+      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, tool_calls_json, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id, to_agent_id, run_error_json)
+      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @toolCallsJson, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId, @toAgentId, @runErrorJson)
     `).run({
       id: msg.id,
       roomId,
@@ -189,6 +203,7 @@ export const messagesRepo = {
       timestamp: msg.timestamp,
       type: msg.type,
       thinking: msg.thinking ?? null,
+      toolCallsJson: stringifyToolCalls(msg.toolCalls),
       durationMs: msg.duration_ms ?? null,
       totalCostUsd: msg.total_cost_usd ?? null,
       inputTokens: msg.input_tokens ?? null,
@@ -205,6 +220,7 @@ export const messagesRepo = {
       UPDATE messages SET
         content = @content,
         thinking = @thinking,
+        tool_calls_json = @toolCallsJson,
         duration_ms = @durationMs,
         total_cost_usd = @totalCostUsd,
         input_tokens = @inputTokens,
@@ -215,6 +231,7 @@ export const messagesRepo = {
       id: messageId,
       content,
       thinking: meta?.thinking ?? null,
+      toolCallsJson: stringifyToolCalls(meta?.toolCalls),
       durationMs: meta?.duration_ms ?? null,
       totalCostUsd: meta?.total_cost_usd ?? null,
       inputTokens: meta?.input_tokens ?? null,
@@ -236,6 +253,7 @@ export const messagesRepo = {
           runError = undefined;
         }
       }
+      const toolCalls = parseToolCalls(r.tool_calls_json);
 
       return {
         id: r.id as string,
@@ -245,6 +263,7 @@ export const messagesRepo = {
         timestamp: r.timestamp as number,
         type: r.type as Message['type'],
         thinking: r.thinking as string | undefined,
+        toolCalls,
         duration_ms: r.duration_ms as number | undefined,
         total_cost_usd: r.total_cost_usd as number | undefined,
         input_tokens: r.input_tokens as number | undefined,

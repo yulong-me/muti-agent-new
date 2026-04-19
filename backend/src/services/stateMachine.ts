@@ -11,18 +11,18 @@
 import { store } from '../store.js';
 import { getAgent, type ProviderName } from '../config/agentConfig.js';
 import { getProvider } from './providers/index.js';
-import type { ClaudeEvent } from './providers/index.js';
 import {
   emitStreamStart,
   emitStreamEnd,
   emitAgentStatus,
   emitStreamDelta,
   emitThinkingDelta,
+  emitToolUse,
   emitRoomErrorEvent,
   emitUserMessage,
 } from './socketEmitter.js';
 import { HOST_PROMPTS } from '../prompts/host.js';
-import type { Message, Agent, MessageType, AgentExecutionErrorCode, AgentRunError } from '../types.js';
+import type { Message, Agent, MessageType, AgentExecutionErrorCode, AgentRunError, ToolCall } from '../types.js';
 import { v4 as uuid } from 'uuid';
 import { roomsRepo, messagesRepo } from '../db/index.js';
 import { sessionsRepo } from '../db/index.js';
@@ -179,6 +179,7 @@ function handleAgentRunFailure(args: {
   streamStarted: boolean;
   accumulated: string;
   accumulatedThinking: string;
+  accumulatedToolCalls: ToolCall[];
   requestMeta?: {
     originalUserContent?: string;
     toAgentId?: string;
@@ -229,6 +230,7 @@ function handleAgentRunFailure(args: {
                 ...m,
                 content: args.accumulated,
                 thinking: args.accumulatedThinking,
+                toolCalls: args.accumulatedToolCalls,
                 duration_ms: 0,
                 total_cost_usd: 0,
                 input_tokens: 0,
@@ -241,6 +243,7 @@ function handleAgentRunFailure(args: {
     }
     messagesRepo.updateContent(args.msg.id, args.accumulated, {
       thinking: args.accumulatedThinking,
+      toolCalls: args.accumulatedToolCalls,
       duration_ms: 0,
       total_cost_usd: 0,
       input_tokens: 0,
@@ -543,6 +546,7 @@ async function streamingCallAgent(
   let returnedSessionId = '';
   let deltaCount = 0;
   let thinkingCount = 0;
+  let accumulatedToolCalls: ToolCall[] = [];
 
   try {
     const agentConfig = getAgent(configId);
@@ -616,6 +620,25 @@ async function streamingCallAgent(
         thinkingCount++;
         accumulatedThinking += event.thinking;
         emitThinkingDelta(roomId, agentId, event.thinking);
+      } else if (event.type === 'tool_use') {
+        const toolCall: ToolCall = {
+          toolName: event.toolName,
+          toolInput: event.toolInput,
+          callId: event.callId,
+          timestamp: Date.now(),
+        };
+        accumulatedToolCalls = [...accumulatedToolCalls, toolCall];
+        const r = store.get(roomId);
+        if (r && msg) {
+          store.update(roomId, {
+            messages: r.messages.map(m =>
+              m.id === msg!.id
+                ? { ...m, toolCalls: accumulatedToolCalls }
+                : m,
+            ),
+          });
+        }
+        emitToolUse(roomId, agentId, event.toolName, event.toolInput, event.callId, toolCall.timestamp);
       } else if (event.type === 'end') {
         duration_ms = event.duration_ms;
         total_cost_usd = event.total_cost_usd;
@@ -640,6 +663,7 @@ async function streamingCallAgent(
       streamStarted,
       accumulated,
       accumulatedThinking,
+      accumulatedToolCalls,
       requestMeta,
     });
     throw err;
@@ -665,6 +689,7 @@ async function streamingCallAgent(
                 ...m,
                 content: accumulated,
                 thinking: accumulatedThinking,
+                toolCalls: accumulatedToolCalls,
                 duration_ms,
                 total_cost_usd,
                 input_tokens,
@@ -675,6 +700,7 @@ async function streamingCallAgent(
       });
       messagesRepo.updateContent(msg.id, accumulated, {
         thinking: accumulatedThinking,
+        toolCalls: accumulatedToolCalls,
         duration_ms,
         total_cost_usd,
         input_tokens,

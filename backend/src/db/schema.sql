@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS messages (
   type            TEXT NOT NULL
                   CHECK (type IN ('system','statement','question','rebuttal','summary','report','user_action')),
   thinking        TEXT,
+  tool_calls_json TEXT,
   duration_ms     INTEGER,
   total_cost_usd  REAL,
   input_tokens    INTEGER,

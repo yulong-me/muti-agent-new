@@ -11,12 +11,12 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { io, type Socket } from 'socket.io-client'
 import {
-  Menu, Download, ChevronDown, BrainCircuit, UserPlus, Users, X,
+  Menu, Download, ChevronDown, BrainCircuit, UserPlus, Users, X, Wrench,
 } from 'lucide-react'
 import {
   AGENT_COLORS, DEFAULT_AGENT_COLOR, STATE_LABELS,
   mdComponents, extractMentions, extractUserMentionsFromAgents, findActiveMentionTrigger, insertMention, TIME_FORMATTER,
-  type Agent, type Message, type DiscussionState,
+  type Agent, type Message, type DiscussionState, type ToolCall,
   type OutgoingQueueItem,
 } from '../lib/agents'
 import { error as logError, telemetry, setRoomId } from '../lib/logger'
@@ -120,6 +120,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({ state: 'RUNNING' as DiscussionState, agents: [] as Agent[] })
   const streamingMessagesRef = useRef<Map<string, Message>>(new Map())
   const streamingThinkingRef = useRef<Map<string, string>>(new Map())
+  const streamingToolCallsRef = useRef<Map<string, ToolCall[]>>(new Map())
 
   // F007: invite drawer
   const [showInviteDrawer, setShowInviteDrawer] = useState(false)
@@ -184,6 +185,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     // Reset all streaming refs so previous room's in-flight messages don't bleed in
     streamingMessagesRef.current.clear()
     streamingThinkingRef.current.clear()
+    streamingToolCallsRef.current.clear()
     streamingCountRef.current = 0
     streamingAgentIdsRef.current.clear()
     // F015: reset outgoing queue so items from previous room can't leak into new room
@@ -236,6 +238,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       streamingAgentIdsRef.current.add(data.agentId)
       setStreamingAgentIds(new Set(streamingAgentIdsRef.current))
       streamingThinkingRef.current.set(data.agentId, '')
+      streamingToolCallsRef.current.set(data.agentId, [])
       telemetry('ui:ai:start', { roomId, agentName: data.agentName, agentRole: data.agentRole })
       telemetry('socket:stream_start', { agentName: data.agentName, id: data.id })
       const tempMsg: Message = {
@@ -271,6 +274,23 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       }
     })
 
+    socket.on('tool_use', (data: any) => {
+      if (data.roomId !== roomId) return
+      const toolCalls = streamingToolCallsRef.current.get(data.agentId) ?? []
+      toolCalls.push({
+        toolName: data.toolName,
+        toolInput: data.toolInput ?? {},
+        callId: data.callId,
+        timestamp: data.timestamp ?? Date.now(),
+      })
+      streamingToolCallsRef.current.set(data.agentId, toolCalls)
+      const msg = streamingMessagesRef.current.get(data.agentId)
+      if (msg) {
+        msg.toolCalls = [...toolCalls]
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, toolCalls: [...toolCalls] } : m))
+      }
+    })
+
     socket.on('room_error_event', (data: any) => {
       if (data.roomId !== roomId) return
       const roomError = data.error as AgentRunErrorEvent
@@ -280,6 +300,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         if (streamingMsg?.id === roomError.messageId) {
           streamingMessagesRef.current.delete(roomError.agentId)
           streamingThinkingRef.current.delete(roomError.agentId)
+          streamingToolCallsRef.current.delete(roomError.agentId)
           streamingAgentIdsRef.current.delete(roomError.agentId)
           streamingCountRef.current = streamingMessagesRef.current.size
           setStreamingAgentIds(new Set(streamingAgentIdsRef.current))
@@ -350,10 +371,12 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         msg.input_tokens = data.input_tokens
         msg.output_tokens = data.output_tokens
         const accumulatedThinking = streamingThinkingRef.current.get(data.agentId)
-        setMessages(prev => prev.map(m => m.id === data.id ? { ...msg, thinking: accumulatedThinking ?? msg.thinking, type: m.type !== 'streaming' ? m.type : 'statement' } : m))
+        const accumulatedToolCalls = streamingToolCallsRef.current.get(data.agentId)
+        setMessages(prev => prev.map(m => m.id === data.id ? { ...msg, thinking: accumulatedThinking ?? msg.thinking, toolCalls: accumulatedToolCalls ?? msg.toolCalls, type: m.type !== 'streaming' ? m.type : 'statement' } : m))
       }
       streamingMessagesRef.current.delete(data.agentId)
       streamingThinkingRef.current.delete(data.agentId)
+      streamingToolCallsRef.current.delete(data.agentId)
       // F015: trigger queue drain when last streaming agent finishes
       const stillStreaming = streamingAgentIdsRef.current.size
       if (stillStreaming === 0) {
@@ -454,6 +477,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
           if (fresh && (fresh.runError || fresh.duration_ms !== undefined)) {
             streamingMessagesRef.current.delete(agentId)
             streamingThinkingRef.current.delete(agentId)
+            streamingToolCallsRef.current.delete(agentId)
             streamingAgentIdsRef.current.delete(agentId)
             recoveredMissedStreamEnd = true
           }
@@ -1048,7 +1072,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               const isSystem = msg.type === 'system'
               const isStreaming = !isUser && !isSystem && (msg.type === 'streaming' || msg.duration_ms === undefined)
               const runError = messageErrorMap[msg.id] ?? msg.runError
-              const hasOutput = Boolean(msg.content.trim() || msg.thinking?.trim())
+              const hasToolCalls = Boolean(msg.toolCalls?.length)
+              const hasOutput = Boolean(msg.content.trim() || msg.thinking?.trim() || hasToolCalls)
               const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
               const mentions = extractMentions(msg.content, agents.map(a => a.name))
               // Only show @点名 for agents that are actually in this room.
@@ -1158,6 +1183,23 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                     <div className="rounded-2xl rounded-tl-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
                       <BubbleErrorBoundary agentName={msg.agentName}>
                         <BubbleSection label="思考过程" icon="brain" content={msg.thinking ?? ''} isStreaming={isStreaming} agentColor={agentColor} />
+                        {msg.toolCalls && msg.toolCalls.length > 0 && (
+                          <div className="mb-3">
+                            <div className="flex items-center gap-2 text-xs font-medium mb-2 px-2 py-1 rounded-lg" style={{ color: agentColor, backgroundColor: `${agentColor}10` }}>
+                              <Wrench className="w-3 h-3" />
+                              <span>工具调用</span>
+                              <span className="text-[11px] opacity-50 font-normal tracking-wider">{msg.toolCalls.length} 次</span>
+                            </div>
+                            <div className="ml-2 pl-3.5 border-l-2 font-mono text-[13px] overflow-x-auto" style={{ borderColor: `${agentColor}40` }}>
+                              {msg.toolCalls.map((tool, i) => (
+                                <div key={tool.callId ?? i} className="py-1.5">
+                                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>{tool.toolName}</span>
+                                  <pre className="text-[12px] text-ink-soft mt-1 whitespace-pre-wrap break-all">{JSON.stringify(tool.toolInput, null, 2)}</pre>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         <BubbleSection label="回复" icon="output" content={msg.content} isStreaming={isStreaming} agentColor={agentColor} />
                         {validMentions.length > 0 && (
                           <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap" style={{ color: agentColor }}>

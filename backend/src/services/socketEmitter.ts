@@ -42,6 +42,11 @@ export function emitThinkingDelta(roomId: string, agentId: string, thinking: str
   getIO().to(roomId).emit('thinking_delta', { roomId, agentId, thinking });
 }
 
+/** Emit tool use event to clients in a room */
+export function emitToolUse(roomId: string, agentId: string, toolName: string, toolInput: Record<string, unknown>, callId?: string, timestamp?: number) {
+  getIO().to(roomId).emit('tool_use', { roomId, agentId, toolName, toolInput, callId, timestamp });
+}
+
 /** Emit agent status change */
 export function emitAgentStatus(roomId: string, agentId: string, status: string) {
   getIO().to(roomId).emit('agent_status', { roomId, agentId, status });

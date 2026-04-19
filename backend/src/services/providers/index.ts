@@ -11,6 +11,7 @@ export type ClaudeEvent =
   | { type: 'start'; agentId: string; timestamp: number; messageId: string }
   | { type: 'delta'; agentId: string; text: string }
   | { type: 'thinking_delta'; agentId: string; thinking: string }
+  | { type: 'tool_use'; agentId: string; toolName: string; toolInput: Record<string, unknown>; callId?: string }
   | { type: 'end'; agentId: string; duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number; sessionId?: string }
   | { type: 'error'; agentId: string; message: string };
 

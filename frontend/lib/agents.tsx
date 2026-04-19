@@ -37,6 +37,13 @@ export interface AgentRunErrorEvent {
   toAgentName?: string
 }
 
+export interface ToolCall {
+  toolName: string
+  toolInput: Record<string, unknown>
+  callId?: string
+  timestamp?: number
+}
+
 export interface Message {
   id: string
   agentRole: AgentRole | 'USER'
@@ -45,6 +52,7 @@ export interface Message {
   timestamp: number
   type: string
   thinking?: string
+  toolCalls?: ToolCall[]
   duration_ms?: number
   total_cost_usd?: number
   input_tokens?: number

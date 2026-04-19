@@ -10,6 +10,42 @@ function shellQuote(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+export function parseOpenCodeToolUseEvent(parsed: Record<string, unknown>, agentId: string): ClaudeEvent | null {
+  if (parsed.type !== 'tool_use') return null;
+
+  const toolPart = asRecord(parsed.part) ?? parsed;
+  const toolType = toolPart.type;
+  if (toolType !== 'tool' && toolType !== 'tool_use') return null;
+
+  const state = asRecord(toolPart.state);
+  const toolName = typeof toolPart.tool === 'string'
+    ? toolPart.tool
+    : typeof toolPart.name === 'string'
+    ? toolPart.name
+    : 'unknown';
+  const callId = typeof toolPart.callID === 'string'
+    ? toolPart.callID
+    : typeof toolPart.callId === 'string'
+    ? toolPart.callId
+    : typeof toolPart.id === 'string'
+    ? toolPart.id
+    : undefined;
+
+  return {
+    type: 'tool_use',
+    agentId,
+    toolName,
+    toolInput: asRecord(state?.input) ?? asRecord(toolPart.input) ?? {},
+    callId,
+  };
+}
+
 /**
  * Normalize subprocess stdout to UTF-8 text stream.
  * Uses TextDecoder with auto-detection to handle:
@@ -199,6 +235,12 @@ export async function* streamOpenCodeProvider(
 
     if (eventType === 'step_start') {
       yield { type: 'start', agentId, timestamp: Date.now(), messageId: (part?.messageID as string) ?? '' };
+    } else if (eventType === 'tool_use') {
+      const toolUseEvent = parseOpenCodeToolUseEvent(parsed, agentId);
+      if (toolUseEvent) {
+        markTokenReceived();
+        yield toolUseEvent;
+      }
     } else if (eventType === 'reasoning') {
       markTokenReceived();
       yield { type: 'thinking_delta', agentId, thinking: (part?.text as string) ?? '' };

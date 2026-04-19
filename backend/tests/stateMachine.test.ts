@@ -52,6 +52,7 @@ vi.mock('../src/services/socketEmitter.js', () => ({
   emitAgentStatus: vi.fn(),
   emitStreamDelta: vi.fn(),
   emitThinkingDelta: vi.fn(),
+  emitToolUse: vi.fn(),
   emitRoomErrorEvent: vi.fn(),
   emitUserMessage: vi.fn(),
 }));
@@ -181,6 +182,58 @@ describe('F004: Manager 路由器', () => {
             code: 'AGENT_PROCESS_EXIT',
             originalUserContent: '@架构师 帮我看看这个方案',
           }),
+        }),
+      );
+    });
+
+    it('专家工具调用应该随消息持久化，刷新后可回放', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+      const { emitToolUse } = await import('../src/services/socketEmitter.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* () {
+        yield {
+          type: 'tool_use',
+          agentId: 'worker-1',
+          toolName: 'Bash',
+          toolInput: { command: 'pwd' },
+          callId: 'toolu_1',
+        };
+        yield { type: 'delta', agentId: 'worker-1', text: '完成' };
+        yield { type: 'end', agentId: 'worker-1', duration_ms: 100, total_cost_usd: 0.01, input_tokens: 100, output_tokens: 50 };
+      });
+
+      await routeToAgent('room-1', '@架构师 帮我看看这个方案', 'worker-1');
+
+      expect(emitToolUse).toHaveBeenCalledWith('room-1', 'worker-1', 'Bash', { command: 'pwd' }, 'toolu_1', expect.any(Number));
+      expect(messagesRepo.updateContent).toHaveBeenCalledWith(
+        expect.any(String),
+        '完成',
+        expect.objectContaining({
+          toolCalls: [
+            expect.objectContaining({
+              toolName: 'Bash',
+              toolInput: { command: 'pwd' },
+              callId: 'toolu_1',
+            }),
+          ],
         }),
       );
     });

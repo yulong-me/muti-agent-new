@@ -9,6 +9,29 @@ function shellQuote(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+export function parseClaudeAssistantToolUseEvents(parsed: Record<string, unknown>, agentId: string): ClaudeEvent[] {
+  const message = asRecord(parsed.message);
+  const content = Array.isArray(message?.content)
+    ? message.content as Record<string, unknown>[]
+    : [];
+
+  return content
+    .filter(block => block.type === 'tool_use')
+    .map(block => ({
+      type: 'tool_use' as const,
+      agentId,
+      toolName: typeof block.name === 'string' ? block.name : 'unknown',
+      toolInput: asRecord(block.input) ?? {},
+      callId: typeof block.id === 'string' ? block.id : undefined,
+    }));
+}
+
 export async function* streamClaudeCodeProvider(
   prompt: string,
   agentId: string,
@@ -142,7 +165,6 @@ export async function* streamClaudeCodeProvider(
   armFirstTokenTimer();
 
   const rl = createInterface({ input: proc.stdout!, crlfDelay: Infinity });
-  let inThinkingBlock = false;
   let capturedSessionId = sessionId ?? '';
 
   for await (const rawLine of rl) {
@@ -171,9 +193,6 @@ export async function* streamClaudeCodeProvider(
       if (subType === 'message_start') {
         const msg = event.message as Record<string, unknown>;
         yield { type: 'start', agentId, timestamp: Date.now(), messageId: msg.id as string };
-      } else if (subType === 'content_block_start') {
-        const block = event.content_block as Record<string, unknown>;
-        if (block.type === 'thinking') inThinkingBlock = true;
       } else if (subType === 'content_block_delta') {
         const delta = event.delta as Record<string, unknown>;
         if (delta.type === 'text_delta') {
@@ -183,8 +202,11 @@ export async function* streamClaudeCodeProvider(
           markTokenReceived();
           yield { type: 'thinking_delta', agentId, thinking: delta.thinking as string };
         }
-      } else if (subType === 'content_block_stop') {
-        inThinkingBlock = false;
+      }
+    } else if (eventType === 'assistant') {
+      for (const toolUseEvent of parseClaudeAssistantToolUseEvents(parsed, agentId)) {
+        markTokenReceived();
+        yield toolUseEvent;
       }
     } else if (eventType === 'result') {
       clearTimers();
