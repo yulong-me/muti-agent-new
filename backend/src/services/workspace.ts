@@ -29,8 +29,7 @@ export class WorkspaceSecurityError extends Error {
  * Validate a user-provided workspace path.
  * - Must be an absolute path
  * - Must exist and be a directory
- * - Must not escape to parent directories
- * - Must be within user's home directory (security boundary, consistent with browse.ts)
+ * - Must not escape to parent directories (no ..)
  */
 export async function validateWorkspacePath(workspacePath: string): Promise<void> {
   const normalized = path.normalize(workspacePath);
@@ -45,12 +44,6 @@ export async function validateWorkspacePath(workspacePath: string): Promise<void
     if (!stat.isDirectory()) {
       throw new WorkspaceSecurityError('Workspace path is not a directory', 'NOT_DIRECTORY');
     }
-    // 安全边界：与 /api/browse 保持一致，必须在 home 目录下
-    const home = homedir();
-    const real = await fs.realpath(workspacePath);
-    if (!real.startsWith(home + '/') && real !== home) {
-      throw new WorkspaceSecurityError('Workspace path must be within your home directory', 'TRAVERSAL');
-    }
   } catch (err) {
     if (err instanceof WorkspaceSecurityError) throw err;
     throw new WorkspaceSecurityError(`Workspace path does not exist: ${workspacePath}`, 'NOT_FOUND');
@@ -60,7 +53,6 @@ export async function validateWorkspacePath(workspacePath: string): Promise<void
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { homedir } from 'node:os';
 
 // 使用项目根目录下的 workspaces/，避免 /workspace 需要 root 权限
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

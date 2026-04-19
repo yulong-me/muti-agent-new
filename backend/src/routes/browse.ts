@@ -29,15 +29,10 @@ export interface BrowseResult {
 
 export const browseRouter = Router();
 
-/** 安全校验：只允许访问 home 下的目录，防止越界 */
+/** 安全校验：解析 symlink 后返回真实路径 */
 async function validatePath(targetPath: string): Promise<string | null> {
-  const home = homedir();
-  // realpath 解析 symlink 后再检查
   try {
     const real = await realpath(targetPath);
-    if (!real.startsWith(home + '/') && real !== home) {
-      return null; // 不在 home 目录下 → 403
-    }
     return real;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
