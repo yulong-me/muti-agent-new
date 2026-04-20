@@ -4,7 +4,6 @@ import path from 'node:path';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
 
 import {
-  WorkspaceSecurityError,
   ensureWorkspace,
   getWorkspacePath,
   validateWorkspacePath,
@@ -39,26 +38,20 @@ describe('workspace security', () => {
     await expect(validateWorkspacePath(dir)).resolves.toBeUndefined();
   });
 
-  it('rejects an existing directory outside home', async () => {
+  it('accepts an existing directory outside home', async () => {
     const outsideDir = await makeOutsideTemp('workspace-outside');
 
-    await expect(validateWorkspacePath(outsideDir)).rejects.toMatchObject({
-      name: 'WorkspaceSecurityError',
-      code: 'TRAVERSAL',
-    } satisfies Partial<WorkspaceSecurityError>);
+    await expect(validateWorkspacePath(outsideDir)).resolves.toBeUndefined();
   });
 
-  it('rejects a symlink inside home that escapes to an outside directory', async () => {
+  it('accepts a symlink that resolves to an outside directory', async () => {
     const outsideDir = await makeOutsideTemp('workspace-symlink-target');
     const homeDir = await makeHomeTemp('workspace-symlink-home');
     const symlinkPath = path.join(homeDir, 'escape-link');
 
     await symlink(outsideDir, symlinkPath);
 
-    await expect(validateWorkspacePath(symlinkPath)).rejects.toMatchObject({
-      name: 'WorkspaceSecurityError',
-      code: 'TRAVERSAL',
-    } satisfies Partial<WorkspaceSecurityError>);
+    await expect(validateWorkspacePath(symlinkPath)).resolves.toBeUndefined();
   });
 
   it('uses the default workspaces/room-{id} path when custom workspace is omitted', async () => {

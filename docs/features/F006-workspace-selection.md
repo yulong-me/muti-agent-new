@@ -9,7 +9,7 @@ updated: 2026-04-20
 ## Changelog
 
 - 2026-04-14: 初始版本，包含已实现的后端目录浏览器 API
-- 2026-04-20: 收紧 workspace / browse 安全边界：统一要求 realpath 后仍位于 `homedir()` 内，补充自动化测试覆盖
+- 2026-04-20: 修复 workspace / browse 目录访问回归：恢复支持 `~` 外的绝对路径目录，保留 `realpath()` / 绝对路径 / 目录存在性校验
 - 2026-04-20: 补齐 workspace 默认目录与 provider cwd 自动化测试，确认 room 级 workspace 会透传到 Claude/OpenCode CLI
 
 ## 已完成实现
@@ -124,14 +124,15 @@ updated: 2026-04-20
 ```
 
 **安全策略（参考 clowder-ai）：**
-- 限制在 `homedir()` 目录下
-- `realpath()` 解析 symlink 后再检查边界，防止逃逸
+- 要求绝对路径
+- `realpath()` 解析 symlink，拒绝不存在路径
+- 仅允许真实存在的目录
 - 跳过 `.` 开头的隐藏目录和 `node_modules`
 
 **POST /api/pick-directory**
 - macOS：`osascript -e 'POSIX path of (choose folder)'`
 - 返回选中的绝对路径
-- 校验是否在 home 目录下
+- 校验目录真实存在且当前进程可访问
 
 ### 已实现（本次之前）
 
@@ -174,7 +175,7 @@ updated: 2026-04-20
 - [x] AC-8: 工作目录持久化到数据库，重启后保持（workspace 列已加入 schema + rooms repo）
 - [x] AC-9: 路径校验失败时返回明确 HTTP 状态码（404 目录不存在 / 403 越权或无权访问）
 
-> **安全边界统一**：`validateWorkspacePath()`（POST /api/rooms）与 `validatePath()`（/api/browse）均强制 workspace 必须在 `homedir()` 下，防止 agent 逃逸到系统任意路径。
+> **安全边界统一**：`validateWorkspacePath()`（POST /api/rooms）与 `validatePath()`（/api/browse）统一使用绝对路径 + `realpath()` + 目录存在性校验，允许用户选择 `~` 之外但当前进程可访问的目录。
 
 ## Dependencies
 
@@ -182,6 +183,6 @@ updated: 2026-04-20
 
 ## Risk
 
-- 路径遍历安全：`realpath()` 解析 symlink 后检查边界
+- 路径遍历安全：要求绝对路径，且以 `realpath()` 后的真实目录为准
 - macOS only：`osascript` 仅 macOS 支持
 - 权限问题：agent 用户需对指定目录有读写权限

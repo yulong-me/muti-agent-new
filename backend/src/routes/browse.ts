@@ -12,11 +12,6 @@ import { basename, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const HOME_DIR = resolve(homedir());
-
-function isWithinHome(targetPath: string): boolean {
-  return targetPath === HOME_DIR || targetPath.startsWith(HOME_DIR + '/');
-}
 
 export interface BrowseEntry {
   name: string;
@@ -47,9 +42,7 @@ const MAX_FILE_PREVIEW_BYTES = 128 * 1024;
 /** 安全校验：解析 symlink 后返回真实路径 */
 async function validatePath(targetPath: string): Promise<string | null> {
   try {
-    const real = await realpath(targetPath);
-    if (!isWithinHome(real)) return null;
-    return real;
+    return await realpath(targetPath);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') return null;    // 路径不存在 → 404
@@ -95,7 +88,6 @@ browseRouter.get('/', async (req, res) => {
         // 目录：检查 symlink 不逃逸
         try {
           const childReal = await realpath(childPath);
-          if (!childReal.startsWith(homedir() + '/')) continue;
           dirs.push({ name: entry.name, path: childReal, isDirectory: true });
         } catch {
           // 不可访问的子目录跳过

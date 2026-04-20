@@ -15,7 +15,6 @@
  */
 
 import * as fs from 'fs/promises';
-import { homedir } from 'node:os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -30,33 +29,23 @@ export class WorkspaceSecurityError extends Error {
   }
 }
 
-const HOME_DIR = path.resolve(homedir());
-
-function isWithinHome(targetPath: string): boolean {
-  return targetPath === HOME_DIR || targetPath.startsWith(HOME_DIR + path.sep);
-}
-
 /**
  * Validate a user-provided workspace path.
  * - Must be an absolute path
  * - Must exist and be a directory
- * - Must resolve inside homedir() after realpath()
+ * - Must resolve successfully after realpath()
  */
 export async function validateWorkspacePath(workspacePath: string): Promise<void> {
   const normalized = path.normalize(workspacePath);
   if (!path.isAbsolute(normalized)) {
     throw new WorkspaceSecurityError('Workspace path must be absolute', 'TRAVERSAL');
   }
-  if (workspacePath.split(path.sep).includes('..')) {
+  if (normalized.split(path.sep).includes('..')) {
     throw new WorkspaceSecurityError('Workspace path cannot contain parent directory references', 'TRAVERSAL');
   }
 
-  let realWorkspacePath = normalized;
   try {
-    realWorkspacePath = await fs.realpath(normalized);
-    if (!isWithinHome(realWorkspacePath)) {
-      throw new WorkspaceSecurityError('Workspace path must stay within home directory', 'TRAVERSAL');
-    }
+    const realWorkspacePath = await fs.realpath(normalized);
     const stat = await fs.stat(realWorkspacePath);
     if (!stat.isDirectory()) {
       throw new WorkspaceSecurityError('Workspace path is not a directory', 'NOT_DIRECTORY');

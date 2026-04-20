@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
 import http from 'node:http';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -83,13 +83,36 @@ describe('browse route security', () => {
     expect(result.data).toHaveProperty('current', dir);
   });
 
-  it('rejects browsing directories outside home with 403', async () => {
+  it('allows browsing directories outside home', async () => {
     const dir = await makeOutsideTemp('browse-outside');
+    const realDir = await realpath(dir);
 
     const result = await reqJson(`/api/browse?path=${encodeURIComponent(dir)}`);
 
-    expect(result.status).toBe(403);
-    expect(result.data).toHaveProperty('error');
+    expect(result.status).toBe(200);
+    expect(result.data).toHaveProperty('current', realDir);
+  });
+
+  it('lists child directories for an outside-home path', async () => {
+    const dir = await makeOutsideTemp('browse-outside-children');
+    const childDir = path.join(dir, 'child-folder');
+    await mkdir(childDir);
+    const realDir = await realpath(dir);
+    const realChildDir = await realpath(childDir);
+
+    const result = await reqJson(`/api/browse?path=${encodeURIComponent(dir)}`);
+
+    expect(result.status).toBe(200);
+    expect(result.data).toMatchObject({
+      current: realDir,
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'child-folder',
+          path: realChildDir,
+          isDirectory: true,
+        }),
+      ]),
+    });
   });
 
   it('previews text files inside home', async () => {
