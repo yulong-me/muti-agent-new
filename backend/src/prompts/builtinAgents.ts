@@ -13,19 +13,19 @@ const ROUNDTABLE_TAGS = ['圆桌论坛', '人物视角', 'expert'];
 const SOFTWARE_TAG = '软件开发';
 
 export const ROUNDTABLE_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
-  { id: 'paul-graham',     name: 'Paul Graham',    roleLabel: 'Paul Graham',     skillId: 'paul-graham',     provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'zhang-yiming',    name: '张一鸣',          roleLabel: '张一鸣',           skillId: 'zhang-yiming',    provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'andrej-karpathy', name: 'Andrej Karpathy', roleLabel: 'Karpathy',       skillId: 'andrej-karpathy', provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'ilya-sutskever',  name: 'Ilya Sutskever',  roleLabel: 'Ilya',           skillId: 'ilya-sutskever',  provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'mrbeast',         name: 'MrBeast',         roleLabel: 'MrBeast',        skillId: 'mrbeast',         provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'trump',           name: '特朗普',           roleLabel: '特朗普',          skillId: 'trump',           provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'steve-jobs',      name: '乔布斯',           roleLabel: '乔布斯',          skillId: 'steve-jobs',      provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'elon-musk',       name: '马斯克',           roleLabel: '马斯克',          skillId: 'elon-musk',       provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'munger',          name: '查理·芒格',        roleLabel: '芒格',            skillId: 'munger',          provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'feynman',         name: '理查德·费曼',       roleLabel: '费曼',            skillId: 'feynman',         provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'naval',           name: '纳瓦尔',           roleLabel: '纳瓦尔',          skillId: 'naval',           provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'taleb',           name: '塔勒布',           roleLabel: '塔勒布',          skillId: 'taleb',           provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
-  { id: 'zhangxuefeng',    name: '张雪峰',           roleLabel: '张雪峰',          skillId: 'zhangxuefeng',    provider: 'claude-code', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'paul-graham',     name: 'Paul Graham',    roleLabel: 'Paul Graham',     skillId: 'paul-graham',     provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'zhang-yiming',    name: '张一鸣',          roleLabel: '张一鸣',           skillId: 'zhang-yiming',    provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'andrej-karpathy', name: 'Andrej Karpathy', roleLabel: 'Karpathy',       skillId: 'andrej-karpathy', provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'ilya-sutskever',  name: 'Ilya Sutskever',  roleLabel: 'Ilya',           skillId: 'ilya-sutskever',  provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'mrbeast',         name: 'MrBeast',         roleLabel: 'MrBeast',        skillId: 'mrbeast',         provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'trump',           name: '特朗普',           roleLabel: '特朗普',          skillId: 'trump',           provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'steve-jobs',      name: '乔布斯',           roleLabel: '乔布斯',          skillId: 'steve-jobs',      provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'elon-musk',       name: '马斯克',           roleLabel: '马斯克',          skillId: 'elon-musk',       provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'munger',          name: '查理·芒格',        roleLabel: '芒格',            skillId: 'munger',          provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'feynman',         name: '理查德·费曼',       roleLabel: '费曼',            skillId: 'feynman',         provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'naval',           name: '纳瓦尔',           roleLabel: '纳瓦尔',          skillId: 'naval',           provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'taleb',           name: '塔勒布',           roleLabel: '塔勒布',          skillId: 'taleb',           provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
+  { id: 'zhangxuefeng',    name: '张雪峰',           roleLabel: '张雪峰',          skillId: 'zhangxuefeng',    provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
 ];
 
 export const SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
@@ -33,7 +33,7 @@ export const SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = 
     id: 'dev-requirements',
     name: '需求分析师',
     roleLabel: '需求澄清',
-    provider: 'claude-code',
+    provider: 'opencode',
     providerOpts: { thinking: true },
     tags: [SOFTWARE_TAG, '需求', 'expert'],
     systemPrompt: `你是软件开发场景中的需求分析师。
@@ -53,7 +53,7 @@ export const SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = 
     id: 'dev-architect',
     name: '架构师',
     roleLabel: '架构设计',
-    provider: 'claude-code',
+    provider: 'opencode',
     providerOpts: { thinking: true },
     tags: [SOFTWARE_TAG, '架构', 'expert'],
     systemPrompt: `你是软件开发场景中的架构师。
@@ -73,7 +73,7 @@ export const SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = 
     id: 'dev-implementer',
     name: '实现工程师',
     roleLabel: '代码实现',
-    provider: 'claude-code',
+    provider: 'opencode',
     providerOpts: { thinking: true },
     tags: [SOFTWARE_TAG, '实现', 'expert'],
     systemPrompt: `你是软件开发场景中的实现工程师。
@@ -93,7 +93,7 @@ export const SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = 
     id: 'dev-reviewer',
     name: 'Reviewer',
     roleLabel: '代码审查',
-    provider: 'claude-code',
+    provider: 'opencode',
     providerOpts: { thinking: true },
     tags: [SOFTWARE_TAG, 'review', 'expert'],
     systemPrompt: `你是软件开发场景中的代码 Reviewer。
@@ -113,7 +113,7 @@ export const SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = 
     id: 'dev-qa',
     name: '测试工程师',
     roleLabel: '测试验证',
-    provider: 'claude-code',
+    provider: 'opencode',
     providerOpts: { thinking: true },
     tags: [SOFTWARE_TAG, '测试', 'expert'],
     systemPrompt: `你是软件开发场景中的测试工程师。
@@ -135,3 +135,16 @@ export const BUILTIN_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   ...ROUNDTABLE_AGENT_DEFINITIONS,
   ...SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
 ];
+
+export function buildBuiltinProviderOptsForMigration(
+  builtinProviderOpts: BuiltinAgentDefinition['providerOpts'],
+  existingProviderOpts: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...builtinProviderOpts };
+
+  if (typeof existingProviderOpts?.thinking === 'boolean') {
+    next.thinking = existingProviderOpts.thinking;
+  }
+
+  return next;
+}

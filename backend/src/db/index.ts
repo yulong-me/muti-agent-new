@@ -11,6 +11,7 @@ import {
   BUILTIN_AGENT_DEFINITIONS,
   SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
   ROUNDTABLE_AGENT_DEFINITIONS,
+  buildBuiltinProviderOptsForMigration,
   type BuiltinAgentDefinition,
 } from '../prompts/builtinAgents.js';
 import fs from 'fs';
@@ -84,12 +85,13 @@ function hasTags(agent: { tags: string[] }, expected: string[]): boolean {
   return agent.tags.length === expected.length && expected.every(tag => agent.tags.includes(tag));
 }
 
-function ensureBuiltinAgentCatalogV2(): void {
+function ensureBuiltinAgentCatalogV3(): void {
   const row = db.prepare("SELECT value FROM app_meta WHERE key = 'builtin_agent_catalog_version'").get() as { value: string } | undefined;
-  if (row?.value === '2') return;
+  if (row?.value === '3') return;
 
   let inserted = 0;
   let retagged = 0;
+  let providerMigrated = 0;
 
   for (const agent of SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS) {
     if (agentsRepo.get(agent.id)) continue;
@@ -103,8 +105,19 @@ function ensureBuiltinAgentCatalogV2(): void {
     retagged++;
   }
 
-  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('builtin_agent_catalog_version', '2')").run();
-  log('INFO', 'db:seed:agents:catalog_v2', { inserted, retagged });
+  for (const def of BUILTIN_AGENT_DEFINITIONS) {
+    const existing = agentsRepo.get(def.id);
+    if (!existing || existing.provider === def.provider) continue;
+    agentsRepo.upsert({
+      ...existing,
+      provider: def.provider,
+      providerOpts: buildBuiltinProviderOptsForMigration(def.providerOpts, existing.providerOpts),
+    });
+    providerMigrated++;
+  }
+
+  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('builtin_agent_catalog_version', '3')").run();
+  log('INFO', 'db:seed:agents:catalog_v3', { inserted, retagged, providerMigrated });
 }
 
 const seedFreshBuiltinData = db.transaction(() => {
@@ -157,7 +170,7 @@ export function initDB(): void {
     log('INFO', 'db:seed:bootstrap:skipped', { reason: 'bootstrap_seed_version already set' });
   }
 
-  ensureBuiltinAgentCatalogV2();
+  ensureBuiltinAgentCatalogV3();
 
   log('INFO', 'db:init:done', { dbPath: DB_PATH });
 }

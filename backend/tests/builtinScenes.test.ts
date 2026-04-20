@@ -3,8 +3,10 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { BUILTIN_SCENES } from '../src/prompts/builtinScenes.js';
 import {
+  BUILTIN_AGENT_DEFINITIONS,
   ROUNDTABLE_AGENT_DEFINITIONS,
   SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
+  buildBuiltinProviderOptsForMigration,
 } from '../src/prompts/builtinAgents.js';
 
 describe('builtin scene prompts', () => {
@@ -38,6 +40,7 @@ describe('builtin scene prompts', () => {
   it('ships related agents for roundtable and software-development scenes', () => {
     expect(ROUNDTABLE_AGENT_DEFINITIONS.length).toBeGreaterThanOrEqual(10);
     expect(ROUNDTABLE_AGENT_DEFINITIONS.every(agent => agent.tags.includes('圆桌论坛'))).toBe(true);
+    expect(BUILTIN_AGENT_DEFINITIONS.every(agent => agent.provider === 'opencode')).toBe(true);
 
     const softwareAgentNames = SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS.map(agent => agent.name);
     expect(softwareAgentNames).toEqual(expect.arrayContaining([
@@ -48,5 +51,17 @@ describe('builtin scene prompts', () => {
       '测试工程师',
     ]));
     expect(SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS.every(agent => agent.tags.includes('软件开发'))).toBe(true);
+  });
+
+  it('migrates builtin provider opts to opencode-safe defaults while preserving thinking', () => {
+    expect(buildBuiltinProviderOptsForMigration(
+      { thinking: true },
+      { thinking: false, model: 'claude-sonnet-4-6' },
+    )).toEqual({ thinking: false });
+
+    expect(buildBuiltinProviderOptsForMigration(
+      { thinking: true },
+      undefined,
+    )).toEqual({ thinking: true });
   });
 });
