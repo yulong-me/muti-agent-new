@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "node:check": "node ../scripts/check-node-version.mjs",
+    "native:check": "node scripts/ensure-better-sqlite.mjs",
+    "predev": "pnpm run node:check && pnpm run native:check",
     "dev": "LOG_LEVEL=debug tsx watch src/server.ts",
+    "prebuild": "pnpm run node:check && pnpm run native:check",
     "build": "tsc",
+    "pretest": "pnpm run node:check && pnpm run native:check",
     "test": "vitest run",
     "test:watch": "vitest"
   },

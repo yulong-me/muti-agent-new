@@ -266,6 +266,59 @@ textarea {
   opacity: 0.78;
 }
 
+.workspace-diff-view {
+  --diff-background-color: #111216;
+  --diff-text-color: #d7dce3;
+  --diff-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --diff-selection-background-color: rgba(230, 92, 70, 0.32);
+  --diff-selection-text-color: #f7efe9;
+  --diff-gutter-insert-background-color: rgba(16, 185, 129, 0.18);
+  --diff-gutter-insert-text-color: rgba(234, 255, 238, 0.92);
+  --diff-gutter-delete-background-color: rgba(239, 68, 68, 0.16);
+  --diff-gutter-delete-text-color: rgba(255, 228, 230, 0.9);
+  --diff-gutter-selected-background-color: rgba(230, 92, 70, 0.2);
+  --diff-gutter-selected-text-color: #f7efe9;
+  --diff-code-insert-background-color: rgba(16, 185, 129, 0.12);
+  --diff-code-insert-text-color: rgba(234, 255, 238, 0.92);
+  --diff-code-delete-background-color: rgba(239, 68, 68, 0.1);
+  --diff-code-delete-text-color: rgba(255, 228, 230, 0.9);
+  --diff-code-insert-edit-background-color: rgba(16, 185, 129, 0.22);
+  --diff-code-insert-edit-text-color: rgba(241, 255, 245, 0.96);
+  --diff-code-delete-edit-background-color: rgba(239, 68, 68, 0.2);
+  --diff-code-delete-edit-text-color: rgba(255, 241, 242, 0.96);
+  --diff-code-selected-background-color: rgba(230, 92, 70, 0.18);
+  --diff-code-selected-text-color: #f7efe9;
+  --diff-omit-gutter-line-color: rgba(230, 92, 70, 0.72);
+}
+
+.workspace-diff-view .diff {
+  font-size: 12px;
+}
+
+.workspace-diff-view .diff td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.workspace-diff-view .diff-line,
+.workspace-diff-view .diff-decoration {
+  line-height: 1.65;
+}
+
+.workspace-diff-view .diff-gutter {
+  color: rgba(215, 220, 227, 0.48);
+}
+
+.workspace-diff-view .diff-code {
+  padding: 0.2rem 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.workspace-diff-view .diff-code:first-child,
+.workspace-diff-view .diff-gutter:first-child {
+  border-left: 0;
+}
+
 .settings-surface {
   background-color: rgba(255, 255, 255, 0.04) !important;
   backdrop-filter: blur(16px) saturate(120%);

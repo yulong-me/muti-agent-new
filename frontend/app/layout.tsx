@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import 'react-diff-view/style/index.css'
 import './globals.css'
 
 export const metadata: Metadata = {

@@ -6,7 +6,7 @@
 
 import { Router } from 'express';
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
+import { mkdir, open, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -32,7 +32,17 @@ export interface BrowseResult {
   entries: BrowseEntry[];
 }
 
+export interface FilePreviewResult {
+  path: string;
+  name: string;
+  size: number;
+  isBinary: boolean;
+  truncated: boolean;
+  content: string | null;
+}
+
 export const browseRouter = Router();
+const MAX_FILE_PREVIEW_BYTES = 128 * 1024;
 
 /** 安全校验：解析 symlink 后返回真实路径 */
 async function validatePath(targetPath: string): Promise<string | null> {
@@ -52,8 +62,9 @@ async function validatePath(targetPath: string): Promise<string | null> {
  * GET /api/browse?path=/some/dir — 列出目录下的子目录
  */
 browseRouter.get('/', async (req, res) => {
-  const query = req.query as { path?: string };
+  const query = req.query as { path?: string; includeHidden?: string };
   const targetPath = query.path || homedir();
+  const includeHidden = query.includeHidden === '1' || query.includeHidden === 'true';
 
   const validatedPath = await validatePath(targetPath);
   if (!validatedPath) {
@@ -72,8 +83,10 @@ browseRouter.get('/', async (req, res) => {
     const dirs: BrowseEntry[] = [];
 
     for (const entry of entries) {
-      // 跳过隐藏目录和 node_modules
-      if (entry.name.startsWith('.')) continue;
+      // 默认跳过隐藏文件；工作区文件浏览可显式打开 includeHidden
+      if (!includeHidden && entry.name.startsWith('.')) continue;
+      // 永远隐藏 .git 目录，避免误操作仓库内部实现细节
+      if (entry.name === '.git') continue;
       if (entry.name === 'node_modules') continue;
 
       const childPath = resolve(validatedPath, entry.name);
@@ -93,7 +106,10 @@ browseRouter.get('/', async (req, res) => {
       }
     }
 
-    dirs.sort((a, b) => a.name.localeCompare(b.name));
+    dirs.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 
     const parent = resolve(validatedPath, '..');
     const parentReal = parent === validatedPath ? null : await validatePath(parent);
@@ -107,6 +123,62 @@ browseRouter.get('/', async (req, res) => {
     });
   } catch (err) {
     return res.status(400).json({ error: `无法读取目录: ${(err as Error).message}` });
+  }
+});
+
+function looksBinary(buffer: Buffer): boolean {
+  if (buffer.length === 0) return false;
+  let suspicious = 0;
+  for (const byte of buffer) {
+    if (byte === 0) return true;
+    if (byte < 7 || (byte > 13 && byte < 32)) suspicious++;
+  }
+  return suspicious / buffer.length > 0.1;
+}
+
+/**
+ * GET /api/browse/file?path=/some/file — 预览文件内容
+ */
+browseRouter.get('/file', async (req, res) => {
+  const query = req.query as { path?: string };
+  const targetPath = query.path;
+  if (!targetPath) {
+    return res.status(400).json({ error: 'path 为必填' });
+  }
+
+  const validatedPath = await validatePath(targetPath);
+  if (!validatedPath) {
+    return res.status(404).json({ error: '文件不存在或无权访问' });
+  }
+
+  try {
+    const fileStat = await stat(validatedPath);
+    if (!fileStat.isFile()) {
+      return res.status(400).json({ error: '仅支持预览普通文件' });
+    }
+
+    const previewSize = Math.min(fileStat.size, MAX_FILE_PREVIEW_BYTES);
+    const handle = await open(validatedPath, 'r');
+    try {
+      const buffer = Buffer.alloc(previewSize);
+      if (previewSize > 0) {
+        await handle.read(buffer, 0, previewSize, 0);
+      }
+      const isBinary = looksBinary(buffer);
+      const result: FilePreviewResult = {
+        path: validatedPath,
+        name: basename(validatedPath),
+        size: fileStat.size,
+        isBinary,
+        truncated: fileStat.size > MAX_FILE_PREVIEW_BYTES,
+        content: isBinary ? null : buffer.toString('utf8'),
+      };
+      return res.json(result);
+    } finally {
+      await handle.close();
+    }
+  } catch (err) {
+    return res.status(400).json({ error: `无法预览文件: ${(err as Error).message}` });
   }
 });
 

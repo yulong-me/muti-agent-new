@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
 import http from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -90,5 +90,36 @@ describe('browse route security', () => {
 
     expect(result.status).toBe(403);
     expect(result.data).toHaveProperty('error');
+  });
+
+  it('previews text files inside home', async () => {
+    const dir = await makeHomeTemp('browse-preview');
+    const filePath = path.join(dir, 'notes.txt');
+    await writeFile(filePath, 'hello preview\nline 2', 'utf8');
+
+    const result = await reqJson(`/api/browse/file?path=${encodeURIComponent(filePath)}`);
+
+    expect(result.status).toBe(200);
+    expect(result.data).toMatchObject({
+      path: filePath,
+      isBinary: false,
+      truncated: false,
+      content: 'hello preview\nline 2',
+    });
+  });
+
+  it('marks binary files as non-previewable', async () => {
+    const dir = await makeHomeTemp('browse-binary');
+    const filePath = path.join(dir, 'image.bin');
+    await writeFile(filePath, Buffer.from([0, 159, 146, 150]));
+
+    const result = await reqJson(`/api/browse/file?path=${encodeURIComponent(filePath)}`);
+
+    expect(result.status).toBe(200);
+    expect(result.data).toMatchObject({
+      path: filePath,
+      isBinary: true,
+      content: null,
+    });
   });
 });

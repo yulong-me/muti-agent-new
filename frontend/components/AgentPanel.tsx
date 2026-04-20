@@ -1,15 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { API_URL } from '@/lib/api'
+import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from 'react'
+import { GripVertical, X } from 'lucide-react'
 import { type Agent } from '../lib/agents'
-import { X, Folder, File, ChevronRight, ChevronLeft } from 'lucide-react'
-
-interface BrowseEntry {
-  name: string
-  path: string
-  isDirectory: boolean
-}
+import { WorkspaceSidebar } from './WorkspaceSidebar'
 
 interface AgentPanelProps {
   roomId?: string
@@ -17,13 +11,16 @@ interface AgentPanelProps {
   workspace?: string
   isMobileOpen?: boolean
   onMobileClose?: () => void
+  desktopWidth?: number
+  desktopCollapsed?: boolean
+  onDesktopWidthChange?: (width: number) => void
 }
 
 // ── Section 1: Compact agent card ─────────────────────────────────────────────
 function AgentItem({ agent }: { agent: Agent }) {
   const isBusy = agent.status === 'thinking' || agent.status === 'waiting'
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+    <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.045] px-2.5 py-2 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset]">
       <span
         className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
           isBusy
@@ -36,98 +33,6 @@ function AgentItem({ agent }: { agent: Agent }) {
   )
 }
 
-// ── Section 2: Workspace file list ────────────────────────────────────────────
-function WorkspaceFiles({ workspacePath }: { workspacePath: string }) {
-  const [currentPath, setCurrentPath] = useState(workspacePath)
-  const [entries, setEntries] = useState<BrowseEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // Reset to workspace root when workspacePath changes
-  useEffect(() => { setCurrentPath(workspacePath) }, [workspacePath])
-
-  const fetchFiles = useCallback(async (path: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`${API_URL}/api/browse?path=${encodeURIComponent(path)}`)
-      if (!res.ok) { setError('无法读取'); return }
-      const data = await res.json()
-      setEntries(data.entries || [])
-    } catch {
-      setError('连接失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchFiles(currentPath) }, [currentPath, fetchFiles])
-
-  const isAtRoot = currentPath === workspacePath
-  const folderCount = entries.filter(e => e.isDirectory).length
-
-  return (
-    <div className="pt-3 border-t border-line">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Folder className="w-3.5 h-3.5 text-ink-soft" />
-        <span className="text-[11px] font-semibold text-ink-soft">工作目录</span>
-        {/* Back button */}
-        {!isAtRoot && (
-          <button
-            type="button"
-            onClick={() => setCurrentPath(p => p.substring(0, p.lastIndexOf('/')) || workspacePath)}
-            className="ml-auto p-0.5 rounded hover:bg-white/[0.06] text-ink-soft hover:text-ink transition-colors"
-            title="返回上级"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Current path breadcrumb */}
-      {!isAtRoot && (
-        <div className="mb-1.5 px-1">
-          <span className="text-[10px] text-ink-soft/60 truncate" title={currentPath}>
-            …{currentPath.slice(workspacePath.length)}
-          </span>
-        </div>
-      )}
-
-      {loading && <p className="text-[11px] text-ink-soft/60 py-1">加载中…</p>}
-      {error && <p className="text-[11px] text-red-500 py-1">{error}</p>}
-      {!loading && !error && entries.length === 0 && (
-        <p className="text-[11px] text-ink-soft/60 py-1">空目录</p>
-      )}
-      {!loading && !error && entries.length > 0 && (
-        <div className="space-y-0.5 max-h-48 overflow-y-auto custom-scrollbar">
-          {entries.map(entry => (
-            <button
-              key={entry.path}
-              type="button"
-              title={entry.path}
-              onClick={() => {
-                if (entry.isDirectory) {
-                  setCurrentPath(entry.path)
-                } else {
-                  navigator.clipboard.writeText(entry.path)
-                }
-              }}
-              className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-white/[0.06] transition-colors cursor-pointer"
-            >
-              {entry.isDirectory
-                ? <Folder className="w-3.5 h-3.5 text-[#c4a882] shrink-0" />
-                : <File className="w-3.5 h-3.5 text-ink-soft/40 shrink-0" />
-              }
-              <span className="text-[12px] text-ink truncate flex-1 text-left">{entry.name}</span>
-              <ChevronRight className="w-3 h-3 text-ink-soft/30 shrink-0" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── AgentPanel ────────────────────────────────────────────────────────────────
 export function AgentPanel({
   roomId,
@@ -135,11 +40,59 @@ export function AgentPanel({
   workspace,
   isMobileOpen,
   onMobileClose,
+  desktopWidth = 320,
+  desktopCollapsed = false,
+  onDesktopWidthChange,
 }: AgentPanelProps) {
+  const dragStartRef = useRef<{ x: number; width: number } | null>(null)
+
+  const handleResizeStart = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (!onDesktopWidthChange) return
+    const handleWidthChange = onDesktopWidthChange
+    event.preventDefault()
+    dragStartRef.current = { x: event.clientX, width: desktopWidth }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    function handleMouseMove(moveEvent: MouseEvent) {
+      const start = dragStartRef.current
+      if (!start) return
+      handleWidthChange(start.width - (moveEvent.clientX - start.x))
+    }
+
+    function handleMouseUp() {
+      dragStartRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }, [desktopWidth, onDesktopWidthChange])
+
   return (
     <>
       {/* Desktop: fixed right sidebar */}
-      <div className="hidden lg:flex app-islands-panel w-[260px] bg-surface border-l border-line flex-col z-20 h-full shrink-0">
+      <div
+        className={`relative hidden lg:flex flex-col z-20 h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${
+          desktopCollapsed ? 'border-l-0' : 'border-l border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.065)_0%,rgba(255,255,255,0.018)_100%)] shadow-[-16px_0_36px_rgba(0,0,0,0.18)] backdrop-blur-xl'
+        }`}
+        style={{ width: desktopCollapsed ? 0 : desktopWidth }}
+        aria-hidden={desktopCollapsed}
+      >
+        {!desktopCollapsed && (
+          <button
+            type="button"
+            onMouseDown={handleResizeStart}
+            className="absolute inset-y-0 left-0 z-10 flex w-3 -translate-x-1/2 items-center justify-center text-ink-soft/40 transition-colors hover:text-accent"
+            aria-label="调整参与 Agent 面板宽度"
+            title="拖拽调整面板宽度"
+          >
+            <GripVertical className="h-4 w-4 rounded-full bg-bg/70" />
+          </button>
+        )}
         <PanelContent roomId={roomId} agents={agents} workspace={workspace} />
       </div>
 
@@ -182,25 +135,36 @@ export function AgentPanel({
 function PanelContent({ roomId, agents, workspace }: { roomId?: string; agents: Agent[]; workspace?: string }) {
   return (
     <>
-      <div className="p-5 border-b border-line space-y-1.5">
+      <div className="border-b border-white/[0.08] px-3 py-3 space-y-1.5">
         {roomId && (
           <button
             type="button"
             onClick={() => navigator.clipboard.writeText(roomId)}
             title="点击复制对话 ID"
-            className="flex items-center gap-1.5 text-[11px] text-ink-soft hover:text-accent transition-colors cursor-pointer group w-full"
+            className="flex items-center gap-1.5 rounded-lg border border-white/[0.05] bg-white/[0.03] px-2 py-1.5 text-[11px] text-ink-soft transition-colors cursor-pointer group w-full hover:border-accent/20 hover:text-accent"
           >
             <span className="opacity-60 group-hover:opacity-100 shrink-0">ID:</span>
             <span className="font-mono truncate group-hover:text-accent">{roomId.slice(0, 8)}…</span>
             <span className="text-[10px] opacity-40 ml-auto">📋</span>
           </button>
         )}
-        <h2 className="text-[15px] font-bold text-ink pt-1">参与 Agent</h2>
+        <div className="space-y-0.5 pt-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-soft/45">Room Crew</p>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-bold text-ink">参与 Agent</h2>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-ink-soft">
+              {agents.length}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-        {/* Section 1: Agent list — compact dot + name */}
-        <div className="space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-2.5 py-2.5 space-y-2.5 custom-scrollbar">
+        <section className="rounded-2xl border border-white/[0.06] bg-black/[0.08] px-2.5 py-2.5 space-y-2">
+          <div className="flex items-center justify-between px-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-soft/45">Participants</p>
+            <span className="text-[10px] text-ink-soft/50">{agents.length || 0}</span>
+          </div>
           {agents.length === 0 ? (
             <p className="text-[12px] text-ink-soft/60 text-center py-2">选择讨论室后显示参与者</p>
           ) : (
@@ -208,11 +172,10 @@ function PanelContent({ roomId, agents, workspace }: { roomId?: string; agents: 
               <AgentItem key={agent.id} agent={agent} />
             ))
           )}
-        </div>
+        </section>
 
-        {/* Section 2: Workspace files */}
         {workspace && (
-          <WorkspaceFiles workspacePath={workspace} />
+          <WorkspaceSidebar workspacePath={workspace} />
         )}
       </div>
     </>

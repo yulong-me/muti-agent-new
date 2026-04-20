@@ -8,7 +8,7 @@ import { API_URL } from '@/lib/api'
 const API = API_URL;
 import { io, type Socket } from 'socket.io-client'
 import {
-  Menu, Download, ChevronDown, UserPlus, Users,
+  ChevronDown, ChevronLeft, ChevronRight, Download, Menu, UserPlus, Users,
 } from 'lucide-react'
 import {
   extractUserMentionsFromAgents,
@@ -95,6 +95,16 @@ function DepthSwitcher({ value, onChange, currentDepth, maxDepth }: {
 
 interface RoomViewProps { roomId?: string; defaultCreateOpen?: boolean }
 
+const AGENT_PANEL_DEFAULT_WIDTH = 320
+const AGENT_PANEL_MIN_WIDTH = 280
+const AGENT_PANEL_MAX_WIDTH = 560
+const AGENT_PANEL_WIDTH_KEY = 'opencouncil.agent-panel-width'
+const AGENT_PANEL_COLLAPSED_KEY = 'opencouncil.agent-panel-collapsed'
+
+function clampAgentPanelWidth(width: number) {
+  return Math.min(AGENT_PANEL_MAX_WIDTH, Math.max(AGENT_PANEL_MIN_WIDTH, Math.round(width)))
+}
+
 export default function RoomView_new({ roomId, defaultCreateOpen = false }: RoomViewProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(defaultCreateOpen)
   const router = useRouter()
@@ -123,6 +133,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [effectiveMaxDepth, setEffectiveMaxDepth] = useState(5)
   // F006: workspace path from poll
   const [workspace, setWorkspace] = useState<string | undefined>(undefined)
+  const [agentPanelWidth, setAgentPanelWidth] = useState(AGENT_PANEL_DEFAULT_WIDTH)
+  const [agentPanelCollapsed, setAgentPanelCollapsed] = useState(false)
 
   // F017: displayMax — user-selected depth option takes priority over poll's effectiveMaxDepth
   const displayMax = maxA2ADepth !== null ? maxA2ADepth : effectiveMaxDepth
@@ -191,6 +203,25 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
   useEffect(() => setMounted(true), [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const storedWidth = Number.parseInt(localStorage.getItem(AGENT_PANEL_WIDTH_KEY) ?? '', 10)
+    if (Number.isFinite(storedWidth)) {
+      setAgentPanelWidth(clampAgentPanelWidth(storedWidth))
+    }
+    setAgentPanelCollapsed(localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY) === '1')
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(AGENT_PANEL_WIDTH_KEY, String(agentPanelWidth))
+  }, [agentPanelWidth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, agentPanelCollapsed ? '1' : '0')
+  }, [agentPanelCollapsed])
+
   // AC-5: debug logs are no longer synced to UI state (panel removed)
 
   // F0043: Set roomId in logger so frontend logs get persisted to logs/{roomId}.log
@@ -223,6 +254,14 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
 
   useEffect(() => { agentsRef.current = agents }, [agents])
+
+  const handleAgentPanelWidthChange = useCallback((nextWidth: number) => {
+    setAgentPanelWidth(clampAgentPanelWidth(nextWidth))
+  }, [])
+
+  const toggleAgentPanel = useCallback(() => {
+    setAgentPanelCollapsed(prev => !prev)
+  }, [])
 
   // ─── Socket ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -972,6 +1011,19 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               >
                 <UserPlus className="w-5 h-5" />
               </button>
+              <button
+                type="button"
+                onClick={toggleAgentPanel}
+                className="hidden lg:inline-flex p-2 text-ink-soft hover:text-accent transition-colors"
+                aria-label={agentPanelCollapsed ? '展开参与 Agent 面板' : '收起参与 Agent 面板'}
+                title={agentPanelCollapsed ? '展开参与 Agent 面板' : '收起参与 Agent 面板'}
+              >
+                {agentPanelCollapsed ? (
+                  <ChevronLeft className="w-5 h-5" />
+                ) : (
+                  <ChevronRight className="w-5 h-5" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -1039,6 +1091,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
           workspace={workspace}
           isMobileOpen={agentDrawerOpen}
           onMobileClose={() => setAgentDrawerOpen(false)}
+          desktopWidth={agentPanelWidth}
+          desktopCollapsed={agentPanelCollapsed}
+          onDesktopWidthChange={handleAgentPanelWidthChange}
         />
 
       </div>

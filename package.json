@@ -1,7 +1,14 @@
 {
   "name": "opencouncil",
   "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": "22.x",
+    "pnpm": "10.x"
+  },
   "scripts": {
+    "node:check": "node scripts/check-node-version.mjs",
+    "predev": "pnpm run node:check",
     "dev": "node scripts/dev.mjs",
     "dev:backend": "pnpm --dir backend dev",
     "dev:frontend": "pnpm --dir frontend dev",

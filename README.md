@@ -5,7 +5,7 @@
 一个让多个 AI 专家协作讨论、交叉质疑并逐步收敛观点的工作台。用户创建讨论室、选择专家、把消息明确发给目标专家，专家之间可以继续 `@mention` 其他专家协作。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Node](https://img.shields.io/badge/node-%3E%3D20-green)
+![Node](https://img.shields.io/badge/node-22.x-green)
 ![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8-orange)
 
 ## 核心能力
@@ -54,11 +54,13 @@
 
 ## 前置依赖
 
-### 1. Node.js >= 20
+### 1. Node.js 22.x
 
 ```bash
 node --version
 ```
+
+仓库根目录提供了 `.nvmrc` / `.node-version`。`dev/build/test` 现在会在启动前显式校验 Node 主版本，不再让不兼容的版本一路运行到半路才报 native / bundler 错误。
 
 ### 2. pnpm >= 8
 
@@ -97,6 +99,8 @@ cd OpenCouncil
 ```bash
 pnpm install:all
 ```
+
+`backend` 使用 `better-sqlite3`。从现在开始，`pnpm dev` / `pnpm --dir backend build` / `pnpm --dir backend test` 会在启动前自动检查并按当前 Node 版本重建 native binding，因此即使开发者切换过 Node 版本，也不会再在运行时才因为 ABI 不匹配崩掉。
 
 ### 可选环境变量
 
