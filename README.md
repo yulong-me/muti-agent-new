@@ -1,8 +1,8 @@
 # OpenCouncil
 
-> Open agents. Real debate. Shared decisions.
+> Open agents. Structured debate. Shared context.
 
-一个让多个 AI 专家协作辩论并形成共识的工作台。用户创建讨论室、选择专家、把消息明确发给目标专家，专家之间可以继续 `@mention` 其他专家协作。
+一个让多个 AI 专家协作讨论、交叉质疑并逐步收敛观点的工作台。用户创建讨论室、选择专家、把消息明确发给目标专家，专家之间可以继续 `@mention` 其他专家协作。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-green)
@@ -88,7 +88,7 @@ opencode --version
 ### 克隆仓库
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/yulong-me/muti-agent-new.git
 cd muti-agent-new
 ```
 
@@ -106,7 +106,7 @@ pnpm install:all
 LOG_LEVEL=info
 ```
 
-前端若不走同源代理，可在 `frontend/.env.local` 中指定后端地址：
+若前后端不在同一地址，或你需要覆盖默认 API 地址，可在 `frontend/.env.local` 中指定后端地址：
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:7001
@@ -127,14 +127,14 @@ pnpm dev
 
 首次启动时会自动创建 SQLite 数据库：
 
-- [backend/data/muti-agent.db](/Users/yulong/work/muti-agent-new/backend/data/muti-agent.db)
+- `backend/data/muti-agent.db`
 
 ### 进入产品
 
 1. 打开 [http://localhost:7002](http://localhost:7002)
 2. 进入设置，先配置 Provider
 3. 创建房间，选择一个或多个专家
-4. 在房间内把消息发给目标专家开始协作
+4. 在输入框中通过 `@专家名` 或 mention picker 指定接收专家后发送消息
 
 ## 配置说明
 
@@ -171,6 +171,6 @@ pnpm dev
 
 仓库默认保留一批内置人物视角专家。这些人物 prompt 来源于：
 
-- [.agents/skills](/Users/yulong/work/muti-agent-new/.agents/skills)
+- [.agents/skills](./.agents/skills)
 
 如果你希望 fresh DB 启动后仍然自动具备这些人物专家，请不要删除这个目录。
