@@ -340,6 +340,41 @@ describe('F016: scenePromptBuilder — real export', () => {
     expect(prompt).toContain('- Reviewer（代码审查）');
     expect(prompt).toContain('需要协作时，另起一行行首 @专家名');
   });
+
+  it('injects current A2A depth and effective max depth into runtime context', async () => {
+    const { buildRoomScopedSystemPrompt } = await import('../src/services/scenePromptBuilder.js');
+    const { store } = await import('../src/store.js');
+
+    vi.mocked(store.get).mockReturnValue({
+      id: 'room-depth',
+      topic: '实现登录态持久化',
+      state: 'RUNNING' as const,
+      agents: [
+        { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'architect', status: 'idle' as const },
+      ],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 2,
+      a2aCallChain: ['架构师', 'Reviewer'],
+      sceneId: 'software-development',
+      maxA2ADepth: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    mockScenesRepo.get.mockReturnValue({
+      id: 'software-development',
+      name: '软件开发',
+      prompt: '软件开发场景',
+      builtin: true,
+      maxA2ADepth: 10,
+    });
+
+    const prompt = buildRoomScopedSystemPrompt('room-depth', 'base prompt', {
+      userMessage: '请继续深入讨论',
+    });
+
+    expect(prompt).toContain('【A2A 协作深度】当前 2 层 / 最大 10 层');
+  });
 });
 
 // ── Pure logic: name guard expression (no mock needed) ──────────────────────

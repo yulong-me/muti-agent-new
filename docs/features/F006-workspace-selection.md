@@ -4,11 +4,13 @@ related_features: [F0043]
 topics: [workspace, multi-agent, directory-browser]
 doc_kind: spec
 created: 2026-04-14
-updated: 2026-04-14
+updated: 2026-04-20
 
 ## Changelog
 
 - 2026-04-14: 初始版本，包含已实现的后端目录浏览器 API
+- 2026-04-20: 收紧 workspace / browse 安全边界：统一要求 realpath 后仍位于 `homedir()` 内，补充自动化测试覆盖
+- 2026-04-20: 补齐 workspace 默认目录与 provider cwd 自动化测试，确认 room 级 workspace 会透传到 Claude/OpenCode CLI
 
 ## 已完成实现
 
@@ -28,15 +30,15 @@ updated: 2026-04-14
 - [x] AC-3: 面包屑可点击回上级目录
 - [x] AC-4: "选择此目录"按钮将当前路径填入并关闭弹窗
 - [x] AC-5: POST `/api/pick-directory` 调用系统原生文件夹选择器（macOS osascript）
-- [ ] AC-6: 留空时使用默认 `workspaces/room-{id}/`
-- [ ] AC-7: agent CLI cwd 使用 room 绑定的 workspace
-- [ ] AC-8: 工作目录持久化到数据库，重启后保持
-- [ ] AC-9: 路径校验失败时显示明确错误
+- [x] AC-6: 留空时使用默认 `workspaces/room-{id}/`
+- [x] AC-7: agent CLI cwd 使用 room 绑定的 workspace
+- [x] AC-8: 工作目录持久化到数据库，重启后保持
+- [x] AC-9: 路径校验失败时显示明确错误
 ---
 
 # F006: 创建 Room 时可选工作目录
 
-> Status: spec | Owner: TBD
+> Status: done | Owner: codex
 
 ## Why
 
@@ -167,8 +169,8 @@ updated: 2026-04-14
 - [x] AC-3: 面包屑可点击回上级目录
 - [x] AC-4: "选择此目录"按钮将当前路径填入并关闭弹窗
 - [x] AC-5: POST `/api/browse/pick-directory` 调用系统原生文件夹选择器（macOS osascript），前端 DirectoryBrowser 提供"系统选择器"按钮
-- [ ] AC-6: 留空时使用默认 `workspaces/room-{id}/`
-- [ ] AC-7: agent CLI cwd 使用 room 绑定的 workspace
+- [x] AC-6: 留空时使用默认 `workspaces/room-{id}/`
+- [x] AC-7: agent CLI cwd 使用 room 绑定的 workspace
 - [x] AC-8: 工作目录持久化到数据库，重启后保持（workspace 列已加入 schema + rooms repo）
 - [x] AC-9: 路径校验失败时返回明确 HTTP 状态码（404 目录不存在 / 403 越权或无权访问）
 

@@ -10,17 +10,27 @@
 import type { A2AContext, A2ARouteResult } from '../../types.js';
 import { store } from '../../store.js';
 import { getAgent } from '../../config/agentConfig.js';
-import { scenesRepo } from '../../db/repositories/scenes.js';
+import { scenesRepo } from '../../db/index.js';
 
 /**
- * 获取 Room 的有效最大 A2A 深度
+ * 获取有效最大 A2A 深度
  * 优先级：room.maxA2ADepth > scene.maxA2ADepth > 5
  * 0 = 无限
  */
-function getEffectiveMaxDepth(roomId: string, roomMaxDepth: number | null, sceneId: string): number {
+export function resolveEffectiveMaxDepth(roomMaxDepth: number | null, sceneId: string): number {
   if (roomMaxDepth !== null) return roomMaxDepth;
   const scene = scenesRepo.get(sceneId);
   return scene?.maxA2ADepth ?? 5;
+}
+
+/**
+ * 获取某个 room 当前生效的最大 A2A 深度。
+ * room 不存在时回退到默认值 5。
+ */
+export function getEffectiveMaxDepthForRoom(roomId: string): number {
+  const room = store.get(roomId);
+  if (!room) return 5;
+  return resolveEffectiveMaxDepth(room.maxA2ADepth, room.sceneId);
 }
 
 /**
@@ -145,19 +155,16 @@ export function resolveAgent(targetId: string): { exists: boolean; agentName: st
  * A2A 路由决策
  *
  * @param params A2A 上下文
- * @returns 路由结果：继续路由到 Agent，或交回 Manager
+ * @returns 路由结果：继续路由到 Agent，或标记已达到深度上限
  */
 export function a2aRoute(params: A2AContext): A2ARouteResult {
-  const room = store.get(params.roomId);
-  const effectiveMaxDepth = room
-    ? getEffectiveMaxDepth(params.roomId, room.maxA2ADepth, room.sceneId)
-    : 5;
+  const effectiveMaxDepth = getEffectiveMaxDepthForRoom(params.roomId);
 
   // 0 = 无限模式，不做深度检查
   if (effectiveMaxDepth > 0 && params.depth >= effectiveMaxDepth) {
-    // 达到深度上限，交回 Manager
+    // 达到深度上限，停止继续路由
     return {
-      type: 'manager_handoff',
+      type: 'depth_limited',
       depth: params.depth,
       callChain: params.callChain,
       taskSummary: params.taskSummary,
@@ -199,9 +206,7 @@ export function routeFromMessage(
   }
 
   // 获取有效深度上限
-  const effectiveMaxDepth = room
-    ? getEffectiveMaxDepth(roomId, room.maxA2ADepth, room.sceneId)
-    : 5;
+  const effectiveMaxDepth = getEffectiveMaxDepthForRoom(roomId);
 
   // 0 = 无限模式，不做深度检查
   if (effectiveMaxDepth > 0 && depth >= effectiveMaxDepth) {

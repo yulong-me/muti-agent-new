@@ -276,6 +276,235 @@ describe('F004: Manager 路由器', () => {
         }),
       );
     });
+
+    it('首包超时时应该保留“响应超时”语义', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { emitRoomErrorEvent } = await import('../src/services/socketEmitter.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-timeout-first-token',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* () {
+        const failure = new Error('Timed out waiting for first token');
+        (failure as Error & { code?: string; phase?: string }).code = 'AGENT_TIMEOUT';
+        (failure as Error & { code?: string; phase?: string }).phase = 'first_token';
+        throw failure;
+      });
+
+      await expect(routeToAgent('room-timeout-first-token', '@架构师 帮我看看这个方案', 'worker-1')).rejects.toThrow('Timed out waiting for first token');
+
+      expect(emitRoomErrorEvent).toHaveBeenCalledWith(
+        'room-timeout-first-token',
+        expect.objectContaining({
+          code: 'AGENT_TIMEOUT',
+          title: '响应超时',
+          timeoutPhase: 'first_token',
+        }),
+      );
+    });
+
+    it('中途 idle 超时应该以“连接中断”提示，并保留已生成内容', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { emitRoomErrorEvent } = await import('../src/services/socketEmitter.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-timeout-idle',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* () {
+        yield { type: 'delta', agentId: 'worker-1', text: '这是已生成的半段回答' };
+        const failure = new Error('Timed out waiting for next token');
+        (failure as Error & { code?: string; phase?: string }).code = 'AGENT_TIMEOUT';
+        (failure as Error & { code?: string; phase?: string }).phase = 'idle';
+        throw failure;
+      });
+
+      await expect(routeToAgent('room-timeout-idle', '@架构师 帮我看看这个方案', 'worker-1')).rejects.toThrow('Timed out waiting for next token');
+
+      expect(emitRoomErrorEvent).toHaveBeenCalledWith(
+        'room-timeout-idle',
+        expect.objectContaining({
+          code: 'AGENT_TIMEOUT',
+          title: '连接中断',
+          timeoutPhase: 'idle',
+        }),
+      );
+      expect(messagesRepo.updateContent).toHaveBeenCalledWith(
+        expect.any(String),
+        '这是已生成的半段回答',
+        expect.objectContaining({
+          runError: expect.objectContaining({
+            code: 'AGENT_TIMEOUT',
+            timeoutPhase: 'idle',
+          }),
+        }),
+      );
+    });
+
+    it('调用专家时会把 room workspace 传给 provider，并以 room.workspace 解析工作目录', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { ensureWorkspace } = await import('../src/services/workspace.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const roomWorkspace = '/Users/yulong/work/sample-project';
+      const mockRoom = {
+        id: 'room-workspace-forward',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+        workspace: roomWorkspace,
+      };
+
+      let capturedOpts: Record<string, unknown> | undefined;
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(ensureWorkspace).mockResolvedValueOnce(roomWorkspace);
+      vi.mocked(getProvider).mockReturnValueOnce(async function* (_prompt: string, _agentId: string, opts?: Record<string, unknown>) {
+        capturedOpts = opts;
+        yield { type: 'delta', agentId: 'worker-1', text: '收到' };
+        yield { type: 'end', agentId: 'worker-1', duration_ms: 100, total_cost_usd: 0.01, input_tokens: 10, output_tokens: 10 };
+      });
+
+      await routeToAgent('room-workspace-forward', '@架构师 在这个项目里看看', 'worker-1');
+
+      expect(ensureWorkspace).toHaveBeenCalledWith('room-workspace-forward', roomWorkspace);
+      expect(capturedOpts).toMatchObject({
+        workspace: roomWorkspace,
+        roomId: 'room-workspace-forward',
+        agentName: '架构师',
+      });
+    });
+
+    it('新邀请专家第一次被调用时会拿到完整 room 历史', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const historyMessages = Array.from({ length: 12 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        agentRole: index % 2 === 0 ? 'USER' as const : 'WORKER' as const,
+        agentName: index % 2 === 0 ? '你' : '架构师',
+        content: `H${String(index + 1).padStart(2, '0')}`,
+        timestamp: Date.now() - (12 - index) * 1000,
+        type: 'statement' as const,
+      }));
+
+      const mockRoom = {
+        id: 'room-invite-history',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '新专家', domainLabel: '代码审查', configId: 'invited-worker', status: 'idle' as const },
+        ],
+        messages: [
+          ...historyMessages,
+          {
+            id: 'joined-system',
+            agentRole: 'WORKER' as const,
+            agentName: '新专家',
+            content: '新专家 加入了讨论',
+            timestamp: Date.now(),
+            type: 'system' as const,
+          },
+        ],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      let capturedPrompt = '';
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* (prompt: string) {
+        capturedPrompt = prompt;
+        yield { type: 'delta', agentId: 'worker-1', text: '收到' };
+        yield { type: 'end', agentId: 'worker-1', duration_ms: 100, total_cost_usd: 0.01, input_tokens: 10, output_tokens: 10 };
+      });
+
+      await routeToAgent('room-invite-history', '@新专家 看看这段历史', 'worker-1');
+
+      expect(capturedPrompt).toContain('H01');
+      expect(capturedPrompt).toContain('H12');
+      expect(capturedPrompt).toContain('新专家 加入了讨论');
+    });
+
+    it('普通已有专家仍然只拿最近窗口，避免每次都带完整历史', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const historyMessages = Array.from({ length: 12 }, (_, index) => ({
+        id: `existing-msg-${index + 1}`,
+        agentRole: index % 2 === 0 ? 'USER' as const : 'WORKER' as const,
+        agentName: index % 2 === 0 ? '你' : '架构师',
+        content: `R${String(index + 1).padStart(2, '0')}`,
+        timestamp: Date.now() - (12 - index) * 1000,
+        type: 'statement' as const,
+      }));
+
+      const mockRoom = {
+        id: 'room-existing-history',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: historyMessages,
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      let capturedPrompt = '';
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* (prompt: string) {
+        capturedPrompt = prompt;
+        yield { type: 'delta', agentId: 'worker-1', text: '收到' };
+        yield { type: 'end', agentId: 'worker-1', duration_ms: 100, total_cost_usd: 0.01, input_tokens: 10, output_tokens: 10 };
+      });
+
+      await routeToAgent('room-existing-history', '@架构师 看看最近上下文', 'worker-1');
+
+      expect(capturedPrompt).not.toContain('R01');
+      expect(capturedPrompt).toContain('R03');
+      expect(capturedPrompt).toContain('R12');
+    });
   });
 
   describe('Manager 决策路由', () => {
@@ -304,8 +533,110 @@ describe('F004: Manager 路由器', () => {
     });
   });
 
-  describe('A2A 循环保护', () => {
-    it('允许回流到链路中出现过但尚未形成乒乓循环的专家', async () => {
+  describe('F017: A2A 协作深度', () => {
+    it('room override / scene default / 无限模式都返回正确的有效深度', async () => {
+      const { getEffectiveMaxDepthForRoom } = await import('../src/services/routing/A2ARouter.js');
+      const { store } = await import('../src/store.js');
+      const { scenesRepo } = await import('../src/db/index.js');
+
+      vi.mocked(store.get)
+        .mockReturnValueOnce({
+          id: 'room-override',
+          topic: 'Test',
+          state: 'RUNNING' as const,
+          agents: [],
+          messages: [],
+          sessionIds: {},
+          a2aDepth: 0,
+          a2aCallChain: [],
+          sceneId: 'software-development',
+          maxA2ADepth: 3,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+        .mockReturnValueOnce({
+          id: 'room-inherit',
+          topic: 'Test',
+          state: 'RUNNING' as const,
+          agents: [],
+          messages: [],
+          sessionIds: {},
+          a2aDepth: 0,
+          a2aCallChain: [],
+          sceneId: 'software-development',
+          maxA2ADepth: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+        .mockReturnValueOnce({
+          id: 'room-infinite',
+          topic: 'Test',
+          state: 'RUNNING' as const,
+          agents: [],
+          messages: [],
+          sessionIds: {},
+          a2aDepth: 99,
+          a2aCallChain: [],
+          sceneId: 'software-development',
+          maxA2ADepth: 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+
+      vi.mocked(scenesRepo.get).mockReturnValue({
+        id: 'software-development',
+        name: '软件开发',
+        prompt: '软件开发场景',
+        builtin: true,
+        maxA2ADepth: 10,
+      });
+
+      expect(getEffectiveMaxDepthForRoom('room-override')).toBe(3);
+      expect(getEffectiveMaxDepthForRoom('room-inherit')).toBe(10);
+      expect(getEffectiveMaxDepthForRoom('room-infinite')).toBe(0);
+    });
+
+    it('达到深度上限时停止继续路由，并追加明确的系统提示', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-depth-limit',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'architect', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: 'Reviewer', domainLabel: '代码审查', configId: 'reviewer', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 3,
+        a2aCallChain: ['实现工程师', '架构师', 'Reviewer'],
+        sceneId: 'software-development',
+        maxA2ADepth: 3,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate('room-depth-limit', 'worker-1', '架构师', '@Reviewer 请继续 review');
+
+      expect(messagesRepo.insert).toHaveBeenCalledWith(
+        'room-depth-limit',
+        expect.objectContaining({
+          agentName: '系统',
+          type: 'system',
+          content: expect.stringContaining('已达到协作深度上限（3 层）'),
+        }),
+      );
+      expect(getProvider).not.toHaveBeenCalled();
+    });
+
+    it('允许回流到链路中出现过但尚未形成重复协作对的专家', async () => {
       const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');
       const { getProvider } = await import('../src/services/providers/index.js');
@@ -324,7 +655,10 @@ describe('F004: Manager 路由器', () => {
         sessionIds: {},
         a2aDepth: 4,
         a2aCallChain: ['需求分析师', '架构师', '需求分析师', '实现工程师'],
+        sceneId: 'software-development',
         maxA2ADepth: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
 
       vi.mocked(store.get).mockReturnValue(mockRoom);
@@ -353,7 +687,10 @@ describe('F004: Manager 路由器', () => {
         sessionIds: {},
         a2aDepth: 2,
         a2aCallChain: ['实现工程师', '测试工程师'],
+        sceneId: 'software-development',
         maxA2ADepth: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
 
       vi.mocked(store.get).mockReturnValue(mockRoom);
@@ -372,5 +709,4 @@ describe('F004: Manager 路由器', () => {
       expect(getProvider).not.toHaveBeenCalled();
     });
   });
-
 });

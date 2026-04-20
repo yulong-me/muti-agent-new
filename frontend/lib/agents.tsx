@@ -29,6 +29,7 @@ export interface AgentRunErrorEvent {
   agentId: string
   agentName: string
   code: 'AGENT_TIMEOUT' | 'AGENT_PROCESS_EXIT' | 'AGENT_PROVIDER_ERROR' | 'AGENT_PARSE_ERROR' | 'AGENT_RUNTIME_ERROR' | string
+  timeoutPhase?: 'first_token' | 'idle'
   title: string
   message: string
   retryable: boolean

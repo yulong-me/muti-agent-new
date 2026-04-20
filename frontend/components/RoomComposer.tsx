@@ -32,9 +32,11 @@ interface RoomComposerProps {
   agents: Agent[]
   lastActiveWorkerId: string | null
   sending: boolean
+  queueMode?: boolean
   sendError: string | null
   onSend: (rawContent: string) => Promise<boolean>
   onSendError: (message: string, timeoutMs?: number) => void
+  onDraftChange?: (value: string) => void
   onRecipientSelected: (agentId: string | null) => void
 }
 
@@ -43,9 +45,11 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
   agents,
   lastActiveWorkerId,
   sending,
+  queueMode = false,
   sendError,
   onSend,
   onSendError,
+  onDraftChange,
   onRecipientSelected,
 }, ref) {
   const [userInput, setUserInput] = useState('')
@@ -121,6 +125,10 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
     ta.style.height = `${newH}px`
     ta.style.overflowY = ta.scrollHeight > maxH ? 'auto' : 'hidden'
   }, [userInput])
+
+  useEffect(() => {
+    onDraftChange?.(userInput)
+  }, [onDraftChange, userInput])
 
   useEffect(() => {
     if (!mentionPickerOpen) return
@@ -293,7 +301,7 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
           onClick={() => void submitDraft()}
           disabled={sending || !userInput.trim()}
         >
-          {sending ? '发送中…' : '发送'}
+          {sending ? '发送中…' : queueMode ? '加入队列' : '发送'}
         </button>
       </div>
     </div>

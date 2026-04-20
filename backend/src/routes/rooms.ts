@@ -17,6 +17,7 @@ import { roomsRepo, sessionsRepo, messagesRepo, scenesRepo } from '../db/index.j
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
+import { resolveEffectiveMaxDepth } from '../services/routing/A2ARouter.js';
 
 export const roomsRouter = Router();
 
@@ -139,7 +140,10 @@ roomsRouter.patch('/:id', (req, res) => {
   // 同步更新 in-memory store
   store.update(id, { maxA2ADepth: updated.maxA2ADepth });
 
-  res.json(updated);
+  res.json({
+    ...updated,
+    effectiveMaxDepth: resolveEffectiveMaxDepth(updated.maxA2ADepth, updated.sceneId),
+  });
 });
 
 // GET /api/rooms/:id/messages — 轮询获取消息
@@ -154,7 +158,7 @@ roomsRouter.get('/:id/messages', (req, res) => {
     report: room.report,
     maxA2ADepth: room.maxA2ADepth, // F017: room override (null = inherit scene)
     a2aDepth: room.a2aDepth ?? 0, // F017: current A2A depth
-    effectiveMaxDepth: room.maxA2ADepth !== null ? room.maxA2ADepth : (scenesRepo.get(room.sceneId)?.maxA2ADepth ?? 5), // F017: computed max depth
+    effectiveMaxDepth: resolveEffectiveMaxDepth(room.maxA2ADepth, room.sceneId), // F017: computed max depth
     workspace: room.workspace, // F006: workspace path for file browser
   });
 });

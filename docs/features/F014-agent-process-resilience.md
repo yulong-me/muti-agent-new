@@ -4,11 +4,12 @@ related_features: []
 topics: [ux, error-handling, resilience, process-management]
 doc_kind: spec
 created: 2026-04-16
+updated: 2026-04-20
 ---
 
 # F014: 专家进程容错与全链路 UX 保护保护机制（Agent Resilience & UX Recovery）
 
-> Status: todo | Owner: yulong
+> Status: in-progress | Owner: codex
 
 ## Why
 
@@ -64,3 +65,16 @@ created: 2026-04-16
 
 - **Backend** (`ProcessManager` / `Executor`): 引入看门狗（Watchdog）机制监听进程管道和生命周期，加入基于 `AbortController` 的网络与进程超时逻辑。
 - **Frontend 组件**：增加 `ErrorBubble.tsx` 和专门的 `TimeoutCard.tsx` 替代死板的悬停动画；完善聊天气泡级的全局错误捕获机制。
+
+## Changelog
+
+- 2026-04-20: 补齐超时 phase 语义。`AGENT_TIMEOUT` 现在区分 `first_token` 与 `idle` 两种 phase；前者继续显示“响应超时”，后者改为“连接中断”，并在错误卡片上明确提示“已保留部分输出”，用于覆盖“回答进行到一半卡住”的场景。
+- 2026-04-20: 错误卡片新增“换个专家试试”恢复动作。当前房间里若还有其他 WORKER，可直接把原问题改写为发给另一位专家并回填到输入框，减少用户手工改写 @mention 的成本。
+
+## Verification
+
+- `pnpm --dir backend exec vitest run tests/stateMachine.test.ts -t "超时|连接中断"`
+- `pnpm --dir backend exec vitest run tests/errorRecovery.test.ts`
+- `pnpm --dir backend test`
+- `pnpm --dir backend build`
+- `pnpm --dir frontend build`

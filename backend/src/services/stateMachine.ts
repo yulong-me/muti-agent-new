@@ -30,9 +30,9 @@ import { auditRepo } from '../db/index.js';
 import { ensureWorkspace } from './workspace.js';
 import {
   scanForA2AMentions,
+  getEffectiveMaxDepthForRoom,
   updateA2AContext,
 } from './routing/A2ARouter.js';
-import { scenesRepo } from '../db/repositories/scenes.js';
 import { buildRoomScopedSystemPrompt } from './scenePromptBuilder.js';
 import { debug, info, warn, error } from '../lib/logger.js';
 
@@ -96,6 +96,28 @@ function appendMessageContent(roomId: string, messageId: string, extra: string) 
   // for "recent activity" ordering since the list only reorders on new message arrival.
 }
 
+function buildTranscriptForAgentInvocation(
+  room: NonNullable<ReturnType<typeof store.get>>,
+  agentName: string,
+): string | undefined {
+  const hasJoinSystemMessage = room.messages.some(
+    m => m.type === 'system' && m.agentName === agentName && m.content === `${agentName} 加入了讨论`,
+  );
+  const hasAgentSpokenBefore = room.messages.some(
+    m => m.agentName === agentName && m.type !== 'system',
+  );
+
+  const transcriptMessages = hasJoinSystemMessage && !hasAgentSpokenBefore
+    ? room.messages
+    : room.messages.slice(-10);
+
+  if (transcriptMessages.length === 0) return undefined;
+
+  return transcriptMessages
+    .map(m => `【${m.agentName}】${m.content}`)
+    .join('\n\n');
+}
+
 function updateAgentStatus(
   roomId: string,
   agentId: string,
@@ -111,6 +133,7 @@ function updateAgentStatus(
 
 function normalizeAgentExecutionError(err: unknown): {
   code: AgentExecutionErrorCode;
+  timeoutPhase?: 'first_token' | 'idle';
   rawMessage: string;
   title: string;
   message: string;
@@ -118,10 +141,22 @@ function normalizeAgentExecutionError(err: unknown): {
 } {
   const rawMessage = err instanceof Error ? err.message : String(err);
   const taggedCode = (err as Error & { code?: string }).code;
+  const timeoutPhase = (err as Error & { phase?: string }).phase;
 
   if (taggedCode === 'AGENT_TIMEOUT') {
+    if (timeoutPhase === 'idle') {
+      return {
+        code: 'AGENT_TIMEOUT',
+        timeoutPhase: 'idle',
+        rawMessage,
+        title: '连接中断',
+        message: '专家已经开始回复，但中途失去了响应。当前已生成内容会被保留，你可以重试，或找回原提问后继续。',
+        retryable: true,
+      };
+    }
     return {
       code: 'AGENT_TIMEOUT',
+      timeoutPhase: 'first_token',
       rawMessage,
       title: '响应超时',
       message: '等待专家的响应超时了，可能他暂时卡住了。你可以重试，或把原问题找回后换个问法再试。',
@@ -194,6 +229,7 @@ function handleAgentRunFailure(args: {
     agentId: args.agentId,
     agentName: args.agentName,
     code: normalized.code,
+    timeoutPhase: normalized.timeoutPhase,
     title: normalized.title,
     message: normalized.message,
     retryable: normalized.retryable,
@@ -557,10 +593,7 @@ async function streamingCallAgent(
 
     // F016: build scene-scoped prompt
     const recentTranscript = room
-      ? room.messages
-          .slice(-10)
-          .map(m => `【${m.agentName}】${m.content}`)
-          .join('\n\n')
+      ? buildTranscriptForAgentInvocation(room, agentName)
       : undefined;
 
     const basePrompt = `【当前执行者】${agentName}\n【角色】${ctx.domainLabel}（${systemPrompt}）`;
@@ -763,17 +796,17 @@ export async function a2aOrchestrate(
   const currentDepth = room.a2aDepth ?? 0;
   const currentChain = room.a2aCallChain ?? [];
 
-  // 有效深度：room 覆盖 > scene 默认 > 5
-  const effectiveMaxDepth = room.maxA2ADepth !== null
-    ? room.maxA2ADepth
-    : (scenesRepo.get(room.sceneId)?.maxA2ADepth ?? 5);
+  const effectiveMaxDepth = getEffectiveMaxDepthForRoom(roomId);
 
   telemetry('a2a:detected', { roomId, fromAgentName, mentions, depth: currentDepth });
 
-// 达深度上限 → 抛出 System 卡片，不再交给 Manager 收口
+// 达深度上限 → 抛出系统提示并停止继续 @ 新专家
   if (effectiveMaxDepth > 0 && currentDepth >= effectiveMaxDepth) {
     telemetry('a2a:depth_limit', { roomId, depth: currentDepth, chain: currentChain });
-    addSystemMessage(roomId, '[系统提醒] 业务内部探讨达到上限，请您介入引导方向');
+    addSystemMessage(
+      roomId,
+      `[系统提醒] 已达到协作深度上限（${effectiveMaxDepth} 层），当前停止继续 @ 其他专家，请你决定下一步。`,
+    );
     return;
   }
 

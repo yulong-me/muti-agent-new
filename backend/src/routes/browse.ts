@@ -12,6 +12,11 @@ import { basename, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const HOME_DIR = resolve(homedir());
+
+function isWithinHome(targetPath: string): boolean {
+  return targetPath === HOME_DIR || targetPath.startsWith(HOME_DIR + '/');
+}
 
 export interface BrowseEntry {
   name: string;
@@ -33,6 +38,7 @@ export const browseRouter = Router();
 async function validatePath(targetPath: string): Promise<string | null> {
   try {
     const real = await realpath(targetPath);
+    if (!isWithinHome(real)) return null;
     return real;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;

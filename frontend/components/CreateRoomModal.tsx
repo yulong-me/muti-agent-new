@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { X, Play, BrainCircuit, Search, ChevronDown } from 'lucide-react'
 import { DirectoryPicker } from './DirectoryPicker'
 import { API_URL } from '@/lib/api'
+import { resolveEffectiveAgentModel } from '@/lib/agentModels'
+import { buildSettingsHref } from '../lib/settingsTabs'
 
 const API = API_URL;
 
@@ -81,6 +83,7 @@ export default function CreateRoomModal({
   const [sceneId, setSceneId] = useState('roundtable-forum')
   const [loadingScenes, setLoadingScenes] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
   const topicRef = useRef<HTMLInputElement>(null)
   const agentGridRef = useRef<HTMLDivElement>(null)
 
@@ -143,6 +146,11 @@ export default function CreateRoomModal({
       else next.add(id)
       return next
     })
+  }
+
+  function handleManageScenes() {
+    onClose()
+    router.push(buildSettingsHref('scene', pathname))
   }
 
   async function handleSubmit() {
@@ -252,7 +260,16 @@ export default function CreateRoomModal({
 
             {/* F016: Scene Selector */}
             <div className="px-6 md:px-8 pt-4 mb-1">
-              <p className="text-[11px] font-bold text-accent uppercase tracking-widest mb-2">讨论场景</p>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-[11px] font-bold text-accent uppercase tracking-widest">讨论场景</p>
+                <button
+                  type="button"
+                  onClick={handleManageScenes}
+                  className="text-[11px] font-semibold text-accent hover:underline"
+                >
+                  管理场景
+                </button>
+              </div>
               <select
                 value={sceneId}
                 onChange={e => setSceneId(e.target.value)}
@@ -350,6 +367,7 @@ export default function CreateRoomModal({
                     const isSelected = selected.has(ag.id)
                     const color = agentColor(ag.name)
                     const domainTag = ag.tags[0]
+                    const effectiveModel = resolveEffectiveAgentModel(ag.provider, ag.providerOpts, {})
                     return (
                       <button
                         key={ag.id}
@@ -372,6 +390,9 @@ export default function CreateRoomModal({
                         </div>
                         <p className="text-[14px] font-bold text-ink">{ag.name}</p>
                         <p className="text-[11px] text-ink-soft mt-0.5">{ag.roleLabel}</p>
+                        <p className="text-[10px] text-ink-soft/80 mt-0.5 font-mono">
+                          {PROVIDER_LABELS[ag.provider]}{effectiveModel ? ` · ${effectiveModel}` : ''}
+                        </p>
                         {domainTag && (
                           <span className="mt-2 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider" style={{ backgroundColor: getTagStyle(domainTag).bg, color: getTagStyle(domainTag).text }}>
                             {domainTag}

@@ -4,11 +4,16 @@ related_features: [F010, F012, F013, F016]
 topics: [mainflow, prompt, room, software-development, ux]
 doc_kind: spec
 created: 2026-04-19
+updated: 2026-04-20
 ---
 
 # F018: 创建房间后的主流程与提示词体验优化
 
-> Status: in-progress | Owner: codex
+> Status: done | Owner: codex | Completed: 2026-04-20
+
+## Changelog
+
+- 2026-04-20: 验证 topic 保留、运行时 prompt 上下文、软件开发 scene 默认 prompt 与空房间起手 UX，收口 feature 生命周期
 
 ## Why
 
@@ -66,3 +71,8 @@ created: 2026-04-19
 - 内置 scene prompt 从 `migrate.ts` 抽到 `backend/src/prompts/builtinScenes.ts`，迁移层只负责 seed。
 - `ensureBuiltinScenes()` 仍使用 `INSERT ... WHERE NOT EXISTS`。
 - 软件开发 prompt 借鉴 clowder-ai 的 invocation anchor 思路，但不引入复杂 guide / queue 系统。
+
+## Verification
+
+- `pnpm --dir backend exec vitest run tests/rooms.http.test.ts tests/scenes.test.ts tests/builtinScenes.test.ts`
+- `pnpm --dir frontend build`

@@ -19,5 +19,7 @@ created: 2026-04-09
 | F011 | 会话列表 → 导航列表重构 | done | sonnet | [F011](docs/features/F011-room-list-navigation.md) |
 | F012 | 去 MANAGER 化：系统级路由与容错模型 | done | sonnet | [F012](docs/features/F012-decentralized-routing.md) |
 | F013 | 强制显式路由（Mandatory @-Mention）| done | sonnet | [F013](docs/features/F013-mandatory-mention-routing.md) |
-| F015 | 房间忙时消息阻断与出站队列 | spec | yulong | [F015](docs/features/F015-busy-room-send-queue.md) |
-| F018 | 创建房间后的主流程与提示词体验优化 | in-progress | codex | [F018](docs/features/F018-mainflow-prompt-ux.md) |
+| F014 | 专家进程容错与全链路 UX 保护机制 | in-progress | codex | [F014](docs/features/F014-agent-process-resilience.md) |
+| F015 | 房间忙时消息阻断与出站队列 | done | codex | [F015](docs/features/F015-busy-room-send-queue.md) |
+| F016 | 讨论室场景（Room Scenes: 内置场景 + Prompt 注入） | done | codex | [F016](docs/features/F016-agent-scenes.md) |
+| F018 | 创建房间后的主流程与提示词体验优化 | done | codex | [F018](docs/features/F018-mainflow-prompt-ux.md) |

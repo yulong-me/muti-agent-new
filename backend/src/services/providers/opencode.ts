@@ -3,6 +3,7 @@ import { createInterface } from 'readline';
 import { Readable, Transform } from 'stream';
 import { ClaudeEvent } from './index.js';
 import { getProvider } from '../../config/providerConfig.js';
+import type { ProviderConfig } from '../../config/providerConfig.js';
 import { debug, error } from '../../lib/logger.js';
 
 function shellQuote(arg: string): string {
@@ -14,6 +15,66 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined;
+}
+
+interface ProviderLaunchConfig {
+  cliPath: string;
+  args: string[];
+  env: Record<string, string>;
+  cwd: string;
+  timeout: number;
+  spawnOptions: {
+    timeout: number;
+    env: Record<string, string>;
+    cwd: string;
+    stdio: ['ignore', 'pipe', 'pipe'];
+  };
+}
+
+export function buildOpenCodeProviderLaunch(
+  prompt: string,
+  opts: Record<string, unknown> = {},
+  providerCfg: ProviderConfig | undefined = getProvider('opencode'),
+  baseEnv: Record<string, string> = process.env as Record<string, string>,
+): ProviderLaunchConfig {
+  const timeout = ((opts.timeout as number) ?? (providerCfg?.timeout ?? 90)) * 1000;
+  const thinking = opts.thinking !== false;
+  const sessionId = opts.sessionId as string | undefined;
+  const workspace = opts.workspace as string | undefined;
+  const model = typeof opts.model === 'string' && opts.model.trim()
+    ? opts.model.trim()
+    : providerCfg?.defaultModel.trim()
+    ? providerCfg.defaultModel.trim()
+    : undefined;
+  const cliPath = (providerCfg?.cliPath ?? 'opencode').replace(/^~/, baseEnv.HOME || '/root');
+  const cwd = workspace ?? '/tmp';
+
+  const env: Record<string, string> = { ...(baseEnv as Record<string, string>) };
+  if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
+  if (providerCfg?.baseUrl) env.ANTHROPIC_BASE_URL = providerCfg.baseUrl;
+
+  const args: string[] = ['run'];
+  if (workspace) args.push('--dir', workspace);
+  if (sessionId) args.push('--session', sessionId);
+  if (model) args.push('-m', model);
+  if (thinking) args.push('--thinking');
+  args.push('--dangerously-skip-permissions');
+  args.push('--format', 'json');
+  args.push('--', prompt);
+
+  return {
+    cliPath,
+    args,
+    env,
+    cwd,
+    timeout,
+    spawnOptions: {
+      timeout,
+      env,
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  };
 }
 
 export function parseOpenCodeToolUseEvent(parsed: Record<string, unknown>, agentId: string): ClaudeEvent | null {
@@ -73,7 +134,8 @@ export async function* streamOpenCodeProvider(
 ): AsyncGenerator<ClaudeEvent, void, undefined> {
   const start = Date.now();
   const providerCfg = getProvider('opencode');
-  const timeout = ((opts.timeout as number) ?? (providerCfg?.timeout ?? 90)) * 1000;
+  const launch = buildOpenCodeProviderLaunch(prompt, opts, providerCfg);
+  const timeout = launch.timeout;
   // No -m flag: let opencode use its own default model
   const thinking = opts.thinking !== false; // default true
   const sessionId = opts.sessionId as string | undefined;
@@ -81,18 +143,7 @@ export async function* streamOpenCodeProvider(
   const agentName = opts.agentName as string | undefined;
   const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 180000); // 3 min
   const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 180000);
-  // Default all permissions: write, exec, network
-
-  // Resolve CLI path (expand ~)
-  const cliPath = (providerCfg?.cliPath ?? 'opencode').replace(/^~/, process.env.HOME || '/root');
-
-  // Workspace support — 每个 Room 有独立工作目录
   const workspace = opts.workspace as string | undefined;
-
-  // Build environment: inject API key and base URL if configured
-  const env: Record<string, string> = { ...(process.env as Record<string, string>) };
-  if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
-  if (providerCfg?.baseUrl) env.ANTHROPIC_BASE_URL = providerCfg.baseUrl;
 
   debug('provider:call_start', {
     roomId,
@@ -102,47 +153,29 @@ export async function* streamOpenCodeProvider(
     timeout,
     thinking,
     sessionId: sessionId ?? 'new',
-    cliPath,
-    cwd: workspace ?? '/tmp',
-    spawnOpts: { cwd: workspace ?? '/tmp', timeout, stdio: ['ignore', 'pipe', 'pipe'] },
+    cliPath: launch.cliPath,
+    cwd: launch.cwd,
+    spawnOpts: launch.spawnOptions,
   });
 
-  // Build args: opencode run [opts] -- <prompt>
-  // Critical: always use --format json (clowder-ai reference implementation)
-  const args: string[] = ['run'];
-  if (workspace) {
-    // opencode does not support --add-dir; use --dir + spawn cwd to ensure room workspace.
-    args.push('--dir', workspace);
-  }
-  if (sessionId) {
-    args.push('--session', sessionId);
-  }
-  if (thinking) {
-    args.push('--thinking');
-  }
-  // Default all permissions
-  args.push('--dangerously-skip-permissions');
-  args.push('--format', 'json');
-  args.push('--', prompt);
-
-  const command = `${shellQuote(cliPath)} ${args.map(a => shellQuote(a)).join(' ')}`;
+  const command = `${shellQuote(launch.cliPath)} ${launch.args.map(a => shellQuote(a)).join(' ')}`;
   debug('provider:command', {
     roomId,
     agentId: agentName ?? agentId,
     command,
     provider: 'opencode',
     workspace,
-    cwd: workspace ?? '/tmp',
+    cwd: launch.cwd,
     sessionId: sessionId ?? null,
     thinking,
     timeout,
-    cliPath,
-    envKeys: Object.keys(env),
-    spawnOpts: { cwd: workspace ?? '/tmp', timeout, stdio: ['ignore', 'pipe', 'pipe'] },
+    cliPath: launch.cliPath,
+    envKeys: Object.keys(launch.env),
+    spawnOpts: { cwd: launch.cwd, timeout, stdio: ['ignore', 'pipe', 'pipe'] },
     promptPreview: prompt.slice(0, 100),
   });
 
-  const proc = spawn(cliPath, args, { timeout, env, cwd: workspace ?? '/tmp', stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(launch.cliPath, launch.args, launch.spawnOptions);
 
   let stderrBuffer = '';
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });

@@ -4,37 +4,40 @@ related_features: [F001]
 topics: [opencode, provider, streaming, multi-agent]
 doc_kind: spec
 created: 2026-04-10
+updated: 2026-04-20
 ---
 
 # F002: Multi-Provider Agent System
 
-> Status: spec | Owner: TBD
+> Status: done | Owner: codex | Completed: 2026-04-20
 
 ## Why
 
-F001 当前只支持 `claude -p` 作为 Agent 调用源，每个 Agent 绑定同一底层工具，无法差异化选择。
+F001 早期只支持 `claude -p` 作为 Agent 调用源，所有 Agent 绑定同一底层工具，无法按 Agent 维度切换 provider、模型和 provider 特定参数。
 
-**我们想要**：
-1. **接入 OpenCode**：支持 20+ 模型（OpenAI、Anthropic、Gemini、Ollama、本地模型等），一套接口切换全生态
-2. **Agent 级别配置**：每个 Agent 可独立选择 provider 和模型参数
+本期目标：
+1. 接入 `OpenCode`，让系统可以在 Claude Code / OpenCode 之间按 Agent 级别切换
+2. 给每个 Agent 暴露独立的 provider / model / thinking 配置
+3. 把这些配置接到真实运行时，而不是只停留在设置页
 
 ## What
 
-- 新增 `streamOpenCode()`，与 `streamClaudeCode()` 共用 `ClaudeEvent` 类型
-- 统一 Provider 抽象接口（`Provider.stream()`），新增 provider 无需修改调用方
-- `backend/src/config/agents.ts` 集中管理每个 Agent 的 provider + providerOpts
-- **系统级 Agent 配置页面**：前端独立路由 `/settings/agents`，集中管理所有 Agent 的 provider 和模型参数
+- 新增 `streamOpenCodeProvider()`，与 `streamClaudeCodeProvider()` 共用统一 `ClaudeEvent` 类型
+- 统一 Provider 抽象接口（`getProvider()` factory），新增 provider 无需修改调用方
+- Agent 配置持久化到 `agents` 表，Provider 配置持久化到 `providers` 表；首次启动只 seed 一次
+- 系统级配置页面支持 `/settings/agents`、`/settings/providers`、`/settings/scenes`
+- `provider.defaultModel` 与 `agent.providerOpts.model` 都会透传到真实 CLI 命令
 
 ## Agent 配置页面
 
 ### 路由与布局
 
-```
+```text
 /settings/agents
-├── AgentCard (每个 Agent 一张卡片)
+├── Agent 列表
 │   ├── Agent 名称 + 角色 Badge
 │   ├── Provider 选择器 (claude-code | opencode)
-│   ├── 模型输入框 (providerOpts.model)
+│   ├── 模型输入框 (providerOpts.model，可为空表示跟随 Provider 默认模型)
 │   ├── Thinking 开关
 │   └── 保存按钮
 └── + 新增 Agent 按钮
@@ -42,194 +45,122 @@ F001 当前只支持 `claude -p` 作为 Agent 调用源，每个 Agent 绑定同
 
 ### 后端 API
 
-```
-GET  /api/agents          → 返回 AGENT_CONFIGS 列表
+```text
+GET  /api/agents          → 返回 agents 表中的 Agent 列表
 PUT  /api/agents/:id      → 更新指定 Agent 配置
 POST /api/agents          → 新增 Agent
-DELETE /api/agents/:id    → 删除 Agent（仅限非 HOST 角色）
+DELETE /api/agents/:id    → 删除 Agent（仅限非 MANAGER 角色，当前主线实际均为 WORKER）
 ```
 
 ### 数据流
 
-```
+```text
 前端 /settings/agents
   → GET /api/agents
-  → AgentConfig[] (后端从 agents.ts 读写，持久化为 JSON 文件)
+  → AgentConfig[]（SQLite 真相源）
 
-讨论室创建时:
-  前端 GET /api/agents → 展示 Agent 列表（带 provider badge）
-  后端 streamingCallAgent → 读取 agentConfig.provider → 路由到对应 Provider
+讨论室创建/执行时:
+  前端 GET /api/agents → 展示 Agent 列表（带 provider / model 信息）
+  后端 streamingCallAgent → 读取 agentConfig.provider / providerOpts → 路由到对应 Provider
 ```
 
 ## OpenCode CLI 输出格式
 
-测试版本：**1.2.27**，路径 `~/.opencode/bin/opencode`
+测试环境确认过 `opencode run --help` 支持：
 
-### `opencode run --format json` — NDJSON 事件类型
-
-```
-step_start   → {type, timestamp, sessionID, part: {id, messageID, type, snapshot}}
-reasoning    → {type, timestamp, sessionID, part: {id, messageID, type:"reasoning", text}}
-text         → {type, timestamp, sessionID, part: {id, messageID, type:"text", text}}
-tool_use     → {type, timestamp, sessionID, part: {id, messageID, type:"tool_use", ...}}
-tool_result  → {type, timestamp, sessionID, part: {id, messageID, type:"tool_result", ...}}
-step_finish  → {type, timestamp, sessionID, part: {type:"step-finish", reason, cost, tokens}}
-error        → {type, timestamp, sessionID, part: {type:"error", error}}
-```
-
-关键选项：
-- `--format json` — 输出 NDJSON 行
-- `--thinking` — 开启推理过程输出（`reasoning` 事件）
-- `--continue` / `-c` — 继续上一 session
-- `--session <id>` — 继续指定 session
-- `--model <provider/model>` — 指定模型
-- `--dir <path>` — 指定工作目录
-
-### `opencode serve` — Headless Server
-
-```
-opencode serve --port 4096 --hostname 127.0.0.1
-```
-启动 HTTP server，支持 attach 模式进行流式交互（WebSocket）。可作为长期 running agent 的替代方案。
-
-## 实现方案
-
-### 方案 A：subprocess spawn（推荐）
-
-直接 spawn `opencode run --format json --thinking -- <prompt>`，逐行解析 NDJSON，映射到 `ClaudeEvent` 类型。
-
-**优点**：无状态，每次调用独立，兼容现有 `callAgentWithStreaming` 接口
-**缺点**：冷启动有 CLI 初始化开销
-
-### 方案 B：serve + attach
-
-启动 `opencode serve` 为长期进程，通过 HTTP attach 获取流式事件。
-
-**优点**：session 复用，冷启动更快
-**缺点**：需要管理 server 生命周期，增加复杂度
-
-**建议**：先用方案 A，serve 模式作为后续优化方向。
-
-## 事件映射（OpenCode → ClaudeEvent）
-
-| OpenCode event type | ClaudeEvent type | 备注 |
-|---|---|---|
-| `step_start` | `start` | 提取 messageId |
-| `reasoning` | `thinking_delta` | `part.text` → `thinking` |
-| `text` | `delta` | `part.text` → `text` |
-| `step_finish` | `end` | 从 `part.tokens` / `part.cost` 提取 |
-| `error` | `error` | |
+- `--format json`
+- `--thinking`
+- `--session <id>`
+- `-m, --model <provider/model>`
+- `--dir <path>`
 
 ## Provider 抽象与配置
 
 ### 统一 Provider 接口
-
-每个 Provider 实现相同签名，调用方无感知底层 CLI：
 
 ```typescript
 type ClaudeEvent =
   | { type: 'start'; agentId: string; timestamp: number; messageId: string }
   | { type: 'delta'; agentId: string; text: string }
   | { type: 'thinking_delta'; agentId: string; thinking: string }
+  | { type: 'tool_use'; agentId: string; toolName: string; toolInput: Record<string, unknown> }
   | { type: 'end'; agentId: string; duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number }
   | { type: 'error'; agentId: string; message: string }
 
-interface Provider {
-  name: 'claude-code' | 'opencode' | 'ollama' | ...   // 唯一标识
-  stream(prompt: string, agentId: string, opts?: Record<string, unknown>): AsyncGenerator<ClaudeEvent>
-}
+type StreamFn = (
+  prompt: string,
+  agentId: string,
+  opts?: Record<string, unknown>,
+) => AsyncGenerator<ClaudeEvent, void, undefined>
 ```
 
 ### Agent 级别 Provider 配置
-
-在 `rooms.ts` 的讨论室创建流程中，每个 Agent 可指定自己的 provider：
 
 ```typescript
 interface AgentConfig {
   id: string
   name: string
-  role: 'HOST' | 'RESEARCHER' | 'DEBATER'
-  provider: ProviderName     // 'claude-code' | 'opencode'
-  providerOpts?: {           // provider 特定参数
-    model?: string           // opencode: provider/model
-    thinking?: boolean       // opencode: 是否输出 reasoning
-    // 未来扩展: ollama host, ollama model, etc.
+  role: 'MANAGER' | 'WORKER'
+  provider: 'claude-code' | 'opencode'
+  providerOpts: {
+    model?: string
+    thinking?: boolean
   }
 }
 ```
 
 ### 配置存储位置
 
-方案：在 `backend/src/config/agents.ts`（或 `.json`）集中管理：
+当前实现以 SQLite 为真相源：
 
-```typescript
-// backend/src/config/agents.ts
-export const AGENT_CONFIGS: Record<string, AgentConfig> = {
-  'claude-sonnet': {
-    id: 'claude-sonnet',
-    name: 'Sonnet',
-    role: 'HOST',
-    provider: 'claude-code',
-    providerOpts: {},
-  },
-  'claude-opus': {
-    id: 'claude-opus',
-    name: 'Opus',
-    role: 'RESEARCHER',
-    provider: 'opencode',
-    providerOpts: { model: 'anthropic/claude-sonnet-4-7', thinking: true },
-  },
-  'gemini': {
-    id: 'gemini',
-    name: 'Gemini',
-    role: 'DEBATER',
-    provider: 'opencode',
-    providerOpts: { model: 'google/gemini-2-5-pro', thinking: false },
-  },
-}
+- `agents` 表保存 Agent 的 provider / providerOpts
+- `providers` 表保存 CLI 路径、默认模型、API Key、超时等 Provider 配置
+
+运行时模型选择策略：
+
+```text
+agent.providerOpts.model ?? provider.defaultModel
 ```
 
-前端在创建讨论室时读取 `AGENT_CONFIGS`，展示每个 Agent 使用的模型和 provider。
+如果 Agent 自己配置了模型，优先使用 Agent 覆盖；否则回退到 Provider 默认模型。两者都会透传到实际 CLI：
+
+```text
+claude -p ... --model <model>
+opencode run -m <provider/model> ...
+```
 
 ### 初始化时的 Provider 路由
 
-在 `stateMachine.ts` 的 `streamingCallAgent` 中：
-
 ```typescript
-import { CLAUDE_CODE_PROVIDER, OPENCODE_PROVIDER } from './providers/index.js'
-
-const provider = getProvider(agentConfig.provider)  // factory lookup
-const gen = provider.stream(prompt, agentId, agentConfig.providerOpts)
-for await (const event of gen) { /* 统一处理 */ }
+const provider = getProvider(agentConfig.provider)
+const gen = provider(prompt, agentId, {
+  ...agentConfig.providerOpts,
+  sessionId,
+  workspace,
+})
 ```
 
 ## Acceptance Criteria
 
-- [ ] AC-1: `streamOpenCode(prompt, agentId)` 成功解析 opencode NDJSON 输出
-- [ ] AC-2: `reasoning` 事件映射到 `thinking_delta`，可正常渲染推理过程
-- [ ] AC-3: `callAgentWithStreaming` 可同时支持 claude 和 opencode（通过 provider 参数切换）
-- [ ] AC-4: 错误事件（non-zero exit、stderr）正确抛出为异常
-- [ ] AC-5: 每个 Agent 可在配置中独立指定 provider 和 providerOpts
-- [ ] AC-6: 新增 Provider 只需实现 `stream()` 接口，无需修改调用方
-- [ ] AC-7: `/settings/agents` 页面可查看、编辑、保存、新增、删除 Agent 配置
-- [ ] AC-8: 配置变更实时生效（后端重新读取配置）
-
-## Dependencies
-
-- F001 状态机框架（backend/src/services/agentCaller.ts）
-- opencode CLI 1.2.27+ 已安装于 `~/.opencode/bin/opencode`
+- [x] AC-1: `streamOpenCode(prompt, agentId)` 成功解析 opencode NDJSON 输出
+- [x] AC-2: `reasoning` 事件映射到 `thinking_delta`，可正常渲染推理过程
+- [x] AC-3: `callAgentWithStreaming` 可同时支持 claude 和 opencode（通过 provider 参数切换）
+- [x] AC-4: 错误事件（non-zero exit、stderr）正确抛出为异常
+- [x] AC-5: 每个 Agent 可在配置中独立指定 provider 和 providerOpts
+- [x] AC-6: 新增 Provider 只需实现 `stream()` 接口，无需修改调用方
+- [x] AC-7: `/settings/agents` 页面可查看、编辑、保存、新增、删除 Agent 配置
+- [x] AC-8: 配置变更实时生效（后端重新读取配置）
 
 ## Risk
 
-- opencode 未来版本可能更改 NDJSON 事件格式 → 用版本检测做兼容
-- `--thinking` flag 可能影响某些模型的输出行为 → 默认开启，可配置关闭
-- 不同 provider 的 cost 单位不一致 → 统一归一化为 USD，前端仅显示
+- OpenCode 的 NDJSON 事件格式未来可能变化，需要继续靠解析测试兜底
+- 不同 provider 的 cost 口径不完全一致，前端只消费归一化后的字段
 
-## Open Questions
+## Changelog
 
-1. ~~是否需要 session 复用（方案 B）？还是每次 spawn 独立进程？~~ 选方案 A（每次 spawn）
-2. tool_use / tool_result 事件是否需要转发到前端渲染？暂不实现，后续按需扩展
-3. ~~前端是否需要暴露模型选择器？~~ 改为系统级配置页面 `/settings/agents`
-4. OpenCode 的 cost 字段单位是否与 claude 一致？→ 需实测后确认
-5. 配置用 `.ts` 还是 `.json`？→ **JSON 文件**，后端启动时加载，支持运行时热修改
-6. 配置持久化：JSON 文件存储在 `backend/config/agents.json`，由后端 API 读写
+- 2026-04-20: 完成 Agent 级模型配置闭环。`provider.defaultModel` 与 `agent.providerOpts.model` 会透传到 `claude` / `opencode` CLI；Agent 设置页新增模型输入框；新增 `/settings/[tab]` 路由以支持 `/settings/agents`、`/settings/providers`、`/settings/scenes`。
+
+## Verification
+
+- `pnpm --dir backend exec vitest run tests/providerToolUse.test.ts tests/agentModels.test.ts tests/settingsTabs.test.ts tests/agents.http.test.ts`
+- `pnpm --dir frontend build`

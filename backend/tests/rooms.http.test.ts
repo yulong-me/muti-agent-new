@@ -106,15 +106,22 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     vi.clearAllMocks();
   });
 
-  function postJson(path: string, body: object): Promise<{ status: number; data: Record<string, unknown> }> {
+  function requestJson(
+    method: string,
+    path: string,
+    body?: object,
+  ): Promise<{ status: number; data: Record<string, unknown> }> {
     return new Promise((resolve) => {
-      const bodyStr = JSON.stringify(body);
+      const bodyStr = body ? JSON.stringify(body) : '';
       const options: http.RequestOptions = {
         hostname: '127.0.0.1',
         port: serverPort,
         path,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) },
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+        },
       };
       const req = http.request(options, (res) => {
         const chunks: Buffer[] = [];
@@ -127,7 +134,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
         });
       });
       req.on('error', (e) => resolve({ status: 0, data: { error: String(e) } }));
-      req.write(bodyStr);
+      if (bodyStr) req.write(bodyStr);
       req.end();
     });
   }
@@ -152,7 +159,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     };
     vi.mocked(store.get).mockReturnValue(mockRoom);
 
-    const result = await postJson('/api/rooms/room-busy/messages', {
+    const result = await requestJson('POST', '/api/rooms/room-busy/messages', {
       content: '@测试员 hello',
       toAgentId: 'worker-1',
     });
@@ -181,7 +188,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     };
     vi.mocked(store.get).mockReturnValue(mockRoom);
 
-    const result = await postJson('/api/rooms/room-idle/messages', {
+    const result = await requestJson('POST', '/api/rooms/room-idle/messages', {
       content: '@测试员 hello',
       toAgentId: 'worker-1',
     });
@@ -192,7 +199,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
   _skipIfNoPort('returns 404 when room does not exist', async () => {
     vi.mocked(store.get).mockReturnValue(undefined);
 
-    const result = await postJson('/api/rooms/nonexistent/messages', {
+    const result = await requestJson('POST', '/api/rooms/nonexistent/messages', {
       content: '@测试员 hello',
       toAgentId: 'worker-1',
     });
@@ -220,7 +227,7 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
       tags: ['dev'],
     });
 
-    const result = await postJson('/api/rooms', {
+    const result = await requestJson('POST', '/api/rooms', {
       topic: '  实现登录态持久化  ',
       workerIds: ['worker-1'],
       sceneId: 'software-development',
@@ -235,6 +242,55 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     expect(roomsRepo.create).toHaveBeenCalledWith(expect.objectContaining({
       topic: '实现登录态持久化',
       sceneId: 'software-development',
+    }));
+  });
+
+  _skipIfNoPort('PATCH /api/rooms/:id returns scene effective depth when clearing room override', async () => {
+    vi.mocked(store.get).mockReturnValue({
+      id: 'room-depth',
+      topic: 'Test',
+      state: 'RUNNING' as const,
+      agents: [],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 2,
+      a2aCallChain: [],
+      sceneId: 'software-development',
+      maxA2ADepth: 3,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    vi.mocked(roomsRepo.update).mockReturnValue({
+      id: 'room-depth',
+      topic: 'Test',
+      state: 'RUNNING' as const,
+      agents: [],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 2,
+      a2aCallChain: [],
+      sceneId: 'software-development',
+      maxA2ADepth: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    vi.mocked(scenesRepo.get).mockReturnValue({
+      id: 'software-development',
+      name: '软件开发',
+      prompt: '软件开发场景',
+      builtin: true,
+      maxA2ADepth: 10,
+    });
+
+    const result = await requestJson('PATCH', '/api/rooms/room-depth', {
+      maxA2ADepth: null,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.data).toHaveProperty('maxA2ADepth', null);
+    expect(result.data).toHaveProperty('effectiveMaxDepth', 10);
+    expect(store.update).toHaveBeenCalledWith('room-depth', expect.objectContaining({
+      maxA2ADepth: null,
     }));
   });
 });

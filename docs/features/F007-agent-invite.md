@@ -8,7 +8,7 @@ created: 2026-04-14
 
 # F007: 讨论中邀请 Agent 入群
 
-> Status: spec | Owner: TBD
+> Status: done | Owner: codex
 
 ## Why
 
@@ -158,13 +158,14 @@ interface AgentJoinedMessage extends Message {
 - [x] AC-5: Socket 实时推送，其他在线用户也能看到新 agent 加入
 - [x] AC-6: 已在 room 中的 agent 不出现在邀请列表
 - [x] AC-7: 已结束的 room（DONE）不允许邀请新 agent
-- [ ] AC-8: 新加入的 agent 回填当前 room 完整消息历史，可从上下文继续响应
+- [x] AC-8: 新加入的 agent 回填当前 room 完整消息历史，可从上下文继续响应
 - [x] AC-9: 后端强制校验：追加的 agent 必须为 WORKER 角色，拒绝 MANAGER
 
 ## Changelog
 
 - 2026-04-14: 初始实现（AC-1~7, AC-9）
 - 2026-04-14: 补充 enabled 校验、消息去重、文档与实现对齐（移除 variant）
+- 2026-04-20: 新加入专家首次真正被调用时注入完整 room 历史；已有专家维持最近窗口
 
 ## Dependencies
 

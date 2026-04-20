@@ -46,6 +46,7 @@ interface MessageListProps {
   onRetryFailedMessage: (error: AgentRunErrorEvent) => void
   onRestoreFailedInput: (content?: string) => void
   onCopyFailedPrompt: (content?: string) => void
+  onTryAnotherAgent: (error: AgentRunErrorEvent, nextAgentId: string) => void
 }
 
 interface MessageBubbleProps {
@@ -64,6 +65,7 @@ interface MessageBubbleProps {
   onRetryFailedMessage: (error: AgentRunErrorEvent) => void
   onRestoreFailedInput: (content?: string) => void
   onCopyFailedPrompt: (content?: string) => void
+  onTryAnotherAgent: (error: AgentRunErrorEvent, nextAgentId: string) => void
 }
 
 export const MessageList = memo(function MessageList({
@@ -83,6 +85,7 @@ export const MessageList = memo(function MessageList({
   onRetryFailedMessage,
   onRestoreFailedInput,
   onCopyFailedPrompt,
+  onTryAnotherAgent,
 }: MessageListProps) {
   const [hoveredToolCall, setHoveredToolCall] = useState<string | null>(null)
   const [expandedToolCall, setExpandedToolCall] = useState<string | null>(null)
@@ -116,6 +119,7 @@ export const MessageList = memo(function MessageList({
           onRetryFailedMessage={onRetryFailedMessage}
           onRestoreFailedInput={onRestoreFailedInput}
           onCopyFailedPrompt={onCopyFailedPrompt}
+          onTryAnotherAgent={onTryAnotherAgent}
         />
       ))}
 
@@ -128,6 +132,10 @@ export const MessageList = memo(function MessageList({
             onRetry={() => onRetryFailedMessage(roomError)}
             onRestore={() => onRestoreFailedInput(roomError.originalUserContent)}
             onCopy={() => onCopyFailedPrompt(roomError.originalUserContent)}
+            alternateAgents={agents
+              .filter(agent => agent.role === 'WORKER' && agent.id !== (roomError.toAgentId ?? roomError.agentId))
+              .map(agent => ({ id: agent.id, name: agent.name }))}
+            onTryAnotherAgent={(nextAgentId) => onTryAnotherAgent(roomError, nextAgentId)}
           />
         </div>
       ))}
@@ -186,6 +194,7 @@ const MessageBubble = memo(function MessageBubble({
   onRetryFailedMessage,
   onRestoreFailedInput,
   onCopyFailedPrompt,
+  onTryAnotherAgent,
 }: MessageBubbleProps) {
   const isUser = msg.agentRole === 'USER'
   const isSystem = msg.type === 'system'
@@ -199,6 +208,14 @@ const MessageBubble = memo(function MessageBubble({
     if (isUser) return []
     return extractMentions(msg.content, agentNames).filter(name => agentNameSet.has(name))
   }, [agentNameSet, agentNames, isUser, msg.content])
+  const alternateAgents = useMemo(
+    () => runError
+      ? Array.from(agentById.values())
+          .filter(agent => agent.role === 'WORKER' && agent.id !== (runError.toAgentId ?? runError.agentId))
+          .map(agent => ({ id: agent.id, name: agent.name }))
+      : [],
+    [agentById, runError],
+  )
 
   if (isUser) {
     const toRecipient = msg.toAgentId ? agentById.get(msg.toAgentId) : null
@@ -267,6 +284,8 @@ const MessageBubble = memo(function MessageBubble({
             onRetry={() => onRetryFailedMessage(runError)}
             onRestore={() => onRestoreFailedInput(runError.originalUserContent)}
             onCopy={() => onCopyFailedPrompt(runError.originalUserContent)}
+            alternateAgents={alternateAgents}
+            onTryAnotherAgent={(nextAgentId) => onTryAnotherAgent(runError, nextAgentId)}
           />
         </div>
       </div>
@@ -328,6 +347,8 @@ const MessageBubble = memo(function MessageBubble({
                 onRetry={() => onRetryFailedMessage(runError)}
                 onRestore={() => onRestoreFailedInput(runError.originalUserContent)}
                 onCopy={() => onCopyFailedPrompt(runError.originalUserContent)}
+                alternateAgents={alternateAgents}
+                onTryAnotherAgent={(nextAgentId) => onTryAnotherAgent(runError, nextAgentId)}
               />
             </div>
           )}

@@ -9,21 +9,27 @@ interface ErrorBubbleProps {
   error: AgentRunErrorEvent
   retryDisabled?: boolean
   restoreDisabled?: boolean
+  alternateAgents?: { id: string; name: string }[]
   onRetry?: () => void
   onRestore?: () => void
   onCopy?: () => void
+  onTryAnotherAgent?: (agentId: string) => void
 }
 
 export function ErrorBubble({
   error,
   retryDisabled = false,
   restoreDisabled = false,
+  alternateAgents = [],
   onRetry,
   onRestore,
   onCopy,
+  onTryAnotherAgent,
 }: ErrorBubbleProps) {
   const accent =
-    error.code === 'AGENT_TIMEOUT'
+    error.code === 'AGENT_TIMEOUT' && error.timeoutPhase === 'idle'
+      ? '#DC2626'
+      : error.code === 'AGENT_TIMEOUT'
       ? '#D97706'
       : error.code === 'AGENT_PROVIDER_ERROR'
       ? '#7C3AED'
@@ -45,6 +51,11 @@ export function ErrorBubble({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-[13px] font-bold text-ink">{error.title}</span>
             <span className="text-[11px] text-ink-soft">{error.agentName}</span>
+            {error.code === 'AGENT_TIMEOUT' && error.timeoutPhase === 'idle' && (
+              <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-500">
+                已保留部分输出
+              </span>
+            )}
           </div>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">{error.message}</p>
           <p className="mt-2 text-[10px] text-ink-soft/70 font-mono">TraceId: {error.traceId}</p>
@@ -83,6 +94,21 @@ export function ErrorBubble({
               </button>
             )}
           </div>
+          {error.originalUserContent && alternateAgents.length > 0 && onTryAnotherAgent && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-ink-soft">换个专家试试</span>
+              {alternateAgents.slice(0, 3).map(agent => (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => onTryAnotherAgent(agent.id)}
+                  className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-surface-muted"
+                >
+                  @{agent.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

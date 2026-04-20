@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Bot, Server, CheckCircle2, Trash2, Edit2, Save, Plus, Loader2, Play, XCircle, BrainCircuit } from 'lucide-react'
 import { API_URL } from '@/lib/api'
+import { mergeAgentModel, normalizeModelValue, resolveEffectiveAgentModel } from '@/lib/agentModels'
+import { type SettingsTab } from '../lib/settingsTabs'
 
 const API = API_URL;
 
@@ -45,8 +47,12 @@ const PROVIDER_COLORS: Record<ProviderName, string> = {
 
 // ── Agent Row ──────────────────────────────────────────────────────────────────
 
-function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
-  agent: AgentConfig; onSave: (a: AgentConfig) => Promise<void>; onDeleteRequest: (agent: AgentConfig) => void; saving: boolean
+function AgentRow({ agent, providers, onSave, onDeleteRequest, saving }: {
+  agent: AgentConfig
+  providers: Record<string, ProviderConfig>
+  onSave: (a: AgentConfig) => Promise<void>
+  onDeleteRequest: (agent: AgentConfig) => void
+  saving: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<AgentConfig>(agent)
@@ -60,6 +66,9 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
   }
   function opt(k: string, v: unknown) {
     setForm(f => ({ ...f, providerOpts: { ...f.providerOpts, [k]: v } }))
+  }
+  function modelInput(value: string) {
+    setForm(f => ({ ...f, providerOpts: mergeAgentModel(f.providerOpts, value) }))
   }
   async function handleSave() {
     setSaveError('')
@@ -77,6 +86,8 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
 
   const isHost = agent.role === 'MANAGER'
   const pc = PROVIDER_COLORS[agent.provider]
+  const effectiveModel = resolveEffectiveAgentModel(agent.provider, agent.providerOpts, providers)
+  const formModel = normalizeModelValue(form.providerOpts.model) ?? ''
 
   if (!editing) {
     return (
@@ -98,6 +109,9 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
         </td>
         <td className="px-4 py-3.5">
           <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${pc}`}>{agent.provider}</span>
+        </td>
+        <td className="px-4 py-3.5">
+          <span className="text-[11px] text-ink-soft font-mono">{effectiveModel ?? '默认'}</span>
         </td>
         <td className="px-4 py-3.5">
           <div className="flex flex-wrap gap-1">
@@ -127,7 +141,7 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
 
   return (
     <tr className="border-b border-line bg-white/[0.03]">
-      <td colSpan={5} className="px-4 py-4">
+      <td colSpan={6} className="px-4 py-4">
         <div className="flex flex-col gap-4">
           <span className="text-[13px] font-bold text-ink">{agent.name} <span className="text-ink-soft font-normal ml-1">编辑中…</span></span>
           <div className="grid grid-cols-2 gap-3">
@@ -146,6 +160,15 @@ function AgentRow({ agent, onSave, onDeleteRequest, saving }: {
               <input value={form.tags.join(', ')}
                 onChange={e => field('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))}
                 className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50"/>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">模型（可选）</label>
+              <input
+                value={formModel}
+                onChange={e => modelInput(e.target.value)}
+                placeholder={providers[form.provider]?.defaultModel || '使用 Provider 默认模型'}
+                className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
             </div>
             <div>
               <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">推理</label>
@@ -516,8 +539,8 @@ function SceneRow({ scene, onUpdate, onDelete }: {
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
-export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }: { isOpen: boolean; onClose: () => void; initialTab?: 'agent' | 'provider' | 'scene' }) {
-  const [tab, setTab] = useState<'agent' | 'provider' | 'scene'>(initialTab)
+export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }: { isOpen: boolean; onClose: () => void; initialTab?: SettingsTab }) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({})
   const [scenes, setScenes] = useState<SceneConfig[]>([])
@@ -527,10 +550,23 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<AgentConfig | null>(null)
   const [addOpen, setAddOpen] = useState(false)
-  const [addForm, setAddForm] = useState({ id: '', name: '', roleLabel: '', provider: 'claude-code' as ProviderName, systemPrompt: '', tags: [] as string[] })
+  const [addForm, setAddForm] = useState({
+    id: '',
+    name: '',
+    roleLabel: '',
+    provider: 'claude-code' as ProviderName,
+    model: '',
+    systemPrompt: '',
+    tags: [] as string[],
+  })
   const [addError, setAddError] = useState('')
   const router = useRouter()
   const backdropRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    setTab(initialTab)
+  }, [initialTab, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -593,13 +629,27 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   function handleAddAgent() {
     if (!addForm.id || !addForm.name) { setAddError('ID 和名称必填'); return }
     setSaving(true)
-    fetch(`${API}/api/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...addForm, role: 'WORKER', providerOpts: { thinking: true }, enabled: true }) })
+    fetch(`${API}/api/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: addForm.id,
+        name: addForm.name,
+        roleLabel: addForm.roleLabel,
+        provider: addForm.provider,
+        role: 'WORKER',
+        providerOpts: mergeAgentModel({ thinking: true }, addForm.model),
+        systemPrompt: addForm.systemPrompt,
+        tags: addForm.tags,
+        enabled: true,
+      }),
+    })
       .then(r => {
         if (!r.ok) return r.json().then(err => { throw new Error(err.error || `HTTP ${r.status}`) })
         return r.json()
       })
       .then(a => {
-        setAgents(prev => [...prev, a]); setAddForm({ id: '', name: '', roleLabel: '', provider: 'claude-code', systemPrompt: '', tags: [] }); setAddOpen(false); setAddError(''); setSaving(false)
+        setAgents(prev => [...prev, a]); setAddForm({ id: '', name: '', roleLabel: '', provider: 'claude-code', model: '', systemPrompt: '', tags: [] }); setAddOpen(false); setAddError(''); setSaving(false)
       })
       .catch(e => { setAddError(e.message); setSaving(false) })
   }
@@ -667,6 +717,12 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                           {(Object.keys(PROVIDER_LABELS) as ProviderName[]).map(p => <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>)}
                         </select>
                       </div>
+                      <div>
+                        <label htmlFor="add-agent-model" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">模型（可选）</label>
+                        <input id="add-agent-model" value={addForm.model} onChange={e => setAddForm(f => ({ ...f, model: e.target.value }))}
+                          className="w-full settings-input rounded-xl px-3 py-2 text-[13px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-ink-soft/40"
+                          placeholder={providers[addForm.provider]?.defaultModel || '使用 Provider 默认模型'}/>
+                      </div>
                     </div>
                     <div>
                       <label htmlFor="add-agent-prompt" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">System Prompt</label>
@@ -696,13 +752,14 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
                       <tr className="border-b border-line bg-white/[0.02]">
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">名称</th>
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">Provider</th>
+                        <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">模型</th>
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">标签</th>
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">推理</th>
                         <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase text-right">操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {agents.map(a => <AgentRow key={a.id} agent={a} onSave={handleAgentSave} onDeleteRequest={setPendingDelete} saving={saving}/>)}
+                      {agents.map(a => <AgentRow key={a.id} agent={a} providers={providers} onSave={handleAgentSave} onDeleteRequest={setPendingDelete} saving={saving}/>)}
                     </tbody>
                   </table>
                 </div>

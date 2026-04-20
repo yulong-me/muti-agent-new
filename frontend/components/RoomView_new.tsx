@@ -12,10 +12,21 @@ import {
 } from 'lucide-react'
 import {
   extractUserMentionsFromAgents,
-  type Agent, type Message, type DiscussionState, type ToolCall,
+  type Agent, type Message, type DiscussionState, type OutgoingQueueItem, type ToolCall,
 } from '../lib/agents'
+import {
+  createOutgoingQueueItem,
+  findRecallableOutgoingQueueItem,
+  getNextQueuedOutgoingItem,
+  isRoomBusy as computeIsRoomBusy,
+  markOutgoingQueueItemDispatching,
+  recallOutgoingQueueItem,
+  removeOutgoingQueueItem,
+} from '../lib/outgoingQueue'
+import { rewriteMessageForDifferentAgent } from '../lib/errorRecovery'
 import { error as logError, telemetry, setRoomId } from '../lib/logger'
 import CreateRoomModal from './CreateRoomModal'
+import { OutgoingMessageQueue } from './OutgoingMessageQueue'
 import SettingsModal from './SettingsModal'
 import { RoomListSidebarDesktop, RoomListSidebarMobile } from './RoomListSidebar'
 import { AgentPanel } from './AgentPanel'
@@ -33,14 +44,14 @@ function DepthSwitcher({ value, onChange, currentDepth, maxDepth }: {
   maxDepth: number
 }) {
   const [open, setOpen] = useState(false)
+  const maxDepthLabel = maxDepth === 0 ? '∞' : `${maxDepth}层`
   const options: { label: string; value: number | null; title: string }[] = [
+    { label: `跟随场景 (${maxDepthLabel})`, value: null, title: `使用当前场景默认协作深度：${maxDepthLabel}` },
     { label: '浅 (3层)', value: 3, title: '协作深度 3 层' },
-    { label: '中 (5层)', value: 5, title: '协作深度 5 层（默认）' },
+    { label: '中 (5层)', value: 5, title: '协作深度 5 层' },
     { label: '深 (10层)', value: 10, title: '协作深度 10 层' },
     { label: '∞ 无限', value: 0, title: '无深度限制' },
   ]
-  // null means "inherit scene default" — we treat null as 5 (the scene default) for display
-  const effective = value ?? 5
   // remaining = maxDepth - currentDepth (decrements from maxDepth toward 0)
   const remaining = maxDepth === 0 ? '∞' : Math.max(0, maxDepth - currentDepth)
 
@@ -68,7 +79,7 @@ function DepthSwitcher({ value, onChange, currentDepth, maxDepth }: {
               title={opt.title}
               onClick={() => { onChange(opt.value); setOpen(false) }}
               className={`w-full text-left px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                effective === opt.value
+                value === opt.value
                   ? 'bg-accent text-white'
                   : 'text-ink hover:bg-surface-muted'
               }`}
@@ -101,6 +112,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
+  const [outgoingQueue, setOutgoingQueue] = useState<OutgoingQueueItem[]>([])
+  const [composerDraft, setComposerDraft] = useState('')
   const [messageErrorMap, setMessageErrorMap] = useState<Record<string, AgentRunErrorEvent>>({})
   const [orphanErrors, setOrphanErrors] = useState<AgentRunErrorEvent[]>([])
   // F017: A2A depth config (null = inherit scene default)
@@ -138,9 +151,21 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const streamingCountRef = useRef(0)
   const streamingAgentIdsRef = useRef<Set<string>>(new Set())
+  const outgoingQueueRef = useRef<OutgoingQueueItem[]>([])
+  const dispatchingQueueItemIdRef = useRef<string | null>(null)
+  const isDrainingQueueRef = useRef(false)
+  const queuedDispatchPendingRef = useRef(false)
   const socketRef = useRef<Socket | null>(null)
   const agentsRef = useRef<Agent[]>([])
   const sendErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const roomBusy = useMemo(() => computeIsRoomBusy({
+    streamingCount: streamingAgentIds.size,
+    agents,
+  }), [agents, streamingAgentIds])
+  const recallableQueueItemId = useMemo(
+    () => findRecallableOutgoingQueueItem(outgoingQueue)?.id ?? null,
+    [outgoingQueue],
+  )
 
   const scrollToBottom = useCallback(() => {
     if (userScrolledRef.current) return
@@ -178,6 +203,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     setState('RUNNING')
     setReport('')
     setStreamingAgentIds(new Set())
+    setOutgoingQueue([])
+    setComposerDraft('')
     setMessageErrorMap({})
     setOrphanErrors([])
     // Reset all streaming refs so previous room's in-flight messages don't bleed in
@@ -186,6 +213,10 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     streamingToolCallsRef.current.clear()
     streamingCountRef.current = 0
     streamingAgentIdsRef.current.clear()
+    outgoingQueueRef.current = []
+    dispatchingQueueItemIdRef.current = null
+    isDrainingQueueRef.current = false
+    queuedDispatchPendingRef.current = false
     userScrolledRef.current = false
     setShowScrollBtn(false)
   }, [roomId])
@@ -211,6 +242,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
     socket.on('stream_start', (data: any) => {
       if (data.roomId !== roomId) return
+      queuedDispatchPendingRef.current = false
       streamingCountRef.current++
       streamingAgentIdsRef.current.add(data.agentId)
       setStreamingAgentIds(new Set(streamingAgentIdsRef.current))
@@ -270,6 +302,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
     socket.on('room_error_event', (data: any) => {
       if (data.roomId !== roomId) return
+      queuedDispatchPendingRef.current = false
       const roomError = data.error as AgentRunErrorEvent
       if (roomError.messageId) {
         setMessageErrorMap(prev => ({ ...prev, [roomError.messageId as string]: roomError }))
@@ -305,6 +338,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
     socket.on('stream_end', (data: any) => {
       if (data.roomId !== roomId) return
+      queuedDispatchPendingRef.current = false
       streamingCountRef.current = Math.max(0, streamingCountRef.current - 1)
       streamingAgentIdsRef.current.delete(data.agentId)
       setStreamingAgentIds(new Set(streamingAgentIdsRef.current))
@@ -438,6 +472,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         }
         const nowIdle = streamingAgentIdsRef.current.size === 0 &&
           !newAgents.some((a: Agent) => a.status === 'thinking' || a.status === 'waiting')
+        if (!nowIdle) {
+          queuedDispatchPendingRef.current = false
+        }
         if (recoveredMissedStreamEnd) {
           // Sync React state with the refs we just cleaned up
           streamingCountRef.current = streamingMessagesRef.current.size
@@ -528,6 +565,158 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     }
   }, [])
 
+  const postPreparedContent = useCallback(async ({
+    content,
+    recipientId,
+    targetName,
+    source,
+  }: {
+    content: string
+    recipientId: string
+    targetName: string
+    source: 'direct' | 'queue'
+  }): Promise<{ ok: true } | { ok: false; status: number; errorText: string }> => {
+    telemetry('ui:msg:send', {
+      roomId,
+      source,
+      contentLength: content.length,
+      contentSnippet: content.length > 80 ? `${content.slice(0, 80)}…` : content,
+      toAgentId: recipientId,
+      toAgentName: targetName,
+    })
+    const res = await fetch(`${API}/api/rooms/${roomId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, toAgentId: recipientId }),
+    })
+    if (res.ok) return { ok: true }
+    return {
+      ok: false,
+      status: res.status,
+      errorText: await res.text(),
+    }
+  }, [roomId])
+
+  const enqueuePreparedMessage = useCallback((content: string, toAgentId: string, toAgentName: string) => {
+    const item = createOutgoingQueueItem({ content, toAgentId, toAgentName })
+    setOutgoingQueue(prev => {
+      const next = [...prev, item]
+      outgoingQueueRef.current = next
+      return next
+    })
+  }, [])
+
+  const cancelQueuedItem = useCallback((itemId: string) => {
+    if (dispatchingQueueItemIdRef.current === itemId) return
+    setOutgoingQueue(prev => {
+      const next = removeOutgoingQueueItem(prev, itemId)
+      outgoingQueueRef.current = next
+      return next
+    })
+  }, [])
+
+  const recallQueuedItem = useCallback((itemId: string) => {
+    if (composerRef.current?.hasDraft()) {
+      showSendError('输入框里还有草稿，先处理当前内容再撤回队列消息')
+      composerRef.current?.focus()
+      return
+    }
+    setOutgoingQueue(prev => {
+      const recalled = recallOutgoingQueueItem(prev, itemId)
+      if (!recalled.recalledItem) return prev
+      outgoingQueueRef.current = recalled.items
+      composerRef.current?.setDraft(recalled.recalledItem.content)
+      composerRef.current?.focus()
+      return recalled.items
+    })
+  }, [showSendError])
+
+  const drainOutgoingQueue = useCallback(async () => {
+    if (!roomId || isDrainingQueueRef.current || queuedDispatchPendingRef.current) return
+    if (dispatchingQueueItemIdRef.current !== null) return
+
+    const busyNow = computeIsRoomBusy({
+      streamingCount: streamingAgentIdsRef.current.size,
+      agents: agentsRef.current,
+    })
+    if (busyNow) return
+
+    const nextItem = getNextQueuedOutgoingItem(outgoingQueueRef.current)
+    if (!nextItem) return
+
+    isDrainingQueueRef.current = true
+    dispatchingQueueItemIdRef.current = nextItem.id
+    setOutgoingQueue(prev => {
+      const next = markOutgoingQueueItemDispatching(prev, nextItem.id)
+      outgoingQueueRef.current = next
+      return next
+    })
+
+    try {
+      const result = await postPreparedContent({
+        content: nextItem.content,
+        recipientId: nextItem.toAgentId,
+        targetName: nextItem.toAgentName,
+        source: 'queue',
+      })
+
+      if (result.ok) {
+        queuedDispatchPendingRef.current = true
+        setOutgoingQueue(prev => {
+          const next = removeOutgoingQueueItem(prev, nextItem.id)
+          outgoingQueueRef.current = next
+          return next
+        })
+        return
+      }
+
+      logError('queue:dispatch_error', {
+        roomId,
+        itemId: nextItem.id,
+        status: result.status,
+        error: result.errorText,
+      })
+
+      if (result.status === 409) {
+        queuedDispatchPendingRef.current = true
+        setOutgoingQueue(prev => {
+          const next = prev.map(item => item.id === nextItem.id ? { ...item, status: 'queued' as const } : item)
+          outgoingQueueRef.current = next
+          return next
+        })
+        return
+      }
+
+      if (result.status === 400) {
+        setOutgoingQueue(prev => {
+          const next = removeOutgoingQueueItem(prev, nextItem.id)
+          outgoingQueueRef.current = next
+          return next
+        })
+        showSendError('队列消息发送失败：目标专家已不可用')
+        return
+      }
+
+      setOutgoingQueue(prev => {
+        const next = prev.map(item => item.id === nextItem.id ? { ...item, status: 'queued' as const } : item)
+        outgoingQueueRef.current = next
+        return next
+      })
+      showSendError('队列消息发送失败，请稍后重试')
+    } catch (error) {
+      logError('queue:dispatch_error', { roomId, itemId: nextItem.id, error: String(error) })
+      setOutgoingQueue(prev => {
+        const next = prev.map(item => item.id === nextItem.id ? { ...item, status: 'queued' as const } : item)
+        outgoingQueueRef.current = next
+        return next
+      })
+      showSendError('队列消息发送失败，请检查网络')
+    } finally {
+      dispatchingQueueItemIdRef.current = null
+      isDrainingQueueRef.current = false
+    }
+  }, [postPreparedContent, roomId, showSendError])
+
   const sendPreparedContent = useCallback(async (rawContent: string) => {
     if (!roomId || sending) return false
     const content = rawContent.trim()
@@ -543,35 +732,34 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     const recipientId = targetName
       ? agents.find(a => a.name === targetName)?.id ?? null
       : null
-    // F015 P1-fix: use ref to avoid stale closure — read streamingAgentIds live at call time
-    const busyNow = streamingAgentIdsRef.current.size > 0 || agents.some(a => a.status === 'thinking' || a.status === 'waiting')
-    if (busyNow) {
-      showSendError('房间忙碌中，请稍后再试')
+    if (!targetName || !recipientId) {
+      showSendError('未找到指定专家，请检查 @ 后的名字')
       return false
     }
-    setSending(true)
-    telemetry('ui:msg:send', {
-      roomId, contentLength: content.length,
-      contentSnippet: content.length > 80 ? content.slice(0, 80) + '…' : content,
-      toAgentId: recipientId,
-      toAgentName: targetName,
+    const busyNow = computeIsRoomBusy({
+      streamingCount: streamingAgentIdsRef.current.size,
+      agents: agentsRef.current,
     })
+    if (busyNow) {
+      enqueuePreparedMessage(content, recipientId, targetName)
+      return true
+    }
+    setSending(true)
     try {
-      const res = await fetch(`${API}/api/rooms/${roomId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, toAgentId: recipientId }),
+      const result = await postPreparedContent({
+        content,
+        recipientId,
+        targetName,
+        source: 'direct',
       })
-      if (!res.ok) {
-        const err = await res.text()
-        logError('msg:send_error', { roomId, status: res.status, error: err })
-        // 409 means room became busy concurrently — show error
-        if (res.status === 409) {
-          showSendError('房间忙碌中，请稍后再试')
-          return false
+      if (!result.ok) {
+        logError('msg:send_error', { roomId, status: result.status, error: result.errorText })
+        if (result.status === 409) {
+          queuedDispatchPendingRef.current = true
+          enqueuePreparedMessage(content, recipientId, targetName)
+          return true
         }
-        // F013: 400 means missing target; guide user to pick one
-        if (res.status === 400) {
+        if (result.status === 400) {
           showSendError('未找到指定专家，请检查 @ 后的名字')
         } else {
           showSendError('发送失败，请重试')
@@ -586,7 +774,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     } finally {
       setSending(false)
     }
-  }, [agentNames, agents, roomId, sending, showSendError])
+  }, [agentNames, agents, enqueuePreparedMessage, postPreparedContent, roomId, sending, showSendError])
 
   const restoreFailedInput = useCallback((content?: string) => {
     if (!content) return
@@ -608,9 +796,20 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     }
   }, [showSendError])
 
-  // F015: drain the outgoing queue when room becomes idle.
-  // Only sends ONE item per invocation; subsequent items are handled by
-  // the next stream_end / room_error / poll idle trigger.
+  useEffect(() => {
+    if (roomBusy) {
+      queuedDispatchPendingRef.current = false
+    }
+  }, [roomBusy])
+
+  useEffect(() => {
+    if (!roomId || roomBusy) return
+    if (queuedDispatchPendingRef.current) return
+    if (dispatchingQueueItemIdRef.current !== null) return
+    if (!getNextQueuedOutgoingItem(outgoingQueue)) return
+    void drainOutgoingQueue()
+  }, [drainOutgoingQueue, outgoingQueue, roomBusy, roomId])
+
   const retryFailedMessage = useCallback(async (roomError: AgentRunErrorEvent) => {
     if (!roomError.originalUserContent) return
     if (composerRef.current?.hasDraft()) {
@@ -629,6 +828,27 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const handleRetryFailedMessage = useCallback((error: AgentRunErrorEvent) => {
     void retryFailedMessage(error)
   }, [retryFailedMessage])
+  const handleTryAnotherAgent = useCallback((error: AgentRunErrorEvent, nextAgentId: string) => {
+    if (!error.originalUserContent) return
+    const nextAgent = agentsRef.current.find(agent => agent.id === nextAgentId)
+    if (!nextAgent) {
+      showSendError('未找到替代专家，请稍后重试')
+      return
+    }
+    if (composerRef.current?.hasDraft()) {
+      showSendError('输入框里还有草稿，先处理当前内容再改发其他专家')
+      composerRef.current?.focus()
+      return
+    }
+    const currentRecipientName = error.toAgentName ?? error.agentName
+    const rewritten = rewriteMessageForDifferentAgent(
+      error.originalUserContent,
+      currentRecipientName,
+      nextAgent.name,
+    )
+    composerRef.current?.setDraft(rewritten)
+    composerRef.current?.focus()
+  }, [showSendError])
   const handleCopyFailedPrompt = useCallback((content?: string) => {
     void copyFailedPrompt(content)
   }, [copyFailedPrompt])
@@ -703,16 +923,32 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                   currentDepth={currentA2ADepth}
                   maxDepth={displayMax}
                   onChange={async (newDepth) => {
+                    const prevMaxDepth = maxA2ADepth
+                    const prevEffectiveMaxDepth = effectiveMaxDepth
                     setMaxA2ADepth(newDepth)
+                    if (newDepth !== null) {
+                      setEffectiveMaxDepth(newDepth)
+                    }
                     try {
-                      await fetch(`${API}/api/rooms/${roomId}`, {
+                      const res = await fetch(`${API}/api/rooms/${roomId}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ maxA2ADepth: newDepth }),
                       })
+                      if (!res.ok) {
+                        throw new Error(`PATCH /api/rooms/${roomId} failed: ${res.status}`)
+                      }
+                      const data = await res.json()
+                      if (Object.prototype.hasOwnProperty.call(data, 'maxA2ADepth')) {
+                        setMaxA2ADepth(data.maxA2ADepth)
+                      }
+                      if (Object.prototype.hasOwnProperty.call(data, 'effectiveMaxDepth')) {
+                        setEffectiveMaxDepth(data.effectiveMaxDepth)
+                      }
                     } catch {
                       // revert on error
-                      setMaxA2ADepth(maxA2ADepth)
+                      setMaxA2ADepth(prevMaxDepth)
+                      setEffectiveMaxDepth(prevEffectiveMaxDepth)
                     }
                   }}
                 />
@@ -756,6 +992,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
             onRetryFailedMessage={handleRetryFailedMessage}
             onRestoreFailedInput={restoreFailedInput}
             onCopyFailedPrompt={handleCopyFailedPrompt}
+            onTryAnotherAgent={handleTryAnotherAgent}
           />
 
           {/* Action Area */}
@@ -769,17 +1006,28 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                 <Download className="w-4 h-4" /> 下载讨论报告
               </button>
             ) : roomId ? (
-              <RoomComposer
-                ref={composerRef}
-                roomId={roomId}
-                agents={agents}
-                lastActiveWorkerId={lastActiveWorkerId}
-                sending={sending}
-                sendError={sendError}
-                onSend={sendPreparedContent}
-                onSendError={showSendError}
-                onRecipientSelected={handleRecipientSelected}
-              />
+              <>
+                <OutgoingMessageQueue
+                  items={outgoingQueue}
+                  recallableItemId={recallableQueueItemId}
+                  inputHasDraft={composerDraft.trim().length > 0}
+                  onCancel={cancelQueuedItem}
+                  onRecall={recallQueuedItem}
+                />
+                <RoomComposer
+                  ref={composerRef}
+                  roomId={roomId}
+                  agents={agents}
+                  lastActiveWorkerId={lastActiveWorkerId}
+                  sending={sending}
+                  queueMode={roomBusy}
+                  sendError={sendError}
+                  onSend={sendPreparedContent}
+                  onSendError={showSendError}
+                  onDraftChange={setComposerDraft}
+                  onRecipientSelected={handleRecipientSelected}
+                />
+              </>
             ) : null}
           </div>
         </div>

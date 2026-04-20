@@ -4,11 +4,16 @@ related_features: [F003, F010, F012]
 topics: [scene, prompt, room-config, settings, multi-agent]
 doc_kind: spec
 created: 2026-04-16
+updated: 2026-04-20
 ---
 
 # F016: 讨论室场景（Room Scenes: 内置场景 + Prompt 注入）
 
-> Status: spec | Owner: yulong
+> Status: done | Owner: codex | Completed: 2026-04-20
+
+## Changelog
+
+- 2026-04-20: 补齐从 CreateRoomModal 直达场景管理的入口，支持 `/settings?tab=scene&returnTo=...` deeplink，并收口 feature 生命周期
 
 ## Why
 
@@ -399,16 +404,16 @@ type SceneListItem = {
 
 ## Acceptance Criteria
 
-- [ ] AC-1: 系统启动后默认存在两个 builtin Scene，ID 固定为 `roundtable-forum` 与 `software-development`
-- [ ] AC-2: `SceneConfig` 类型明确包含 `id`, `name`, `description?`, `prompt`, `builtin`
-- [ ] AC-3: `rooms` 持有 `scene_id`；旧 `rooms` 在 `backend/src/db/migrate.ts` 中通过幂等迁移回填为 `roundtable-forum`
-- [ ] AC-4: CreateRoomModal 必须提交 `sceneId`，未传时后端使用默认值 `roundtable-forum`
-- [ ] AC-5: Settings Modal 存在独立 Scene 管理入口，支持查看、新增、编辑、删除自定义 Scene
-- [ ] AC-6: builtin Scene 不可删除、不可改 ID、不可改名称，但允许改 `prompt` 与 `description`
-- [ ] AC-7: 自定义 Scene 的 ID 由后端基于名称生成 slug；创建后 ID 冻结，不允许编辑
-- [ ] AC-8: `GET /api/scenes`, `POST /api/scenes`, `PUT /api/scenes/:id`, `DELETE /api/scenes/:id` 的行为与错误语义在本文档中明确
-- [ ] AC-9: 任一 Agent 执行路径，包括 Inline Report / Summary，都必须先经过 Room Scene 组装器；动作 prompt 不能直接作为最终 system prompt
-- [ ] AC-10: 删除被 Room 引用的自定义 Scene 时返回 `409 SCENE_IN_USE`，不做静默回退
+- [x] AC-1: 系统启动后默认存在两个 builtin Scene，ID 固定为 `roundtable-forum` 与 `software-development`
+- [x] AC-2: `SceneConfig` 类型明确包含 `id`, `name`, `description?`, `prompt`, `builtin`
+- [x] AC-3: `rooms` 持有 `scene_id`；旧 `rooms` 在 `backend/src/db/migrate.ts` 中通过幂等迁移回填为 `roundtable-forum`
+- [x] AC-4: CreateRoomModal 必须提交 `sceneId`，未传时后端使用默认值 `roundtable-forum`
+- [x] AC-5: Settings Modal 存在独立 Scene 管理入口，支持查看、新增、编辑、删除自定义 Scene
+- [x] AC-6: builtin Scene 不可删除、不可改 ID、不可改名称，但允许改 `prompt` 与 `description`
+- [x] AC-7: 自定义 Scene 的 ID 由后端基于名称生成 slug；创建后 ID 冻结，不允许编辑
+- [x] AC-8: `GET /api/scenes`, `POST /api/scenes`, `PUT /api/scenes/:id`, `DELETE /api/scenes/:id` 的行为与错误语义在本文档中明确
+- [x] AC-9: 任一 Agent 执行路径，包括 Inline Report / Summary，都必须先经过 Room Scene 组装器；动作 prompt 不能直接作为最终 system prompt
+- [x] AC-10: 删除被 Room 引用的自定义 Scene 时返回 `409 SCENE_IN_USE`，不做静默回退
 
 ## Dependencies
 
@@ -427,3 +432,9 @@ type SceneListItem = {
 
 - 是否需要在 Settings 中提供“最终 prompt 预览”，帮助调试 `Scene Prompt + Action Prompt + Runtime Context` 的叠加结果？
 - builtin Scene 的 prompt 编辑是否需要审计日志或“恢复默认”按钮？本期未纳入范围。
+
+## Verification
+
+- `pnpm --dir backend exec vitest run tests/scenes.test.ts tests/builtinScenes.test.ts tests/settingsTabs.test.ts`
+- `pnpm --dir backend test`
+- `pnpm --dir frontend build`

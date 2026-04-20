@@ -1,14 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bot, Server, ChevronLeft, Archive } from 'lucide-react'
+import { Bot, Server, ChevronLeft, BrainCircuit } from 'lucide-react'
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   const isAgents = pathname === '/settings/agents'
   const isProviders = pathname === '/settings/providers'
-  const isArchive = pathname === '/settings/archive'
+  const isScenes = pathname === '/settings/scenes'
 
   return (
     <div className="min-h-screen bg-bg">
@@ -38,12 +38,12 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           </Link>
           <span className="text-line">|</span>
           <Link
-            href="/settings/archive"
+            href="/settings/scenes"
             className={`flex items-center gap-1.5 text-[13px] font-medium transition-colors ${
-              isArchive ? 'text-accent font-bold' : 'text-ink-soft hover:text-ink'
+              isScenes ? 'text-accent font-bold' : 'text-ink-soft hover:text-ink'
             }`}
           >
-            <Archive className="w-3.5 h-3.5" /> 归档
+            <BrainCircuit className="w-3.5 h-3.5" /> 场景
           </Link>
         </div>
       </div>

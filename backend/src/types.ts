@@ -16,6 +16,7 @@ export interface AgentRunError {
   agentId: string;
   agentName: string;
   code: AgentExecutionErrorCode | string;
+  timeoutPhase?: 'first_token' | 'idle';
   title: string;
   message: string;
   retryable: boolean;
@@ -26,14 +27,14 @@ export interface AgentRunError {
 
 // A2A 上下文 — 追踪调用链和深度
 export interface A2AContext {
-  depth: number;                    // 当前深度 0-4
-  callChain: string[];             // ['manager', 'workerA', 'workerB', ...]
-  taskSummary: string;             // 任务摘要，供 Manager 决策
+  depth: number;                    // 当前深度 0..n
+  callChain: string[];             // ['workerA', 'workerB', ...]
+  taskSummary: string;             // 任务摘要，供深度限制提示或调试使用
   roomId: string;
 }
 
 export interface A2ARouteResult {
-  type: 'agent_route' | 'manager_handoff';
+  type: 'agent_route' | 'depth_limited';
   targetAgentId?: string;
   depth: number;
   callChain: string[];

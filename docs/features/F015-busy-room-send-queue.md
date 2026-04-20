@@ -4,11 +4,16 @@ related_features: [F013, F0050]
 topics: [ux, messaging, queue, concurrency, turn-taking]
 doc_kind: spec
 created: 2026-04-16
+updated: 2026-04-20
 ---
 
 # F015: 房间忙时消息阻断与出站队列
 
-> Status: spec | Owner: yulong
+> Status: done | Owner: codex
+
+## Changelog
+
+- 2026-04-20: 补齐前端出站队列实现，新增 queue helper 自动化测试，完成 RoomComposer/RoomView 联动与队列 UI 收口
 
 ## Why
 
@@ -58,12 +63,11 @@ created: 2026-04-16
 ```ts
 interface OutgoingQueueItem {
   id: string
-  roomId: string
   content: string           // 包含显式 @mention 的原始文本
   toAgentId: string
   toAgentName: string
   createdAt: number
-  status: 'queued' | 'dispatching' | 'failed'
+  status: 'queued' | 'dispatching'
 }
 ```
 
@@ -90,7 +94,7 @@ interface OutgoingQueueItem {
    - 阻断的是“立即发送”，不是“继续思考”。
 
 2. **发送反馈清晰**
-   - 忙时点击发送后，不显示“发送中…”，而是提示“已加入队列，当前等待 Agent 完成”。
+   - 忙时点击发送后，发送按钮切换为“加入队列”，且消息立即出现在“待发队列”中。
 
 3. **队列与发言队列分离**
    - 现有 `MentionQueue` 表示“谁将发言 / 正在发言”。
@@ -115,9 +119,10 @@ interface OutgoingQueueItem {
 
 - `frontend/components/RoomView_new.tsx` — 忙时拦截、队列状态、自动 drain、409 处理
 - `frontend/components/OutgoingMessageQueue.tsx` — 新增用户出站队列组件
-- `frontend/components/MentionQueue.tsx` — 仅保留“Agent 发言队列”职责，不承载用户待发消息
+- `frontend/components/RoomComposer.tsx` — 暴露 draft/busy 状态给父层，忙时按钮文案切换为“加入队列”
+- `frontend/lib/outgoingQueue.ts` — 队列纯逻辑 helper（busy 判定、FIFO、dispatching、撤回）
 - `backend/src/routes/rooms.ts` — `POST /api/rooms/:id/messages` 增加 busy 保护与 `409 ROOM_BUSY`
-- `backend/src/services/stateMachine.ts` — 如需要，抽取房间 busy 判定辅助逻辑
+- `backend/tests/outgoingQueue.test.ts` — 队列 helper 自动化测试
 
 ## Dependencies
 
@@ -134,3 +139,8 @@ interface OutgoingQueueItem {
 
 - 是否需要为队列项提供“失败重试”按钮，还是统一回到队列头自动重试？
 - 房间切换时，本地未发出队列是否要给离开确认？本期先不做持久化，但可能需要最小提醒。
+
+## Verification
+
+- `pnpm --dir backend exec vitest run tests/outgoingQueue.test.ts tests/rooms.http.test.ts`
+- `pnpm --dir frontend build`

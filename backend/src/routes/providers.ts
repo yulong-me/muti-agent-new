@@ -75,9 +75,11 @@ router.get('/:name/preview', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Provider not found' })
 
   const cliPath = p.cliPath.replace(/^~/, process.env.HOME || '/root')
+  const defaultModel = p.defaultModel.trim()
   if (p.name === 'claude-code') {
     const args = ['-p', '<prompt>', '--verbose', '--output-format=stream-json', '--include-partial-messages']
     args.push('--dangerously-skip-permissions')
+    if (defaultModel) args.push('--model', defaultModel)
     res.json({
       provider: 'claude-code',
       cli: cliPath,
@@ -87,10 +89,12 @@ router.get('/:name/preview', (req, res) => {
         ...(p.baseUrl ? { ANTHROPIC_BASE_URL: p.baseUrl } : {}),
       },
       timeout: p.timeout,
-      note: 'Agent 调用时会拼接: claude -p "<角色定义>\n\n<用户消息>" --verbose ...',
+      note: defaultModel
+        ? `Agent 调用时会拼接: claude -p "<角色定义>\\n\\n<用户消息>" --verbose --model ${defaultModel} ...`
+        : 'Agent 调用时会拼接: claude -p "<角色定义>\\n\\n<用户消息>" --verbose ...',
     })
   } else if (p.name === 'opencode') {
-    const args = ['run', ...(p.thinking ? ['--thinking'] : []), '--dangerously-skip-permissions', '--format', 'json', '--', '<prompt>']
+    const args = ['run', ...(defaultModel ? ['-m', defaultModel] : []), ...(p.thinking ? ['--thinking'] : []), '--dangerously-skip-permissions', '--format', 'json', '--', '<prompt>']
     res.json({
       provider: 'opencode',
       cli: cliPath,
@@ -100,7 +104,9 @@ router.get('/:name/preview', (req, res) => {
         ...(p.baseUrl ? { ANTHROPIC_BASE_URL: p.baseUrl } : {}),
       },
       timeout: p.timeout,
-      note: 'Agent 调用时: opencode run --thinking --format json -- "<prompt>"',
+      note: defaultModel
+        ? `Agent 调用时: opencode run -m ${defaultModel}${p.thinking ? ' --thinking' : ''} --format json -- "<prompt>"`
+        : `Agent 调用时: opencode run${p.thinking ? ' --thinking' : ''} --format json -- "<prompt>"`,
     })
   } else {
     res.json({ provider: p.name, cli: cliPath, note: '未知 Provider 类型' })
@@ -115,6 +121,7 @@ router.post('/:name/test', (req, res) => {
   const cliPath = p.cliPath.replace(/^~/, process.env.HOME || '/root')
   const timeout = Math.max((p.timeout ?? 1800) * 1000, 30000)
   const testPrompt = '说一个简单的词，比如"你好"'
+  const defaultModel = p.defaultModel.trim()
 
   const env: Record<string, string> = { ...(process.env as Record<string, string>) }
   if (p.apiKey) env.ANTHROPIC_API_KEY = p.apiKey
@@ -126,12 +133,13 @@ router.post('/:name/test', (req, res) => {
   if (p.name === 'claude-code') {
     args = ['-p', testPrompt, '--verbose', '--output-format=stream-json', '--include-partial-messages']
     args.push('--dangerously-skip-permissions')
+    if (defaultModel) args.push('--model', defaultModel)
     resultCli = `${cliPath} ${args.join(' ')}`
   } else if (p.name === 'opencode') {
     args = ['run']
+    if (defaultModel) args.push('-m', defaultModel)
     if (p.thinking) args.push('--thinking')
     args.push('--dangerously-skip-permissions')
-    // no -m flag: let opencode use its default model
     args.push('--format', 'json', '--', testPrompt)
     resultCli = `${cliPath} ${args.join(' ')}`
   } else {

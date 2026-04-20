@@ -6,12 +6,14 @@ function firstParam(value: string | string[] | undefined): string | null {
   return value ?? null
 }
 
-export default function SettingsPage({
+export default function SettingsTabPage({
+  params,
   searchParams,
 }: {
+  params: { tab?: string }
   searchParams?: Record<string, string | string[] | undefined>
 }) {
-  const initialTab = resolveSettingsTab(firstParam(searchParams?.tab))
+  const initialTab = resolveSettingsTab(firstParam(params.tab))
   const returnTo = resolveSettingsReturnPath(firstParam(searchParams?.returnTo))
 
   return <SettingsPageClient initialTab={initialTab} returnTo={returnTo} />

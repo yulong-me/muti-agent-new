@@ -10,6 +10,7 @@
 
 import { store } from '../store.js';
 import { scenesRepo } from '../db/index.js';
+import { getEffectiveMaxDepthForRoom } from './routing/A2ARouter.js';
 
 export interface RuntimeContext {
   /** Current user input / task text */
@@ -24,6 +25,10 @@ export interface RuntimeContext {
   a2aCallChain?: string[];
   /** Room topic */
   roomTopic?: string;
+  /** Current A2A depth */
+  a2aDepth?: number;
+  /** Effective max A2A depth, 0 = unlimited */
+  a2aMaxDepth?: number;
   /** Current room participants shown to the recipient for collaboration routing */
   participants?: Array<{
     name: string;
@@ -63,6 +68,8 @@ export function buildRoomScopedSystemPrompt(
   const roomRuntime: RuntimeContext = {
     ...runtime,
     roomTopic: runtime.roomTopic ?? room.topic,
+    a2aDepth: runtime.a2aDepth ?? room.a2aDepth ?? 0,
+    a2aMaxDepth: runtime.a2aMaxDepth ?? getEffectiveMaxDepthForRoom(roomId),
     participants: runtime.participants ?? room.agents.map(a => ({
       name: a.name,
       domainLabel: a.domainLabel,
@@ -83,6 +90,12 @@ function buildRuntimeContextString(runtime: RuntimeContext): string {
 
   if (runtime.roomTopic) {
     lines.push(`【议题】${runtime.roomTopic}`);
+  }
+
+  if (runtime.a2aMaxDepth !== undefined) {
+    const currentDepth = runtime.a2aDepth ?? 0;
+    const maxDepthLabel = runtime.a2aMaxDepth === 0 ? '∞' : `${runtime.a2aMaxDepth} 层`;
+    lines.push(`【A2A 协作深度】当前 ${currentDepth} 层 / 最大 ${maxDepthLabel}`);
   }
 
   if (runtime.toAgentName) {

@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { ClaudeEvent } from './index.js';
 import { getProvider } from '../../config/providerConfig.js';
+import type { ProviderConfig } from '../../config/providerConfig.js';
 import { debug, info, error } from '../../lib/logger.js';
 
 function shellQuote(arg: string): string {
@@ -13,6 +14,62 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined;
+}
+
+interface ProviderLaunchConfig {
+  cliPath: string;
+  args: string[];
+  env: Record<string, string>;
+  cwd: string;
+  timeout: number;
+  spawnOptions: {
+    timeout: number;
+    env: Record<string, string>;
+    cwd: string;
+    stdio: ['ignore', 'pipe', 'pipe'];
+  };
+}
+
+export function buildClaudeProviderLaunch(
+  prompt: string,
+  opts: Record<string, unknown> = {},
+  providerCfg: ProviderConfig | undefined = getProvider('claude-code'),
+  baseEnv: Record<string, string> = process.env as Record<string, string>,
+): ProviderLaunchConfig {
+  const timeout = ((opts.timeout as number) ?? (providerCfg?.timeout ?? 90)) * 1000;
+  const sessionId = opts.sessionId as string | undefined;
+  const workspace = opts.workspace as string | undefined;
+  const model = typeof opts.model === 'string' && opts.model.trim()
+    ? opts.model.trim()
+    : providerCfg?.defaultModel.trim()
+    ? providerCfg.defaultModel.trim()
+    : undefined;
+  const cliPath = (providerCfg?.cliPath ?? 'claude').replace(/^~/, baseEnv.HOME || '/root');
+  const cwd = workspace ?? process.cwd();
+
+  const env: Record<string, string> = { ...(baseEnv as Record<string, string>) };
+  if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
+  if (providerCfg?.baseUrl) env.ANTHROPIC_BASE_URL = providerCfg.baseUrl;
+
+  const args = ['-p', prompt, '--verbose', '--output-format=stream-json', '--include-partial-messages'];
+  args.push('--dangerously-skip-permissions');
+  if (model) args.push('--model', model);
+  if (sessionId) args.splice(1, 0, '--resume', sessionId);
+  if (workspace) args.push('--add-dir', workspace);
+
+  return {
+    cliPath,
+    args,
+    env,
+    cwd,
+    timeout,
+    spawnOptions: {
+      timeout,
+      env,
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  };
 }
 
 export function parseClaudeAssistantToolUseEvents(parsed: Record<string, unknown>, agentId: string): ClaudeEvent[] {
@@ -39,24 +96,14 @@ export async function* streamClaudeCodeProvider(
 ): AsyncGenerator<ClaudeEvent, void, undefined> {
   const start = Date.now();
   const providerCfg = getProvider('claude-code');
-  const timeout = ((opts.timeout as number) ?? (providerCfg?.timeout ?? 90)) * 1000;
+  const launch = buildClaudeProviderLaunch(prompt, opts, providerCfg);
+  const timeout = launch.timeout;
   const sessionId = opts.sessionId as string | undefined;
   const roomId = opts.roomId as string | undefined;
   const agentName = opts.agentName as string | undefined;
   const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 180000); // 3 min
   const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 180000);
-  // Default all permissions: write, exec, network
-
-  // Resolve CLI path (expand ~)
-  const cliPath = (providerCfg?.cliPath ?? 'claude').replace(/^~/, process.env.HOME || '/root');
-
-  // Workspace support — 每个 Room 有独立工作目录
   const workspace = opts.workspace as string | undefined;
-
-  // Build environment: inject API key and base URL if configured
-  const env: Record<string, string> = { ...(process.env as Record<string, string>) };
-  if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
-  if (providerCfg?.baseUrl) env.ANTHROPIC_BASE_URL = providerCfg.baseUrl;
 
   debug('provider:call_start', {
     roomId,
@@ -65,42 +112,27 @@ export async function* streamClaudeCodeProvider(
     promptLength: prompt.length,
     timeout,
     sessionId: sessionId ?? 'new',
-    cliPath,
-    cwd: workspace ?? process.cwd(),
-    spawnOpts: { cwd: workspace ?? process.cwd(), timeout, env, stdio: ['ignore', 'pipe', 'pipe'] },
+    cliPath: launch.cliPath,
+    cwd: launch.cwd,
+    spawnOpts: launch.spawnOptions,
   });
 
-  const args = ['-p', prompt, '--verbose', '--output-format=stream-json', '--include-partial-messages'];
-  // Default all permissions
-  args.push('--dangerously-skip-permissions');
-
-  if (sessionId) args.splice(1, 0, '--resume', sessionId);
-
-  if (workspace) {
-    args.push('--add-dir', workspace);
-  }
-
-  const command = `${shellQuote(cliPath)} ${args.map(a => shellQuote(a)).join(' ')}`;
+  const command = `${shellQuote(launch.cliPath)} ${launch.args.map(a => shellQuote(a)).join(' ')}`;
   debug('provider:command', {
     roomId,
     agentId: agentName ?? agentId,
     command,
     provider: 'claude-code',
     workspace,
-    cwd: workspace ?? process.cwd(),
+    cwd: launch.cwd,
     sessionId: sessionId ?? null,
     timeout,
-    envKeys: Object.keys(env ?? {}),
-    spawnOpts: { cwd: workspace ?? process.cwd(), timeout, stdio: ['ignore', 'pipe', 'pipe'] },
+    envKeys: Object.keys(launch.env ?? {}),
+    spawnOpts: { cwd: launch.cwd, timeout, stdio: ['ignore', 'pipe', 'pipe'] },
     promptPreview: prompt.slice(0, 100),
   });
 
-  const proc = spawn(cliPath, args, {
-    timeout,
-    env,
-    cwd: workspace ?? process.cwd(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const proc = spawn(launch.cliPath, launch.args, launch.spawnOptions);
 
   let stderrBuffer = '';
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });
