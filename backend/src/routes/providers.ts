@@ -92,7 +92,7 @@ router.get('/:name/preview', (req, res) => {
         : 'Agent 调用时会拼接: claude -p "<角色定义>\\n\\n<用户消息>" --verbose ...',
     })
   } else if (p.name === 'opencode') {
-    const args = ['run', ...(defaultModel ? ['-m', defaultModel] : []), ...(p.thinking ? ['--thinking'] : []), '--dangerously-skip-permissions', '--format', 'json', '--', '<prompt>']
+    const args = ['run', ...(p.thinking ? ['--thinking'] : []), '--format', 'json', '--', '<prompt>']
     res.json({
       provider: 'opencode',
       cli: cliPath,
@@ -102,9 +102,7 @@ router.get('/:name/preview', (req, res) => {
         ...(p.baseUrl ? { ANTHROPIC_BASE_URL: p.baseUrl } : {}),
       },
       timeout: p.timeout,
-      note: defaultModel
-        ? `Agent 调用时: opencode run -m ${defaultModel}${p.thinking ? ' --thinking' : ''} --format json -- "<prompt>"`
-        : `Agent 调用时: opencode run${p.thinking ? ' --thinking' : ''} --format json -- "<prompt>"`,
+      note: `Agent 调用时: opencode run${p.thinking ? ' --thinking' : ''} --format json -- "<prompt>"`,
     })
   } else {
     res.json({ provider: p.name, cli: cliPath, note: '未知 Provider 类型' })
@@ -135,9 +133,7 @@ router.post('/:name/test', (req, res) => {
     resultCli = `${cliPath} ${args.join(' ')}`
   } else if (p.name === 'opencode') {
     args = ['run']
-    if (defaultModel) args.push('-m', defaultModel)
     if (p.thinking) args.push('--thinking')
-    args.push('--dangerously-skip-permissions')
     args.push('--format', 'json', '--', testPrompt)
     resultCli = `${cliPath} ${args.join(' ')}`
   } else {
@@ -157,14 +153,20 @@ router.post('/:name/test', (req, res) => {
     const text = d.toString()
     stdout += text
     if (p.name === 'opencode') {
-      // opencode --format json outputs JSON per line; collect text from delta events
+      // opencode --format json outputs JSON per line; collect text from text/delta events
       for (const line of text.split('\n')) {
         if (!line.trim()) continue
         try {
           const obj = JSON.parse(line)
-          if (obj.type === 'delta' && obj.text) {
-            capturedOutput += obj.text
-            outputLines.push(`[delta] ${obj.text}`)
+          const part = obj.part && typeof obj.part === 'object' ? obj.part as Record<string, unknown> : undefined
+          const textPart = typeof obj.text === 'string'
+            ? obj.text
+            : typeof part?.text === 'string'
+            ? part.text
+            : undefined
+          if ((obj.type === 'delta' || obj.type === 'text') && textPart) {
+            capturedOutput += textPart
+            outputLines.push(`[text] ${textPart}`)
           }
         } catch { /* skip */ }
       }
