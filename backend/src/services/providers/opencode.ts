@@ -43,8 +43,6 @@ export function buildOpenCodeProviderLaunch(
   const workspace = opts.workspace as string | undefined;
   const model = typeof opts.model === 'string' && opts.model.trim()
     ? opts.model.trim()
-    : providerCfg?.defaultModel.trim()
-    ? providerCfg.defaultModel.trim()
     : undefined;
   const cliPath = (providerCfg?.cliPath ?? 'opencode').replace(/^~/, baseEnv.HOME || '/root');
   const cwd = workspace ?? '/tmp';
@@ -105,6 +103,29 @@ export function parseOpenCodeToolUseEvent(parsed: Record<string, unknown>, agent
     toolInput: asRecord(state?.input) ?? asRecord(toolPart.input) ?? {},
     callId,
   };
+}
+
+export function extractOpenCodeErrorMessage(parsed: Record<string, unknown>): string {
+  const part = asRecord(parsed.part);
+  const rootError = asRecord(parsed.error);
+  const partError = asRecord(part?.error);
+
+  const directMessage =
+    (typeof part?.error === 'string' ? part.error : undefined)
+    ?? (typeof part?.message === 'string' ? part.message : undefined)
+    ?? (typeof parsed.error === 'string' ? parsed.error : undefined)
+    ?? (typeof parsed.message === 'string' ? parsed.message : undefined)
+    ?? (typeof partError?.message === 'string' ? partError.message : undefined)
+    ?? (typeof rootError?.message === 'string' ? rootError.message : undefined);
+
+  if (directMessage) return directMessage;
+
+  const fallback = part ?? parsed;
+  try {
+    return `opencode error event: ${JSON.stringify(fallback).slice(0, 300)}`;
+  } catch {
+    return 'unknown opencode error';
+  }
 }
 
 /**
@@ -321,7 +342,7 @@ export async function* streamOpenCodeProvider(
         };
       }
     } else if (eventType === 'error' || (part?.type === 'error')) {
-      yield { type: 'error', agentId, message: (part?.error as string) ?? 'unknown opencode error' };
+      yield { type: 'error', agentId, message: extractOpenCodeErrorMessage(parsed) };
     }
   }
 

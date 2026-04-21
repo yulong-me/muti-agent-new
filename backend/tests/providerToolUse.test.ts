@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProviderConfig } from '../src/config/providerConfig.js';
 import { parseClaudeAssistantToolUseEvents } from '../src/services/providers/claudeCode.js';
-import { parseOpenCodeToolUseEvent } from '../src/services/providers/opencode.js';
+import { extractOpenCodeErrorMessage, parseOpenCodeToolUseEvent } from '../src/services/providers/opencode.js';
 import { buildClaudeProviderLaunch } from '../src/services/providers/claudeCode.js';
 import { buildOpenCodeProviderLaunch } from '../src/services/providers/opencode.js';
 
@@ -78,6 +78,41 @@ describe('provider tool_use parsing', () => {
     });
   });
 
+  it('extracts OpenCode error messages from top-level fields', () => {
+    expect(extractOpenCodeErrorMessage({
+      type: 'error',
+      message: 'upstream temporarily unavailable',
+    })).toBe('upstream temporarily unavailable');
+
+    expect(extractOpenCodeErrorMessage({
+      type: 'error',
+      error: 'rate limit exceeded',
+    })).toBe('rate limit exceeded');
+  });
+
+  it('extracts OpenCode error messages from nested error objects', () => {
+    expect(extractOpenCodeErrorMessage({
+      type: 'error',
+      part: {
+        type: 'error',
+        error: {
+          message: 'provider overloaded',
+        },
+      },
+    })).toBe('provider overloaded');
+
+    expect(extractOpenCodeErrorMessage({
+      type: 'error',
+      part: {
+        type: 'error',
+        error: {
+          code: 'upstream_error',
+          message: 'gateway timeout',
+        },
+      },
+    })).toBe('gateway timeout');
+  });
+
   it('builds Claude launch config with room workspace as cwd and --add-dir', () => {
     const workspace = '/Users/yulong/work/sample-project';
     const launch = buildClaudeProviderLaunch(
@@ -124,6 +159,18 @@ describe('provider tool_use parsing', () => {
     });
   });
 
+  it('does not force the provider default model for OpenCode', () => {
+    const launch = buildOpenCodeProviderLaunch(
+      'hello from opencode',
+      {},
+      { ...baseProviderConfig, name: 'opencode', cliPath: '~/bin/opencode', defaultModel: 'MiniMax-M2.7' },
+      { HOME: '/Users/tester', PATH: '/usr/bin' },
+    );
+
+    expect(launch.args).not.toContain('-m');
+    expect(launch.args).not.toContain('MiniMax-M2.7');
+  });
+
   it('falls back to the default cwd when room workspace is absent', () => {
     const claudeLaunch = buildClaudeProviderLaunch(
       'no workspace',
@@ -142,5 +189,6 @@ describe('provider tool_use parsing', () => {
     expect(claudeLaunch.args).not.toContain('--add-dir');
     expect(opencodeLaunch.cwd).toBe('/tmp');
     expect(opencodeLaunch.args).not.toContain('--dir');
+    expect(opencodeLaunch.args).not.toContain('-m');
   });
 });
