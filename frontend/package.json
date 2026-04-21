@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 7002",
     "build": "next build",
-    "test:input-lag": "node tests/input-lag-regression.mjs"
+    "test:input-lag": "node tests/input-lag-regression.mjs",
+    "test:message-stats-zero": "rm -rf .tmp-tests/message-stats-zero && ./node_modules/.bin/tsc --target es2017 --lib dom,dom.iterable,esnext --skipLibCheck --module commonjs --moduleResolution node --jsx react-jsx --esModuleInterop --outDir .tmp-tests/message-stats-zero tests/message-stats-zero-regression.tsx && node .tmp-tests/message-stats-zero/tests/message-stats-zero-regression.js"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",

@@ -203,6 +203,13 @@ const MessageBubble = memo(function MessageBubble({
   const hasOutput = Boolean(msg.content.trim() || msg.thinking?.trim() || hasToolCalls)
   const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
   const formattedTime = TIME_FORMATTER.format(new Date(msg.timestamp))
+  const hasDurationStat = typeof msg.duration_ms === 'number' && msg.duration_ms > 0
+  const hasCostStat = typeof msg.total_cost_usd === 'number' && msg.total_cost_usd > 0
+  const hasInputTokensStat = typeof msg.input_tokens === 'number' && msg.input_tokens > 0
+  const hasOutputTokensStat = typeof msg.output_tokens === 'number' && msg.output_tokens > 0
+  const hasUsageStats = !isStreaming && state === 'DONE' && (
+    hasDurationStat || hasCostStat || hasInputTokensStat || hasOutputTokensStat
+  )
 
   const validMentions = useMemo(() => {
     if (isUser) return []
@@ -353,12 +360,12 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           )}
         </div>
-        {!isStreaming && msg.duration_ms && state === 'DONE' && (
+        {hasUsageStats && (
           <div className="mt-1.5 px-3 py-1.5 bg-surface border border-line rounded-lg text-[11px] text-ink-soft flex flex-wrap gap-x-4 gap-y-1 max-w-fit">
-            <span>⏱ {(msg.duration_ms / 1000).toFixed(1)}s</span>
-            {msg.total_cost_usd && <span>💰 ${msg.total_cost_usd.toFixed(4)}</span>}
-            {msg.input_tokens && <span>📥 {msg.input_tokens}</span>}
-            {msg.output_tokens && <span>📤 {msg.output_tokens}</span>}
+            {hasDurationStat && <span>⏱ {(msg.duration_ms! / 1000).toFixed(1)}s</span>}
+            {hasCostStat && <span>💰 ${msg.total_cost_usd!.toFixed(4)}</span>}
+            {hasInputTokensStat && <span>📥 {msg.input_tokens}</span>}
+            {hasOutputTokensStat && <span>📤 {msg.output_tokens}</span>}
           </div>
         )}
       </div>
