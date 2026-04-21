@@ -79,13 +79,6 @@ export async function ensureWorkspace(roomId: string, customWorkspace?: string):
 }
 
 /**
- * 获取 Agent CLI 调用的 workspace 参数
- */
-export function getWorkspaceArgs(roomId: string): string[] {
-  return ['--add-dir', getWorkspacePath(roomId)];
-}
-
-/**
  * 将 workspace 移动到归档目录（软删除时调用）
  */
 export async function archiveWorkspace(roomId: string): Promise<void> {

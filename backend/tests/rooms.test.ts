@@ -34,14 +34,11 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
   return {
     ...actual,
     hostReply: vi.fn(),
-    addUserMessage: vi.fn(),
-    handleUserMessage: vi.fn(),
-    generateReport: vi.fn(),
     routeToAgent: vi.fn(),
   };
 });
 
-describe('F004: Manager 路由器 - rooms 路由', () => {
+describe('rooms 路由', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Default mock for scenesRepo — prevents scenePromptBuilder from throwing on old rooms without sceneId
@@ -51,14 +48,6 @@ describe('F004: Manager 路由器 - rooms 路由', () => {
       name: '圆桌论坛',
       prompt: '圆桌',
       builtin: true,
-    });
-  });
-
-  describe('POST /rooms/:id/messages', () => {
-    it('应该存在用户消息路由', async () => {
-      // 验证路由文件导出了需要的函数
-      const roomsModule = await import('../src/services/stateMachine.js');
-      expect(typeof roomsModule.handleUserMessage).toBe('function');
     });
   });
 

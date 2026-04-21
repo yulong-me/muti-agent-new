@@ -71,13 +71,6 @@ export interface OutgoingQueueItem {
   status: 'queued' | 'dispatching'
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-export const STATE_LABELS: Record<DiscussionState, string> = {
-  RUNNING: '讨论中',
-  DONE: '已完成',
-}
-
 export const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
   主持人: { bg: '#4F46E5', text: '#FFFFFF' },
   司马迁: { bg: '#D97706', text: '#FFFFFF' },

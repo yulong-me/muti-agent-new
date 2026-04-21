@@ -16,6 +16,3 @@ export const API_URL: string =
   (typeof window !== 'undefined'
     ? `${window.location.protocol}//${window.location.host}`
     : 'http://localhost:7001');
-
-/** Socket.io connection URL */
-export const SOCKET_URL = API_URL;

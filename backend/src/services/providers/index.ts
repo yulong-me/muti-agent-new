@@ -31,7 +31,3 @@ export function getProvider(name: ProviderName): StreamFn {
   if (!fn) throw new Error(`Unknown provider: ${name}`);
   return fn;
 }
-
-export function getProviderNames(): ProviderName[] {
-  return Object.keys(PROVIDERS) as ProviderName[];
-}

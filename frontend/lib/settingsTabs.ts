@@ -22,9 +22,3 @@ export function buildSettingsHref(tab: SettingsTab, returnTo?: string | null): s
   }
   return `/settings?${params.toString()}`
 }
-
-export function buildSettingsTabPath(tab: SettingsTab): string {
-  if (tab === 'provider') return '/settings/providers'
-  if (tab === 'scene') return '/settings/scenes'
-  return '/settings/agents'
-}

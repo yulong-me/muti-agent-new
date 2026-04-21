@@ -1,10 +1,9 @@
 /**
- * F004: Manager 路由器 - stateMachine 测试
+ * stateMachine 测试
  *
  * 核心变化：
  * - 移除 INIT/RESEARCH/DEBATE/CONVERGING 状态
  * - 新增 RUNNING/DONE 状态（简化设计）
- * - handleUserMessage() 处理用户消息
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -100,39 +99,7 @@ describe('F004: Manager 路由器', () => {
     });
   });
 
-  describe('handleUserMessage()', () => {
-    it('应该存在 handleUserMessage 函数', async () => {
-      const stateMachine = await import('../src/services/stateMachine.js');
-      expect(typeof stateMachine.handleUserMessage).toBe('function');
-    });
-
-    it('应该将用户消息添加到消息列表', async () => {
-      const { handleUserMessage } = await import('../src/services/stateMachine.js');
-      const { store } = await import('../src/store.js');
-      const { messagesRepo } = await import('../src/db/index.js');
-
-      const mockRoom = {
-        id: 'room-1',
-        topic: '测试话题',
-        state: 'RUNNING' as const,
-        agents: [
-          { id: 'manager-1', role: 'MANAGER' as const, name: '主持人', domainLabel: '主持人', configId: 'host', status: 'idle' as const },
-        ],
-        messages: [],
-        sessionIds: {},
-        a2aDepth: 0,
-        a2aCallChain: [],
-      };
-
-      vi.mocked(store.get).mockReturnValue(mockRoom);
-      vi.mocked(store.update).mockImplementation((id, updates) => {});
-
-      await handleUserMessage('room-1', '用户输入的话题');
-
-      expect(store.update).toHaveBeenCalled();
-      expect(messagesRepo.insert).toHaveBeenCalled();
-    });
-
+  describe('routeToAgent()', () => {
     it('专家执行失败时也应该结束 loading 并发出结构化错误事件', async () => {
       const { routeToAgent } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');

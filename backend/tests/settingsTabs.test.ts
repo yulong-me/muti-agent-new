@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildSettingsTabPath,
   buildSettingsHref,
   resolveSettingsReturnPath,
   resolveSettingsTab,
@@ -30,11 +29,5 @@ describe('settings tab helpers', () => {
   it('builds a scene settings link that preserves the caller path', () => {
     expect(buildSettingsHref('scene', '/room/abc')).toBe('/settings?tab=scene&returnTo=%2Froom%2Fabc');
     expect(buildSettingsHref('scene', 'https://example.com')).toBe('/settings?tab=scene');
-  });
-
-  it('builds stable dedicated settings paths for tab routes', () => {
-    expect(buildSettingsTabPath('agent')).toBe('/settings/agents');
-    expect(buildSettingsTabPath('provider')).toBe('/settings/providers');
-    expect(buildSettingsTabPath('scene')).toBe('/settings/scenes');
   });
 });

@@ -195,7 +195,7 @@ browseRouter.post('/mkdir', async (req, res) => {
 
   const newPath = resolve(validatedParent, name);
   try {
-    const created = await mkdir(newPath, { recursive: false });
+    await mkdir(newPath, { recursive: false });
     return res.json({ createdPath: newPath, name });
   } catch (err) {
     return res.status(400).json({ error: `无法创建目录: ${(err as Error).message}` });

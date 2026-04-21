@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { X, Bot, Server, CheckCircle2, Trash2, Edit2, Save, Plus, Loader2, Play, XCircle, BrainCircuit } from 'lucide-react'
 import { API_URL } from '@/lib/api'
 import { mergeAgentModel, normalizeModelValue, resolveEffectiveAgentModel } from '@/lib/agentModels'
@@ -546,7 +545,6 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
   const [scenes, setScenes] = useState<SceneConfig[]>([])
   const [selProvider, setSelProvider] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [loadingScenes, setLoadingScenes] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<AgentConfig | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -560,7 +558,6 @@ export default function SettingsModal({ isOpen, onClose, initialTab = 'agent' }:
     tags: [] as string[],
   })
   const [addError, setAddError] = useState('')
-  const router = useRouter()
   const backdropRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {

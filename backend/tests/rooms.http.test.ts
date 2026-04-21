@@ -38,9 +38,6 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
   return {
     ...actual,
     hostReply: vi.fn(),
-    addUserMessage: vi.fn(),
-    handleUserMessage: vi.fn(),
-    generateReport: vi.fn(),
     // Must resolve so .catch() in the route handler doesn't throw on undefined
     routeToAgent: vi.fn().mockResolvedValue(undefined),
     stopAgentRun: vi.fn().mockReturnValue({ stopped: true, agentName: '测试员' }),

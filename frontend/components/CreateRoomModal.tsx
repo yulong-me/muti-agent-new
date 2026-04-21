@@ -22,11 +22,6 @@ interface AgentConfig {
   tags: string[]
 }
 
-const PROVIDER_COLORS: Record<string, string> = {
-  'claude-code': 'var(--accent)',
-  'opencode': '#7C3AED',
-}
-
 const PROVIDER_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
   'opencode': 'OpenCode',

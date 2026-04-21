@@ -1,11 +1,10 @@
 /**
- * F004: Manager 路由器
+ * Room execution state machine
  *
- * 核心设计：
- * - handleUserMessage(): 用户消息 → Manager 分析 → 路由决策
- * - callWorker(): 直接调用 Worker 执行具体任务
- * - generateReport(): 用户主动触发报告生成
- * - A2A 编排: Manager/Worker 输出后扫描 @mention → 路由
+ * 核心职责：
+ * - routeToAgent(): 用户消息直接发送给指定 Worker
+ * - generateReportInline(): 使用 Worker 生成当前 room 的系统总结
+ * - A2A 编排: Worker 输出后扫描 @mention → 路由
  */
 
 import { store } from '../store.js';
@@ -21,7 +20,6 @@ import {
   emitRoomErrorEvent,
   emitUserMessage,
 } from './socketEmitter.js';
-import { HOST_PROMPTS } from '../prompts/host.js';
 import type { Message, Agent, MessageType, AgentExecutionErrorCode, AgentRunError, ToolCall } from '../types.js';
 import { v4 as uuid } from 'uuid';
 import { roomsRepo, messagesRepo } from '../db/index.js';
@@ -63,7 +61,7 @@ function addMessage(
   return message;
 }
 
-export function addUserMessage(
+function addUserMessage(
   roomId: string,
   content: string,
   toAgentId?: string,
@@ -337,64 +335,6 @@ function handleAgentRunFailure(args: {
   return runError;
 }
 
-// ─── Manager 处理用户消息 ───────────────────────────────────────────────────
-
-/**
- * 处理用户消息的入口
- * 1. 保存用户消息
- * 2. 调用 Manager 分析输入 → 决策
- * 3. Manager 决策执行（路由/生成报告）
- */
-export async function handleUserMessage(
-  roomId: string,
-  userContent: string,
-): Promise<void> {
-  const room = store.get(roomId);
-  if (!room) return;
-  if (room.state === 'DONE') return;
-
-  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
-  if (!managerAgent) return;
-
-  // 1. 保存用户消息（toAgentId = MANAGER.id，表示发给主持人）
-  addUserMessage(roomId, userContent, managerAgent.id);
-  telemetry('msg:user', { roomId, contentLength: userContent.length });
-
-  // 2. 调用 Manager 路由器 prompt
-
-  const managerCfg = getAgent(managerAgent.configId);
-  const managerSystemPrompt = managerCfg?.systemPrompt ?? '专业主持人，负责热情接待、召集专家协作、管理讨论节奏';
-
-  const workers = room.agents.filter(a => a.role === 'WORKER');
-  const prompt = HOST_PROMPTS.MANAGER_ROUTE(room.topic, userContent, workers);
-
-  // 3. Manager 流式输出（包含 A2A @mention）
-  // F016: recentMessages 由 streamingCallAgent 通过 buildRoomScopedSystemPrompt 自动从 room.messages 提取
-  const managerOutput = await streamingCallAgent(
-    {
-      domainLabel: managerAgent.domainLabel,
-      systemPrompt: managerSystemPrompt,
-      userMessage: prompt,
-    },
-    roomId,
-    managerAgent.id,
-    managerAgent.configId,
-    managerAgent.name,
-    'statement',
-    'MANAGER',
-  );
-
-  telemetry('manager:output', {
-    roomId,
-    outputLength: managerOutput.length,
-  });
-
-  // 4. 检查用户是否要求生成报告
-  if (isReportRequest(userContent)) {
-    await generateReport(roomId);
-  }
-}
-
 // ─── F0042: 直接路由 ───────────────────────────────────────────────────────
 
 /**
@@ -427,7 +367,7 @@ export async function routeToAgent(
     addUserMessage(roomId, content, target.id);
     return;
   }
-  debug('route.to', { roomId, toAgentId, toAgentName: target.name, toAgentRole: 'WORKER', path: 'callWorker' });
+  debug('route.to', { roomId, toAgentId, toAgentName: target.name, toAgentRole: 'WORKER', path: 'routeToAgent' });
 
   // 保存用户消息，标记 toAgentId
   addUserMessage(roomId, content, target.id);
@@ -462,84 +402,6 @@ export async function routeToAgent(
 
 export function stopAgentRun(roomId: string, agentId: string) {
   return requestStopAgentRun(roomId, agentId);
-}
-
-// ─── 调用 Worker ─────────────────────────────────────────────────────────────
-
-/**
- * 直接调用 Worker 执行具体任务（通过 @mention 触发）
- */
-export async function callWorker(
-  roomId: string,
-  workerId: string,
-  task: string,
-  context?: string,
-): Promise<string> {
-  const room = store.get(roomId);
-  if (!room) throw new Error('Room not found');
-
-  const worker = room.agents.find(a => a.id === workerId);
-  if (!worker) throw new Error(`Worker not found: ${workerId}`);
-
-  const userMsg = context
-    ? `${context}\n\n任务：${task}`
-    : `议题：${room.topic}\n\n${task}`;
-
-  return streamingCallAgent(
-    {
-      domainLabel: worker.domainLabel,
-      systemPrompt: `专业${worker.domainLabel}，执行具体任务`,
-      userMessage: userMsg,
-    },
-    roomId,
-    worker.id,
-    worker.configId,
-    worker.name,
-    'statement',
-    'WORKER',
-  );
-}
-
-// ─── 生成报告 ────────────────────────────────────────────────────────────────
-
-/**
- * 生成最终报告（用户主动触发）
- */
-export async function generateReport(roomId: string): Promise<string> {
-  const room = store.get(roomId);
-  if (!room) throw new Error('Room not found');
-
-  const managerAgent = room.agents.find(a => a.role === 'MANAGER');
-  if (!managerAgent) throw new Error('Manager not found');
-
-  const allContent = room.messages
-    .map(m => `【${m.agentName}】${m.content}`)
-    .join('\n\n');
-
-  store.update(roomId, { state: 'DONE' });
-  roomsRepo.update(roomId, { state: 'DONE' });
-
-  telemetry('report:start', { roomId, contentLength: allContent.length });
-
-  const report = await streamingCallAgent(
-    {
-      domainLabel: managerAgent.domainLabel,
-      systemPrompt: '专业主持人，整理讨论结论',
-      userMessage: HOST_PROMPTS.GENERATE_REPORT(room.topic, allContent),
-    },
-    roomId,
-    managerAgent.id,
-    managerAgent.configId,
-    managerAgent.name,
-    'report',
-    'MANAGER',
-  );
-
-  store.update(roomId, { report });
-  roomsRepo.update(roomId, { report });
-  telemetry('report:done', { roomId, reportLength: report.length });
-
-return report;
 }
 
 /**
@@ -954,12 +816,6 @@ function createsImmediatePingPong(callChain: string[], targetAgentName: string):
   const speakerBeforePrevious = callChain[callChain.length - 3];
 
   return speakerBeforePrevious === currentSpeaker && previousSpeaker === targetAgentName;
-}
-
-/** 判断用户输入是否请求生成报告 */
-function isReportRequest(text: string): boolean {
-  const keywords = ['生成报告', '输出报告', '整理报告', '导出报告', '总结报告', 'report'];
-  return keywords.some(k => text.toLowerCase().includes(k));
 }
 
 // ─── Room Busy Helper ────────────────────────────────────────────────────────

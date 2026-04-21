@@ -41,7 +41,6 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
   return {
     ...actual,
     routeToAgent: vi.fn().mockResolvedValue(undefined),
-    generateReport: vi.fn(),
     generateReportInline: vi.fn().mockResolvedValue(''),
   };
 });

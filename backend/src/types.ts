@@ -42,15 +42,6 @@ export interface A2ARouteResult {
   taskSummary?: string;
 }
 
-// Provider 流式事件类型
-export type ProviderEvent =
-  | { type: 'start'; agentId: string; timestamp: number; messageId: string }
-  | { type: 'delta'; agentId: string; text: string }
-  | { type: 'thinking_delta'; agentId: string; thinking: string }
-  | { type: 'tool_use'; agentId: string; toolName: string; toolInput: Record<string, unknown>; callId?: string }
-  | { type: 'end'; agentId: string; duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number; sessionId?: string }
-  | { type: 'error'; agentId: string; message: string };
-
 export interface Agent {
   id: string;
   role: AgentRole;
@@ -132,9 +123,3 @@ export interface SceneConfig {
   /** F017: Scene 默认 A2A 最大深度，0=无限 */
   maxA2ADepth: number;
 }
-
-// F016: 内置 Scene ID 常量
-export const BUILTIN_SCENE_IDS = {
-  ROUNDTABLE_FORUM: 'roundtable-forum',
-  SOFTWARE_DEVELOPMENT: 'software-development',
-} as const;

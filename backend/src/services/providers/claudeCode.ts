@@ -3,7 +3,7 @@ import { createInterface } from 'readline';
 import { ClaudeEvent } from './index.js';
 import { getProvider } from '../../config/providerConfig.js';
 import type { ProviderConfig } from '../../config/providerConfig.js';
-import { debug, info, error } from '../../lib/logger.js';
+import { debug, error } from '../../lib/logger.js';
 
 function shellQuote(arg: string): string {
   if (arg === '') return "''";

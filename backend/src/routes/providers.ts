@@ -7,9 +7,7 @@ import {
   upsertProvider,
   deleteProvider,
   updateTestResult,
-  type ProviderConfig,
 } from '../config/providerConfig.js'
-import { debug } from '../lib/logger.js'
 
 /**
  * Normalize subprocess stdout to UTF-8 text stream.
