@@ -9,6 +9,7 @@ import { logsRouter } from './routes/logs.js';
 import { browseRouter } from './routes/browse.js';
 import { gitRouter } from './routes/git.js';
 import { scenesRouter } from './routes/scenes.js';
+import { skillsRouter } from './routes/skills.js';
 import { store } from './store.js';
 import { log } from './log.js';
 import { initDB, roomsRepo } from './db/index.js';
@@ -52,6 +53,7 @@ app.use('/api/logs', logsRouter);
 app.use('/api/browse', browseRouter);
 app.use('/api/git', gitRouter);
 app.use('/api/scenes', scenesRouter);
+app.use('/api/skills', skillsRouter);
 
 // ── Debug endpoint ──────────────────────────────────────────────────────────
 app.get('/api/debug', (_req, res) => {

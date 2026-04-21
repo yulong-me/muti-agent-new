@@ -10,6 +10,7 @@ import { mkdir, open, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { debug, info, warn } from '../lib/logger.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -61,6 +62,7 @@ browseRouter.get('/', async (req, res) => {
 
   const validatedPath = await validatePath(targetPath);
   if (!validatedPath) {
+    warn('browse:list:invalid_path', { targetPath, includeHidden });
     // 区分不存在(404) vs 无权/越界(403)
     try { await stat(targetPath); } catch { /* fall through to 403 below */ }
     try {
@@ -106,6 +108,13 @@ browseRouter.get('/', async (req, res) => {
     const parent = resolve(validatedPath, '..');
     const parentReal = parent === validatedPath ? null : await validatePath(parent);
 
+    debug('browse:list', {
+      targetPath: validatedPath,
+      includeHidden,
+      entryCount: dirs.length,
+      directoryCount: dirs.filter(entry => entry.isDirectory).length,
+    });
+
     return res.json({
       current: validatedPath,
       name: basename(validatedPath),
@@ -114,6 +123,7 @@ browseRouter.get('/', async (req, res) => {
       entries: dirs,
     });
   } catch (err) {
+    warn('browse:list:failed', { targetPath, error: err });
     return res.status(400).json({ error: `无法读取目录: ${(err as Error).message}` });
   }
 });
@@ -140,6 +150,7 @@ browseRouter.get('/file', async (req, res) => {
 
   const validatedPath = await validatePath(targetPath);
   if (!validatedPath) {
+    warn('browse:file:not_found', { targetPath });
     return res.status(404).json({ error: '文件不存在或无权访问' });
   }
 
@@ -165,11 +176,18 @@ browseRouter.get('/file', async (req, res) => {
         truncated: fileStat.size > MAX_FILE_PREVIEW_BYTES,
         content: isBinary ? null : buffer.toString('utf8'),
       };
+      debug('browse:file:preview', {
+        targetPath: validatedPath,
+        size: fileStat.size,
+        truncated: result.truncated,
+        isBinary,
+      });
       return res.json(result);
     } finally {
       await handle.close();
     }
   } catch (err) {
+    warn('browse:file:failed', { targetPath, error: err });
     return res.status(400).json({ error: `无法预览文件: ${(err as Error).message}` });
   }
 });
@@ -185,19 +203,23 @@ browseRouter.post('/mkdir', async (req, res) => {
 
   const validatedParent = await validatePath(parentPath);
   if (!validatedParent) {
+    warn('browse:mkdir:invalid_parent', { parentPath, name });
     return res.status(403).json({ error: '路径不在允许范围内' });
   }
 
   // 安全校验：目录名不能包含路径分隔符
   if (name.includes('/') || name.includes('\\') || name === '.' || name === '..') {
+    warn('browse:mkdir:invalid_name', { parentPath: validatedParent, name });
     return res.status(400).json({ error: '目录名无效' });
   }
 
   const newPath = resolve(validatedParent, name);
   try {
     await mkdir(newPath, { recursive: false });
+    info('browse:mkdir', { parentPath: validatedParent, name, createdPath: newPath });
     return res.json({ createdPath: newPath, name });
   } catch (err) {
+    warn('browse:mkdir:failed', { parentPath: validatedParent, name, error: err });
     return res.status(400).json({ error: `无法创建目录: ${(err as Error).message}` });
   }
 });
@@ -207,6 +229,7 @@ browseRouter.post('/mkdir', async (req, res) => {
  */
 browseRouter.post('/pick-directory', async (_req, res) => {
   if (process.platform !== 'darwin') {
+    warn('browse:pick_directory:unsupported', { platform: process.platform });
     return res.status(400).json({ error: '仅支持 macOS' });
   }
 
@@ -223,15 +246,19 @@ browseRouter.post('/pick-directory', async (_req, res) => {
 
     const validated = await validatePath(picked);
     if (!validated) {
+      warn('browse:pick_directory:invalid', { picked });
       return res.status(403).json({ error: '所选目录不在允许范围内' });
     }
 
+    info('browse:pick_directory', { path: validated, name: basename(validated) });
     return res.json({ path: validated, name: basename(validated) });
   } catch (err: unknown) {
     const stderr = String((err as { stderr?: unknown }).stderr ?? '');
     if (stderr.includes('User canceled')) {
+      debug('browse:pick_directory:cancelled');
       return res.status(204).send();
     }
+    warn('browse:pick_directory:failed', { error: stderr || err });
     return res.status(500).json({ error: stderr || (err as Error).message });
   }
 });

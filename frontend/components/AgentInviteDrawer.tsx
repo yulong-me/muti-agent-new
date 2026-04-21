@@ -5,6 +5,7 @@ import { X, Search } from 'lucide-react'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_COLORS, DEFAULT_AGENT_COLOR } from '../lib/agents'
 import { API_URL } from '@/lib/api'
+import { debug, info, warn } from '@/lib/logger'
 
 const API = API_URL;
 
@@ -35,9 +36,17 @@ function useAgentList(excludeIds: string[]) {
     fetch(`${API}/api/agents`)
       .then(r => r.json())
       .then((data: AgentItem[]) => {
-        setAgents(data.filter(a => !excludeSet.has(a.id) && a.id !== 'host'))
+        const next = data.filter(a => !excludeSet.has(a.id) && a.id !== 'host')
+        setAgents(next)
+        debug('ui:agent_invite:list_loaded', {
+          totalCount: data.length,
+          availableCount: next.length,
+        })
       })
-      .catch(() => setError('无法加载专家列表'))
+      .catch((err) => {
+        warn('ui:agent_invite:list_failed', { error: err })
+        setError('无法加载专家列表')
+      })
       .finally(() => setLoading(false))
   }, [excludeIds.join(',')])
 
@@ -71,6 +80,7 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
   const handleInvite = useCallback(async (agentId: string) => {
     setInvitingId(agentId)
     setInviteError(null)
+    info('ui:agent_invite:submit', { roomId, agentId })
     try {
       const res = await fetch(`${API}/api/rooms/${roomId}/agents`, {
         method: 'POST',
@@ -79,13 +89,21 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
       })
       if (!res.ok) {
         const data = await res.json()
+        warn('ui:agent_invite:failed', {
+          roomId,
+          agentId,
+          status: res.status,
+          error: data.error || '邀请失败',
+        })
         setInviteError(data.error || '邀请失败')
         return
       }
       setDone(agentId)
+      info('ui:agent_invite:success', { roomId, agentId })
       onInvited(agentId)
       // 不自动关闭，用户可继续邀请多个专家
-    } catch {
+    } catch (err) {
+      warn('ui:agent_invite:network_failed', { roomId, agentId, error: err })
       setInviteError('网络错误')
     } finally {
       setInvitingId(null)

@@ -1,3 +1,5 @@
+import { debug, info, warn } from '../lib/logger.js';
+
 interface ActiveAgentRun {
   roomId: string;
   agentId: string;
@@ -21,6 +23,11 @@ export function registerActiveAgentRun(args: {
   const key = buildRunKey(args.roomId, args.agentId);
   const existing = activeRuns.get(key);
   if (existing) {
+    warn('agent_run:register:conflict', {
+      roomId: args.roomId,
+      agentId: args.agentId,
+      existingStartedAt: existing.startedAt,
+    });
     const err = new Error(`Active run already exists for ${args.roomId}:${args.agentId}`);
     (err as Error & { code?: string }).code = 'AGENT_RUN_CONFLICT';
     throw err;
@@ -29,6 +36,12 @@ export function registerActiveAgentRun(args: {
   activeRuns.set(key, {
     ...args,
     startedAt: Date.now(),
+  });
+  debug('agent_run:register', {
+    roomId: args.roomId,
+    agentId: args.agentId,
+    agentName: args.agentName,
+    activeCount: activeRuns.size,
   });
 }
 
@@ -42,6 +55,11 @@ export function clearActiveAgentRun(
   if (!current) return;
   if (abortController && current.abortController !== abortController) return;
   activeRuns.delete(key);
+  debug('agent_run:clear', {
+    roomId,
+    agentId,
+    activeCount: activeRuns.size,
+  });
 }
 
 export function stopAgentRun(roomId: string, agentId: string): {
@@ -50,8 +68,17 @@ export function stopAgentRun(roomId: string, agentId: string): {
   startedAt?: number;
 } {
   const run = activeRuns.get(buildRunKey(roomId, agentId));
-  if (!run) return { stopped: false };
+  if (!run) {
+    debug('agent_run:stop:missing', { roomId, agentId });
+    return { stopped: false };
+  }
   run.abortController.abort();
+  info('agent_run:stop', {
+    roomId,
+    agentId,
+    agentName: run.agentName,
+    startedAt: run.startedAt,
+  });
   return {
     stopped: true,
     agentName: run.agentName,

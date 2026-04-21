@@ -24,7 +24,7 @@ import {
   removeOutgoingQueueItem,
 } from '../lib/outgoingQueue'
 import { rewriteMessageForDifferentAgent } from '../lib/errorRecovery'
-import { error as logError, telemetry, setRoomId } from '../lib/logger'
+import { debug, error as logError, info, telemetry, setRoomId, warn } from '../lib/logger'
 import CreateRoomModal from './CreateRoomModal'
 import { OutgoingMessageQueue } from './OutgoingMessageQueue'
 import SettingsModal from './SettingsModal'
@@ -134,6 +134,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [effectiveMaxDepth, setEffectiveMaxDepth] = useState(5)
   // F006: workspace path from poll
   const [workspace, setWorkspace] = useState<string | undefined>(undefined)
+  const [effectiveSkills, setEffectiveSkills] = useState<Array<{ name: string; mode: 'auto' | 'required'; sourceLabel: string }>>([])
+  const [globalSkillCount, setGlobalSkillCount] = useState(0)
+  const [workspaceDiscoveredCount, setWorkspaceDiscoveredCount] = useState(0)
   const [agentPanelWidth, setAgentPanelWidth] = useState(AGENT_PANEL_DEFAULT_WIDTH)
   const [agentPanelCollapsed, setAgentPanelCollapsed] = useState(false)
 
@@ -145,14 +148,17 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const { theme, resolvedTheme, setTheme } = useTheme()
   const currentTheme = resolvedTheme ?? theme
   const toggleTheme = useCallback(() => {
+    info('ui:theme:toggle', { nextTheme: currentTheme === 'dark' ? 'light' : 'dark' })
     setTheme(currentTheme === 'dark' ? 'light' : 'dark')
   }, [currentTheme, setTheme])
   const openSystemSettings = useCallback(() => {
+    debug('ui:settings:open', { tab: 'agent' })
     setSettingsInitialTab('agent')
     setSettingsOpen(true)
   }, [])
   const openRoom = useCallback((id: string) => {
     setMobileMenuOpen(false)
+    info('ui:room:open', { roomId: id })
     router.push(`/room/${id}`, { scroll: false })
   }, [router])
   const composerRef = useRef<RoomComposerHandle>(null)
@@ -256,6 +262,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     setComposerDraft('')
     setMessageErrorMap({})
     setOrphanErrors([])
+    setEffectiveSkills([])
+    setGlobalSkillCount(0)
+    setWorkspaceDiscoveredCount(0)
     // Reset all streaming refs so previous room's in-flight messages don't bleed in
     streamingMessagesRef.current.clear()
     streamingThinkingRef.current.clear()
@@ -272,6 +281,41 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
 
   useEffect(() => { agentsRef.current = agents }, [agents])
+
+  useEffect(() => {
+    if (!roomId) return
+    let cancelled = false
+    fetch(`${API}/api/rooms/${roomId}/skills`)
+      .then(async res => {
+        if (!res.ok) return { effectiveUnion: [], workspaceSkills: [], globalSkills: [] }
+        return await res.json() as {
+          effectiveUnion?: Array<{ name: string; mode: 'auto' | 'required'; sourceLabel: string }>
+          workspaceSkills?: Array<unknown>
+          globalSkills?: Array<unknown>
+        }
+      })
+      .then(data => {
+        if (cancelled) return
+        setEffectiveSkills(data.effectiveUnion ?? [])
+        setGlobalSkillCount(data.globalSkills?.length ?? 0)
+        setWorkspaceDiscoveredCount(data.workspaceSkills?.length ?? 0)
+        debug('ui:room:skills_loaded', {
+          roomId,
+          effectiveCount: data.effectiveUnion?.length ?? 0,
+          globalCount: data.globalSkills?.length ?? 0,
+          workspaceCount: data.workspaceSkills?.length ?? 0,
+        })
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setEffectiveSkills([])
+          setGlobalSkillCount(0)
+          setWorkspaceDiscoveredCount(0)
+        }
+        warn('ui:room:skills_load_failed', { roomId, error: err })
+      })
+    return () => { cancelled = true }
+  }, [roomId, workspace])
 
   useEffect(() => {
     const busyIds = new Set(busyAgents.map(agent => agent.id))
@@ -473,7 +517,9 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         preview: room.preview,
         agentCount: room.agentCount,
       })))
+      debug('ui:room_list:loaded', { count: data.length, source: 'initial' })
     })
+      .catch((err) => warn('ui:room_list:load_failed', { source: 'initial', error: err }))
   }, [])
 
   // F011: poll room list every 30s to keep updatedAt and preview fresh
@@ -491,6 +537,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
           agentCount: room.agentCount,
         })))
       })
+        .catch((err) => warn('ui:room_list:load_failed', { source: 'poll', error: err }))
     }, 30000)
     return () => clearInterval(interval)
   }, [])
@@ -924,6 +971,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const handleStopAgent = useCallback(async (agent: Agent) => {
     if (!roomId) return
 
+    info('ui:agent:stop', { roomId, agentId: agent.id, agentName: agent.name })
     setStoppingAgentIds(prev => {
       const next = new Set(prev)
       next.add(agent.id)
@@ -943,20 +991,24 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       })
 
       if (res.status === 409) {
+        warn('ui:agent:stop_failed', { roomId, agentId: agent.id, reason: 'not_running' })
         showSendError(`${agent.name} 已经不在回答了`, 3000)
         return
       }
       if (res.status === 404) {
+        warn('ui:agent:stop_failed', { roomId, agentId: agent.id, reason: 'not_found' })
         showSendError(`${agent.name} 当前不可用，请刷新后重试`, 3500)
         return
       }
+      warn('ui:agent:stop_failed', { roomId, agentId: agent.id, status: res.status })
       showSendError('停止失败，请稍后重试')
-    } catch {
+    } catch (err) {
       setStoppingAgentIds(prev => {
         const next = new Set(prev)
         next.delete(agent.id)
         return next
       })
+      warn('ui:agent:stop_network_failed', { roomId, agentId: agent.id, error: err })
       showSendError('停止失败，请检查网络')
     }
   }, [roomId, showSendError])
@@ -973,11 +1025,18 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         <RoomListSidebarDesktop
           rooms={rooms}
           currentRoomId={roomId}
-          onNewRoom={() => setIsCreateModalOpen(true)}
+          onNewRoom={() => {
+            debug('ui:room_create:open', { source: 'desktop_sidebar' })
+            setIsCreateModalOpen(true)
+          }}
           onSelectRoom={openRoom}
           onDeleteRoom={async (id) => {
+            info('ui:room:archive', { roomId: id, source: 'desktop_sidebar' })
             const res = await fetch(`${API}/api/rooms/${id}/archive`, { method: 'PATCH' })
-            if (!res.ok) return
+            if (!res.ok) {
+              warn('ui:room:archive_failed', { roomId: id, source: 'desktop_sidebar', status: res.status })
+              return
+            }
             if (id === roomId) router.push('/')
             else setRooms(rooms => rooms.filter(r => r.id !== id))
           }}
@@ -991,11 +1050,18 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
         <RoomListSidebarMobile
           rooms={rooms}
           currentRoomId={roomId}
-          onNewRoom={() => setIsCreateModalOpen(true)}
+          onNewRoom={() => {
+            debug('ui:room_create:open', { source: 'mobile_sidebar' })
+            setIsCreateModalOpen(true)
+          }}
           onSelectRoom={openRoom}
           onDeleteRoom={async (id) => {
+            info('ui:room:archive', { roomId: id, source: 'mobile_sidebar' })
             const res = await fetch(`${API}/api/rooms/${id}/archive`, { method: 'PATCH' })
-            if (!res.ok) return
+            if (!res.ok) {
+              warn('ui:room:archive_failed', { roomId: id, source: 'mobile_sidebar', status: res.status })
+              return
+            }
             if (id === roomId) router.push('/')
             else setRooms(rooms => rooms.filter(r => r.id !== id))
           }}
@@ -1033,6 +1099,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                   onChange={async (newDepth) => {
                     const prevMaxDepth = maxA2ADepth
                     const prevEffectiveMaxDepth = effectiveMaxDepth
+                    info('ui:room:a2a_depth_change', { roomId, nextDepth: newDepth })
                     setMaxA2ADepth(newDepth)
                     if (newDepth !== null) {
                       setEffectiveMaxDepth(newDepth)
@@ -1053,7 +1120,8 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
                       if (Object.prototype.hasOwnProperty.call(data, 'effectiveMaxDepth')) {
                         setEffectiveMaxDepth(data.effectiveMaxDepth)
                       }
-                    } catch {
+                    } catch (err) {
+                      warn('ui:room:a2a_depth_change_failed', { roomId, nextDepth: newDepth, error: err })
                       // revert on error
                       setMaxA2ADepth(prevMaxDepth)
                       setEffectiveMaxDepth(prevEffectiveMaxDepth)
@@ -1065,7 +1133,10 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               {roomId && (
                 <button
                   type="button"
-                  onClick={() => setAgentDrawerOpen(true)}
+                  onClick={() => {
+                    debug('ui:agent_panel:open_mobile', { roomId })
+                    setAgentDrawerOpen(true)
+                  }}
                   className="md:hidden p-2 text-ink-soft hover:text-accent transition-colors"
                   aria-label="查看参与 Agent"
                 >
@@ -1074,7 +1145,10 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               )}
               <button
                 type="button"
-                onClick={() => setShowInviteDrawer(true)}
+                onClick={() => {
+                  debug('ui:agent_invite:open', { roomId })
+                  setShowInviteDrawer(true)
+                }}
                 className="p-2 text-ink-soft hover:text-accent transition-colors"
                 aria-label="邀请专家入群"
               >
@@ -1193,6 +1267,11 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
           roomId={roomId}
           agents={agents}
           workspace={workspace}
+          skillSummary={{
+            effectiveSkills,
+            globalSkillCount,
+            workspaceDiscoveredCount,
+          }}
           isMobileOpen={agentDrawerOpen}
           onMobileClose={() => setAgentDrawerOpen(false)}
           desktopWidth={agentPanelWidth}

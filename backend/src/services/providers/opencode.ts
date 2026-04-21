@@ -41,11 +41,13 @@ export function buildOpenCodeProviderLaunch(
   const thinking = opts.thinking !== false;
   const sessionId = opts.sessionId as string | undefined;
   const workspace = opts.workspace as string | undefined;
+  const providerRuntimeDir = opts.providerRuntimeDir as string | undefined;
+  // Let opencode pick its configured default model unless the caller explicitly overrides it.
   const model = typeof opts.model === 'string' && opts.model.trim()
     ? opts.model.trim()
     : undefined;
   const cliPath = (providerCfg?.cliPath ?? 'opencode').replace(/^~/, baseEnv.HOME || '/root');
-  const cwd = workspace ?? '/tmp';
+  const cwd = providerRuntimeDir ?? workspace ?? '/tmp';
 
   const env: Record<string, string> = { ...(baseEnv as Record<string, string>) };
   if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
@@ -165,6 +167,7 @@ export async function* streamOpenCodeProvider(
   const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 180000); // 3 min
   const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 180000);
   const workspace = opts.workspace as string | undefined;
+  const providerRuntimeDir = opts.providerRuntimeDir as string | undefined;
   const signal = opts.signal as AbortSignal | undefined;
 
   debug('provider:call_start', {
@@ -187,6 +190,7 @@ export async function* streamOpenCodeProvider(
     command,
     provider: 'opencode',
     workspace,
+    providerRuntimeDir,
     cwd: launch.cwd,
     sessionId: sessionId ?? null,
     thinking,

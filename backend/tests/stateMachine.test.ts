@@ -60,6 +60,21 @@ vi.mock('../src/services/workspace.js', () => ({
   ensureWorkspace: vi.fn().mockResolvedValue('/tmp/test-workspace'),
 }));
 
+vi.mock('../src/services/skills.js', () => ({
+  resolveEffectiveSkills: vi.fn().mockResolvedValue({
+    workspacePath: '/tmp/test-workspace',
+    roomBindings: [],
+    agentBindings: [],
+    discovered: [],
+    effective: [],
+  }),
+  assembleProviderRuntime: vi.fn().mockResolvedValue({
+    providerRuntimeDir: '/tmp/provider-runtime',
+    providerWorkspacePath: '/tmp/provider-runtime/workspace',
+  }),
+  buildEffectiveSkillSummary: vi.fn().mockReturnValue(undefined),
+}));
+
 // 动态导入以获取最新代码
 describe('F004: Manager 路由器', () => {
   beforeEach(async () => {

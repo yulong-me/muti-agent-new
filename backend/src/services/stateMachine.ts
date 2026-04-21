@@ -27,6 +27,11 @@ import { sessionsRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { ensureWorkspace } from './workspace.js';
 import {
+  assembleProviderRuntime,
+  buildEffectiveSkillSummary,
+  resolveEffectiveSkills,
+} from './skills.js';
+import {
   scanForA2AMentions,
   getEffectiveMaxDepthForRoom,
   updateA2AContext,
@@ -492,7 +497,29 @@ async function streamingCallAgent(
     providerName = agentConfig?.provider ?? 'claude-code';
     const systemPrompt = agentConfig?.systemPrompt ?? ctx.systemPrompt;
     const room = store.get(roomId);
+
+    activeRunController = new AbortController();
+    registerActiveAgentRun({
+      roomId,
+      agentId,
+      agentName,
+      abortController: activeRunController,
+    });
+    activeRunRegistered = true;
+
     const workspace = await ensureWorkspace(roomId, room?.workspace);
+    const skillState = await resolveEffectiveSkills({
+      roomId,
+      agentConfigId: configId,
+      workspacePath: workspace,
+      providerName,
+    });
+    const runtimeAssembly = await assembleProviderRuntime({
+      roomId,
+      providerName,
+      effectiveWorkspace: workspace,
+      effectiveSkills: skillState.effective,
+    });
 
     // F016: build scene-scoped prompt
     const recentTranscript = room
@@ -507,6 +534,7 @@ async function streamingCallAgent(
       toAgentName: agentName,
       a2aCallChain: room?.a2aCallChain,
       workspace,
+      skillsSummary: buildEffectiveSkillSummary(skillState.effective),
     }) ?? `${basePrompt}\n\n${ctx.userMessage}`;
 
     const existingSessionId = room?.sessionIds[agentName];
@@ -515,21 +543,14 @@ async function streamingCallAgent(
       ...(agentConfig?.providerOpts ?? {}),
       sessionId: existingSessionId,
       workspace,
+      providerRuntimeDir: runtimeAssembly.providerRuntimeDir,
       roomId,
       agentName,
       firstTokenTimeoutMs: 180000,  // 3 min — generous for cold-start / long thinking
       idleTokenTimeoutMs: 180000,
     };
 
-    activeRunController = new AbortController();
     providerOpts.signal = activeRunController.signal;
-    registerActiveAgentRun({
-      roomId,
-      agentId,
-      agentName,
-      abortController: activeRunController,
-    });
-    activeRunRegistered = true;
 
     msg = addMessage(roomId, {
       agentRole,
@@ -549,6 +570,7 @@ async function streamingCallAgent(
       promptLength: prompt.length,
       sessionId: existingSessionId ?? 'new',
       workspace,
+      providerRuntimeDir: runtimeAssembly.providerRuntimeDir,
     });
     debug('stream.start', { roomId, agentId, agentName, msgId, agentRole });
     emitStreamStart(roomId, agentId, agentName, Date.now(), msgId, agentRole);

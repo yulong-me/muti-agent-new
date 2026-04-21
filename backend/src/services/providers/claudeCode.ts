@@ -39,13 +39,14 @@ export function buildClaudeProviderLaunch(
   const timeout = ((opts.timeout as number) ?? (providerCfg?.timeout ?? 90)) * 1000;
   const sessionId = opts.sessionId as string | undefined;
   const workspace = opts.workspace as string | undefined;
+  const providerRuntimeDir = opts.providerRuntimeDir as string | undefined;
   const model = typeof opts.model === 'string' && opts.model.trim()
     ? opts.model.trim()
     : providerCfg?.defaultModel.trim()
     ? providerCfg.defaultModel.trim()
     : undefined;
   const cliPath = (providerCfg?.cliPath ?? 'claude').replace(/^~/, baseEnv.HOME || '/root');
-  const cwd = workspace ?? process.cwd();
+  const cwd = providerRuntimeDir ?? workspace ?? process.cwd();
 
   const env: Record<string, string> = { ...(baseEnv as Record<string, string>) };
   if (providerCfg?.apiKey) env.ANTHROPIC_API_KEY = providerCfg.apiKey;
@@ -104,6 +105,7 @@ export async function* streamClaudeCodeProvider(
   const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 180000); // 3 min
   const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 180000);
   const workspace = opts.workspace as string | undefined;
+  const providerRuntimeDir = opts.providerRuntimeDir as string | undefined;
   const signal = opts.signal as AbortSignal | undefined;
 
   debug('provider:call_start', {
@@ -125,6 +127,7 @@ export async function* streamClaudeCodeProvider(
     command,
     provider: 'claude-code',
     workspace,
+    providerRuntimeDir,
     cwd: launch.cwd,
     sessionId: sessionId ?? null,
     timeout,

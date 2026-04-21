@@ -20,6 +20,8 @@ export const runtimePaths = {
   logsDir: path.join(runtimeRoot, 'logs'),
   workspaceBaseDir: path.join(runtimeRoot, 'workspaces'),
   workspaceArchiveDir: path.join(runtimeRoot, 'workspaces-archive'),
+  managedSkillsDir: path.join(runtimeRoot, 'data', 'skills', 'managed'),
+  providerRuntimeBaseDir: path.join(runtimeRoot, 'data', 'provider-runtime'),
   builtinSkillsDir,
 } as const;
 

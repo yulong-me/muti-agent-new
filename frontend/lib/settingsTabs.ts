@@ -1,6 +1,7 @@
-export type SettingsTab = 'agent' | 'provider' | 'scene'
+export type SettingsTab = 'agent' | 'provider' | 'scene' | 'skill'
 
 export function resolveSettingsTab(value?: string | null): SettingsTab {
+  if (value === 'skill' || value === 'skills') return 'skill'
   if (value === 'provider' || value === 'providers') return 'provider'
   if (value === 'scene' || value === 'scenes') return 'scene'
   if (value === 'agent' || value === 'agents') return 'agent'

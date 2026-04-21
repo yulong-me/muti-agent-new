@@ -5,15 +5,20 @@
  */
 import type { Server as SocketIOServer } from 'socket.io';
 import type { AgentRunError } from '../types.js';
+import { debug, error, info } from '../lib/logger.js';
 
 let _io: SocketIOServer | null = null;
 
 export function initSocketEmitter(io: SocketIOServer) {
   _io = io;
+  info('socket:emitter:init');
 }
 
 function getIO() {
-  if (!_io) throw new Error('Socket emitter not initialized — call initSocketEmitter first');
+  if (!_io) {
+    error('socket:emitter:uninitialized');
+    throw new Error('Socket emitter not initialized — call initSocketEmitter first');
+  }
   return _io;
 }
 
@@ -24,6 +29,7 @@ export function emitStreamDelta(roomId: string, agentId: string, text: string) {
 
 /** Emit streaming start — frontend creates a placeholder message */
 export function emitStreamStart(roomId: string, agentId: string, agentName: string, timestamp: number, id: string, agentRole: string) {
+  debug('socket:emit:stream_start', { roomId, agentId, agentName, messageId: id, agentRole });
   getIO().to(roomId).emit('stream_start', { roomId, agentId, agentName, timestamp, id, agentRole });
 }
 
@@ -34,6 +40,7 @@ export function emitStreamEnd(
   id: string,
   stats: { duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number },
 ) {
+  debug('socket:emit:stream_end', { roomId, agentId, messageId: id, duration_ms: stats.duration_ms, output_tokens: stats.output_tokens });
   getIO().to(roomId).emit('stream_end', { roomId, agentId, id, ...stats });
 }
 
@@ -49,6 +56,7 @@ export function emitToolUse(roomId: string, agentId: string, toolName: string, t
 
 /** Emit agent status change */
 export function emitAgentStatus(roomId: string, agentId: string, status: string) {
+  debug('socket:emit:agent_status', { roomId, agentId, status });
   getIO().to(roomId).emit('agent_status', { roomId, agentId, status });
 }
 
@@ -57,11 +65,13 @@ export function emitRoomErrorEvent(
   roomId: string,
   error: AgentRunError,
 ) {
+  debug('socket:emit:room_error', { roomId, agentId: error.agentId, code: error.code, retryable: error.retryable });
   getIO().to(roomId).emit('room_error_event', { roomId, error });
 }
 
 /** Emit user message insertion — frontend inserts immediately without waiting for poll */
 export function emitUserMessage(roomId: string, message: { id: string; agentRole: string; agentName: string; content: string; timestamp: number; type: string }) {
+  debug('socket:emit:user_message', { roomId, messageId: message.id, agentName: message.agentName, type: message.type });
   getIO().to(roomId).emit('user_message', { roomId, message });
 }
 
@@ -72,5 +82,6 @@ export function emitRoomAgentJoined(
   systemMessage: { id: string; agentRole: string; agentName: string; content: string; timestamp: number; type: string },
   agents: { id: string; role: string; name: string; domainLabel: string; configId: string; status: string }[],
 ) {
+  info('socket:emit:room_agent_joined', { roomId, agentId: agent.id, agentName: agent.name, totalAgents: agents.length });
   getIO().to(roomId).emit('room:agent-joined', { roomId, agent, systemMessage, agents });
 }

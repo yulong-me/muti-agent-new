@@ -5,6 +5,7 @@
 import { streamClaudeCodeProvider } from './claudeCode.js';
 import { streamOpenCodeProvider } from './opencode.js';
 import type { ProviderName } from '../../config/agentConfig.js';
+import { warn } from '../../lib/logger.js';
 
 // Re-export the unified event type
 export type ClaudeEvent =
@@ -28,6 +29,9 @@ const PROVIDERS: Record<ProviderName, StreamFn> = {
 
 export function getProvider(name: ProviderName): StreamFn {
   const fn = PROVIDERS[name];
-  if (!fn) throw new Error(`Unknown provider: ${name}`);
+  if (!fn) {
+    warn('provider:resolve:unknown', { provider: name });
+    throw new Error(`Unknown provider: ${name}`);
+  }
   return fn;
 }

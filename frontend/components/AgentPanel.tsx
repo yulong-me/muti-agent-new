@@ -1,14 +1,25 @@
 'use client'
 
-import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from 'react'
-import { GripVertical, X } from 'lucide-react'
+import { useCallback, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { ChevronDown, GripVertical, X } from 'lucide-react'
 import { type Agent } from '../lib/agents'
 import { WorkspaceSidebar } from './WorkspaceSidebar'
+
+interface RoomSkillSummary {
+  effectiveSkills: Array<{
+    name: string
+    mode: 'auto' | 'required'
+    sourceLabel: string
+  }>
+  globalSkillCount: number
+  workspaceDiscoveredCount: number
+}
 
 interface AgentPanelProps {
   roomId?: string
   agents: Agent[]
   workspace?: string
+  skillSummary?: RoomSkillSummary
   isMobileOpen?: boolean
   onMobileClose?: () => void
   desktopWidth?: number
@@ -38,6 +49,7 @@ export function AgentPanel({
   roomId,
   agents,
   workspace,
+  skillSummary,
   isMobileOpen,
   onMobileClose,
   desktopWidth = 320,
@@ -93,7 +105,7 @@ export function AgentPanel({
             <GripVertical className="h-4 w-4 rounded-full bg-bg/70" />
           </button>
         )}
-        <PanelContent roomId={roomId} agents={agents} workspace={workspace} />
+        <PanelContent roomId={roomId} agents={agents} workspace={workspace} skillSummary={skillSummary} />
       </div>
 
       {/* Mobile: fixed right drawer */}
@@ -123,7 +135,7 @@ export function AgentPanel({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              <PanelContent roomId={roomId} agents={agents} workspace={workspace} />
+              <PanelContent roomId={roomId} agents={agents} workspace={workspace} skillSummary={skillSummary} />
             </div>
           </div>
         </div>
@@ -132,7 +144,27 @@ export function AgentPanel({
   )
 }
 
-function PanelContent({ roomId, agents, workspace }: { roomId?: string; agents: Agent[]; workspace?: string }) {
+function PanelContent({
+  roomId,
+  agents,
+  workspace,
+  skillSummary,
+}: {
+  roomId?: string
+  agents: Agent[]
+  workspace?: string
+  skillSummary?: RoomSkillSummary
+}) {
+  const [skillsCollapsed, setSkillsCollapsed] = useState(false)
+  const hasSkills = Boolean(
+    skillSummary &&
+    (
+      skillSummary.effectiveSkills.length > 0 ||
+      skillSummary.globalSkillCount > 0 ||
+      skillSummary.workspaceDiscoveredCount > 0
+    ),
+  )
+
   return (
     <>
       <div className="border-b border-white/[0.08] px-3 py-3 space-y-1.5">
@@ -173,6 +205,56 @@ function PanelContent({ roomId, agents, workspace }: { roomId?: string; agents: 
             ))
           )}
         </section>
+
+        {hasSkills && skillSummary && (
+          <section className="rounded-2xl border border-white/[0.06] bg-black/[0.08] px-2.5 py-2.5 space-y-2">
+            <button
+              type="button"
+              onClick={() => setSkillsCollapsed(value => !value)}
+              className="w-full flex items-center justify-between gap-2 px-0.5 text-left"
+              aria-expanded={!skillsCollapsed}
+              aria-label={skillsCollapsed ? '展开 Skills' : '收起 Skills'}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-soft/45">Skills</p>
+              <div className="flex items-center gap-2 text-[10px] text-ink-soft/50">
+                <span>{skillSummary.effectiveSkills.length}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${skillsCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+              </div>
+            </button>
+            {!skillsCollapsed && (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {skillSummary.effectiveSkills.map(skill => (
+                    <span
+                      key={`${skill.name}:${skill.sourceLabel}`}
+                      className={`text-[11px] px-2 py-1 rounded-lg border ${
+                        skill.mode === 'required'
+                          ? 'bg-accent/12 border-accent/25 text-accent'
+                          : 'bg-white/[0.04] border-white/[0.08] text-ink-soft'
+                      }`}
+                    >
+                      {skill.name}
+                      {skill.mode === 'required' ? ' · required' : ''}
+                      {skill.sourceLabel === 'Global' ? ' · global' : ''}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {skillSummary.globalSkillCount > 0 && (
+                    <span className="text-[11px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-ink-soft">
+                      Global discovered {skillSummary.globalSkillCount}
+                    </span>
+                  )}
+                  {skillSummary.workspaceDiscoveredCount > 0 && (
+                    <span className="text-[11px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-ink-soft">
+                      Workspace discovered {skillSummary.workspaceDiscoveredCount}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
         {workspace && (
           <WorkspaceSidebar workspacePath={workspace} />

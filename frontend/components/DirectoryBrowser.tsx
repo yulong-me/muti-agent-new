@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { API_URL } from '@/lib/api'
+import { debug, info as logInfo, warn } from '@/lib/logger'
 
 const API = API_URL;
 
@@ -85,17 +86,28 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
       if (!res.ok) {
         if (fallbackOnForbidden && path && res.status === 403) {
           setInfo('配置路径不可用，已切换到主目录')
+          warn('ui:directory_browser:fallback_home', { path, status: res.status })
           await fetchDirectory(undefined, false)
           return
         }
         const data = await res.json()
+        warn('ui:directory_browser:load_failed', {
+          path: path ?? null,
+          status: res.status,
+          error: data.error || '无法读取目录',
+        })
         setError(data.error || '无法读取目录')
         return
       }
       const data: BrowseResult = await res.json()
       setBrowseResult(data)
       setPathInput(data.current)
+      debug('ui:directory_browser:loaded', {
+        path: data.current,
+        entryCount: data.entries.length,
+      })
     } catch {
+      warn('ui:directory_browser:network_failed', { path: path ?? null })
       setError('无法连接到服务器')
     } finally {
       setIsLoading(false)
@@ -109,13 +121,17 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
 
   const handlePathSubmit = useCallback(() => {
     const trimmed = pathInput.trim()
-    if (trimmed) fetchDirectory(trimmed)
+    if (trimmed) {
+      debug('ui:directory_browser:path_submit', { path: trimmed })
+      fetchDirectory(trimmed)
+    }
   }, [pathInput, fetchDirectory])
 
   const handleStartCreateDir = useCallback(() => {
     setCreatingDir(true)
     setNewDirName('')
     setMkdirError(null)
+    debug('ui:directory_browser:mkdir_start')
     setTimeout(() => newDirInputRef.current?.focus(), 0)
   }, [])
 
@@ -130,14 +146,29 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
       })
       if (!res.ok) {
         const data = await res.json()
+        warn('ui:directory_browser:mkdir_failed', {
+          parentPath: browseResult.current,
+          name: newDirName.trim(),
+          status: res.status,
+          error: data.error || '创建失败',
+        })
         setMkdirError(data.error || '创建失败')
         return
       }
       const data = await res.json()
       setCreatingDir(false)
       setNewDirName('')
+      logInfo('ui:directory_browser:mkdir_success', {
+        parentPath: browseResult.current,
+        name: data.name,
+        createdPath: data.createdPath,
+      })
       fetchDirectory(data.createdPath)
     } catch {
+      warn('ui:directory_browser:mkdir_network_failed', {
+        parentPath: browseResult.current,
+        name: newDirName.trim(),
+      })
       setMkdirError('无法连接到服务器')
     }
   }, [newDirName, browseResult, fetchDirectory])
@@ -339,15 +370,24 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
               onClick={async () => {
                 try {
                   const res = await fetch(`${API}/api/browse/pick-directory`, { method: 'POST' })
-                  if (res.status === 204 || res.status === 0) return // 用户取消
+                  if (res.status === 204 || res.status === 0) {
+                    debug('ui:directory_browser:native_picker_cancelled')
+                    return // 用户取消
+                  }
                   if (!res.ok) {
                     const data = await res.json()
+                    warn('ui:directory_browser:native_picker_failed', {
+                      status: res.status,
+                      error: data.error || '系统选择器失败',
+                    })
                     setError(data.error || '系统选择器失败')
                     return
                   }
                   const data = await res.json()
+                  logInfo('ui:directory_browser:native_picker_selected', { path: data.path })
                   onSelect(data.path)
                 } catch {
+                  warn('ui:directory_browser:native_picker_network_failed')
                   setError('无法打开系统选择器')
                 }
               }}
@@ -366,7 +406,11 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
             </button>
             <button
               type="button"
-              onClick={() => browseResult && onSelect(browseResult.current)}
+              onClick={() => {
+                if (!browseResult) return
+                logInfo('ui:directory_browser:selected', { path: browseResult.current, source: 'manual' })
+                onSelect(browseResult.current)
+              }}
               disabled={!browseResult}
               className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-deep text-white text-sm font-medium transition-colors disabled:opacity-40"
             >

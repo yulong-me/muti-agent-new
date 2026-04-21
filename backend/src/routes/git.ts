@@ -4,6 +4,7 @@ import { basename, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { Router } from 'express';
 
+import { debug, info, warn } from '../lib/logger.js';
 import { validateWorkspacePath } from '../services/workspace.js';
 
 const execFileAsync = promisify(execFile);
@@ -158,6 +159,7 @@ function parseStatus(stdout: string, repoRoot: string): GitChangedFile[] {
 gitRouter.get('/status', async (req, res) => {
   const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : '';
   if (!workspacePath) {
+    warn('git:status:invalid', { reason: 'missing_workspace_path' });
     return res.status(400).json({ error: 'workspacePath 为必填' });
   }
 
@@ -165,6 +167,7 @@ gitRouter.get('/status', async (req, res) => {
     const scope = await resolveGitScope(workspacePath);
     if (!scope) {
       const safeWorkspace = await resolveWorkspace(workspacePath);
+      debug('git:status:not_repo', { workspacePath: safeWorkspace });
       return res.json({
         isRepo: false,
         workspacePath: safeWorkspace,
@@ -176,6 +179,15 @@ gitRouter.get('/status', async (req, res) => {
     if (scope.scopePathspec.length) args.push(...scope.scopePathspec);
     const statusResult = await runGit(args, scope.repoRoot);
     const changedFiles = parseStatus(statusResult.stdout, scope.repoRoot);
+    debug('git:status', {
+      workspacePath: scope.workspacePath,
+      repoRoot: scope.repoRoot,
+      branch: scope.branch,
+      changedCount: changedFiles.length,
+      stagedCount: changedFiles.filter(file => file.staged).length,
+      unstagedCount: changedFiles.filter(file => file.unstaged).length,
+      untrackedCount: changedFiles.filter(file => file.untracked).length,
+    });
 
     return res.json({
       isRepo: true,
@@ -190,6 +202,7 @@ gitRouter.get('/status', async (req, res) => {
       untrackedCount: changedFiles.filter(file => file.untracked).length,
     });
   } catch (err) {
+    warn('git:status:failed', { workspacePath, error: err });
     return res.status(400).json({ error: `无法读取 Git 状态: ${(err as Error).message}` });
   }
 });
@@ -199,12 +212,14 @@ gitRouter.get('/diff', async (req, res) => {
   const filePath = typeof req.query.filePath === 'string' ? req.query.filePath : '';
   const staged = req.query.staged === '1' || req.query.staged === 'true';
   if (!workspacePath) {
+    warn('git:diff:invalid', { reason: 'missing_workspace_path', filePath, staged });
     return res.status(400).json({ error: 'workspacePath 为必填' });
   }
 
   try {
     const scope = await resolveGitScope(workspacePath);
     if (!scope) {
+      warn('git:diff:not_repo', { workspacePath });
       return res.status(400).json({ error: '当前工作区不是 Git 仓库' });
     }
 
@@ -242,12 +257,20 @@ gitRouter.get('/diff', async (req, res) => {
     }
 
     const diffResult = await runGit(diffArgs, scope.repoRoot);
+    debug('git:diff', {
+      workspacePath: scope.workspacePath,
+      repoRoot: scope.repoRoot,
+      filePath: targetPath || null,
+      staged,
+      diffLength: diffResult.stdout.length,
+    });
     return res.json({
       path: targetPath || null,
       staged,
       diff: diffResult.stdout,
     });
   } catch (err) {
+    warn('git:diff:failed', { workspacePath, filePath, staged, error: err });
     return res.status(400).json({ error: `无法读取 Git diff: ${(err as Error).message}` });
   }
 });
@@ -255,12 +278,14 @@ gitRouter.get('/diff', async (req, res) => {
 gitRouter.post('/stage', async (req, res) => {
   const { workspacePath, paths } = req.body as { workspacePath?: string; paths?: unknown };
   if (!workspacePath) {
+    warn('git:stage:invalid', { reason: 'missing_workspace_path' });
     return res.status(400).json({ error: 'workspacePath 为必填' });
   }
 
   try {
     const scope = await resolveGitScope(workspacePath);
     if (!scope) {
+      warn('git:stage:not_repo', { workspacePath });
       return res.status(400).json({ error: '当前工作区不是 Git 仓库' });
     }
 
@@ -272,8 +297,15 @@ gitRouter.post('/stage', async (req, res) => {
       args.push(...scope.scopePathspec);
     }
     await runGit(args, scope.repoRoot);
+    info('git:stage', {
+      workspacePath: scope.workspacePath,
+      repoRoot: scope.repoRoot,
+      pathCount: targetPaths.length,
+      scope: targetPaths.length > 0 ? 'selected' : 'workspace',
+    });
     return res.json({ ok: true });
   } catch (err) {
+    warn('git:stage:failed', { workspacePath, error: err });
     return res.status(400).json({ error: `无法暂存文件: ${(err as Error).message}` });
   }
 });
@@ -281,12 +313,14 @@ gitRouter.post('/stage', async (req, res) => {
 gitRouter.post('/unstage', async (req, res) => {
   const { workspacePath, paths } = req.body as { workspacePath?: string; paths?: unknown };
   if (!workspacePath) {
+    warn('git:unstage:invalid', { reason: 'missing_workspace_path' });
     return res.status(400).json({ error: 'workspacePath 为必填' });
   }
 
   try {
     const scope = await resolveGitScope(workspacePath);
     if (!scope) {
+      warn('git:unstage:not_repo', { workspacePath });
       return res.status(400).json({ error: '当前工作区不是 Git 仓库' });
     }
 
@@ -310,8 +344,16 @@ gitRouter.post('/unstage', async (req, res) => {
       }
       await runGit(args, scope.repoRoot);
     }
+    info('git:unstage', {
+      workspacePath: scope.workspacePath,
+      repoRoot: scope.repoRoot,
+      pathCount: targetPaths.length,
+      scope: targetPaths.length > 0 ? 'selected' : 'workspace',
+      hasHead: scope.hasHead,
+    });
     return res.json({ ok: true });
   } catch (err) {
+    warn('git:unstage:failed', { workspacePath, error: err });
     return res.status(400).json({ error: `无法取消暂存: ${(err as Error).message}` });
   }
 });
@@ -319,26 +361,36 @@ gitRouter.post('/unstage', async (req, res) => {
 gitRouter.post('/commit', async (req, res) => {
   const { workspacePath, message } = req.body as { workspacePath?: string; message?: string };
   if (!workspacePath) {
+    warn('git:commit:invalid', { reason: 'missing_workspace_path' });
     return res.status(400).json({ error: 'workspacePath 为必填' });
   }
   if (!message?.trim()) {
+    warn('git:commit:invalid', { reason: 'empty_message', workspacePath });
     return res.status(400).json({ error: '提交信息不能为空' });
   }
 
   try {
     const scope = await resolveGitScope(workspacePath);
     if (!scope) {
+      warn('git:commit:not_repo', { workspacePath });
       return res.status(400).json({ error: '当前工作区不是 Git 仓库' });
     }
 
     const stagedCheck = await runGit(['diff', '--cached', '--quiet'], scope.repoRoot, { allowCode1: true });
     if (stagedCheck.code === 0) {
+      warn('git:commit:empty_index', { workspacePath: scope.workspacePath, repoRoot: scope.repoRoot });
       return res.status(400).json({ error: '暂存区为空，无法提交' });
     }
 
     await runGit(['-c', 'commit.gpgsign=false', 'commit', '-m', message.trim()], scope.repoRoot);
     const summary = await runGit(['log', '-1', '--pretty=%H%n%h%n%s'], scope.repoRoot);
     const [hash = '', shortHash = '', subject = ''] = summary.stdout.trim().split('\n');
+    info('git:commit', {
+      workspacePath: scope.workspacePath,
+      repoRoot: scope.repoRoot,
+      shortHash,
+      subject,
+    });
 
     return res.json({
       ok: true,
@@ -349,6 +401,7 @@ gitRouter.post('/commit', async (req, res) => {
       },
     });
   } catch (err) {
+    warn('git:commit:failed', { workspacePath, error: err });
     return res.status(400).json({ error: `无法提交变更: ${(err as Error).message}` });
   }
 });

@@ -7,6 +7,7 @@ import { auditRepo } from './repositories/audit.js';
 import { agentsRepo } from './repositories/agents.js';
 import { providersRepo } from './repositories/providers.js';
 import { scenesRepo } from './repositories/scenes.js';
+import { skillsRepo, agentSkillBindingsRepo, roomSkillBindingsRepo } from './repositories/skills.js';
 import { log } from '../log.js';
 import {
   BUILTIN_AGENT_DEFINITIONS,
@@ -186,3 +187,6 @@ export { auditRepo };
 export { agentsRepo };
 export { providersRepo };
 export { scenesRepo };
+export { skillsRepo };
+export { agentSkillBindingsRepo };
+export { roomSkillBindingsRepo };

@@ -8,7 +8,7 @@
  */
 
 import { Router } from 'express';
-import { error, info } from '../lib/logger.js';
+import { debug, error, info, warn } from '../lib/logger.js';
 import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
@@ -18,6 +18,13 @@ import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
 import { resolveEffectiveMaxDepth } from '../services/routing/A2ARouter.js';
+import {
+  discoverWorkspaceSkills,
+  getRoomWorkspace,
+  listRoomSkillBindings,
+  replaceRoomSkillBindings,
+  resolveEffectiveSkills,
+} from '../services/skills.js';
 
 export const roomsRouter = Router();
 
@@ -33,19 +40,22 @@ roomsRouter.get('/sidebar', (_req, res) => {
 
 // POST /api/rooms — 创建讨论室（F012: 无 MANAGER，只有 WORKER）
 roomsRouter.post('/', async (req, res) => {
-  const { topic, workerIds: rawWorkerIds, workspacePath, sceneId } = req.body as {
+  const { topic, workerIds: rawWorkerIds, workspacePath, sceneId, roomSkills: rawRoomSkills } = req.body as {
     topic?: string;
     workerIds?: string[];
     workspacePath?: string; // F006: custom workspace directory
     sceneId?: string; // F016: scene ID, defaults to roundtable-forum
+    roomSkills?: Array<{ skillId?: string; skillName?: string; mode?: 'auto' | 'required'; enabled?: boolean }>;
   };
 
   const workerIds: string[] = rawWorkerIds ?? [];
+  const roomSkills = rawRoomSkills ?? [];
   const roomTopic = topic?.trim() || '自由讨论';
 
   // F016: Validate sceneId — always check effectiveSceneId exists
   const effectiveSceneId = sceneId ?? 'roundtable-forum';
   if (!scenesRepo.get(effectiveSceneId)) {
+    warn('room:create:invalid_scene', { sceneId: effectiveSceneId });
     return res.status(400).json({ error: `Scene not found: ${effectiveSceneId}` });
   }
 
@@ -54,17 +64,20 @@ roomsRouter.post('/', async (req, res) => {
     try {
       await validateWorkspacePath(workspacePath);
     } catch (err) {
+      warn('room:create:invalid_workspace', { workspacePath, error: err });
       return res.status(400).json({ error: (err as Error).message });
     }
   }
 
   if (!workerIds || workerIds.length < 1) {
+    warn('room:create:invalid_workers', { reason: 'empty_worker_list' });
     return res.status(400).json({ error: '至少选择 1 位专家' });
   }
 
   // Resolve workers (with role + enabled validation)
   const invalid = workerIds.filter(id => !getAgent(id));
   if (invalid.length > 0) {
+    warn('room:create:invalid_workers', { reason: 'agent_not_found', invalid });
     return res.status(400).json({ error: `Agent not found: ${invalid.join(', ')}` });
   }
   const disabled = workerIds.filter(id => {
@@ -72,6 +85,7 @@ roomsRouter.post('/', async (req, res) => {
     return !cfg.enabled || cfg.role !== 'WORKER';
   });
   if (disabled.length > 0) {
+    warn('room:create:invalid_workers', { reason: 'disabled_or_non_worker', invalid: disabled });
     return res.status(400).json({ error: `Invalid workers (must be enabled WORKER): ${disabled.join(', ')}` });
   }
 
@@ -104,6 +118,23 @@ roomsRouter.post('/', async (req, res) => {
   };
   store.create(room);
   roomsRepo.create(room);
+  try {
+    if (roomSkills.length > 0) {
+      replaceRoomSkillBindings(room.id, roomSkills);
+    }
+  } catch (err) {
+    store.delete(room.id);
+    roomsRepo.permanentDelete(room.id);
+    warn('room:create:invalid_skills', { roomId: room.id, error: err, skillCount: roomSkills.length });
+    return res.status(400).json({ error: (err as Error).message || 'Invalid room skills' });
+  }
+  info('room:create', {
+    roomId: room.id,
+    sceneId: room.sceneId,
+    workerCount: workerEntries.length,
+    roomSkillCount: roomSkills.length,
+    hasWorkspace: Boolean(room.workspace),
+  });
   auditRepo.log('room:create', room.topic, undefined, {
     roomId: room.id,
     workerCount: workerEntries.length,
@@ -120,17 +151,90 @@ roomsRouter.get('/:id', (req, res) => {
   res.json(room);
 });
 
+roomsRouter.get('/:id/skills', async (req, res) => {
+  const room = store.get(req.params.id);
+  if (!room) {
+    warn('room:skills:get:not_found', { roomId: req.params.id });
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  const workspacePath = await getRoomWorkspace(req.params.id);
+  const roomBindings = listRoomSkillBindings(req.params.id);
+  const discoveredResult = await discoverWorkspaceSkills(workspacePath);
+  const agentSkillStates = await Promise.all(room.agents.map(async agent => {
+    const effective = await resolveEffectiveSkills({
+      roomId: req.params.id,
+      agentConfigId: agent.configId,
+      workspacePath,
+      providerName: getAgent(agent.configId)?.provider ?? 'claude-code',
+    });
+    return {
+      agentId: agent.id,
+      configId: agent.configId,
+      agentName: agent.name,
+      provider: getAgent(agent.configId)?.provider ?? 'claude-code',
+      agentBindings: effective.agentBindings,
+      effectiveSkills: effective.effective,
+    };
+  }));
+
+  const effectiveUnion = Array.from(new Map(
+    agentSkillStates.flatMap(state => state.effectiveSkills).map(skill => [skill.name, skill]),
+  ).values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  debug('room:skills:get', {
+    roomId: req.params.id,
+    roomBindingCount: roomBindings.length,
+    globalCount: discoveredResult.globalSkills.length,
+    workspaceCount: discoveredResult.workspaceSkills.length,
+    effectiveCount: effectiveUnion.length,
+    agentCount: agentSkillStates.length,
+  });
+
+  res.json({
+    workspacePath,
+    roomBindings,
+    discovered: discoveredResult.skills,
+    globalSkills: discoveredResult.globalSkills,
+    workspaceSkills: discoveredResult.workspaceSkills,
+    effectiveUnion,
+    agentSkillStates,
+  });
+});
+
+roomsRouter.put('/:id/skills', (req, res) => {
+  const room = store.get(req.params.id);
+  if (!room) {
+    warn('room:skills:update:not_found', { roomId: req.params.id });
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  const bindings = Array.isArray(req.body?.bindings) ? req.body.bindings : [];
+  try {
+    const next = replaceRoomSkillBindings(req.params.id, bindings);
+    info('room:skills:update', { roomId: req.params.id, bindingCount: next.length });
+    res.json(next);
+  } catch (err) {
+    warn('room:skills:update:invalid', { roomId: req.params.id, error: err });
+    res.status(400).json({ error: (err as Error).message || 'Failed to update room skills' });
+  }
+});
+
 // PATCH /api/rooms/:id — 更新讨论室配置（F017: maxA2ADepth）
 roomsRouter.patch('/:id', (req, res) => {
   const { id } = req.params;
   const room = store.get(id);
-  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!room) {
+    warn('room:update:not_found', { roomId: id });
+    return res.status(404).json({ error: 'Room not found' });
+  }
 
   const { maxA2ADepth } = req.body as { maxA2ADepth?: number | null };
 
   // 有效值：3, 5, 10, 0(无限), null(继承scene)
   const validValues = new Set([3, 5, 10, 0, null]);
   if (maxA2ADepth !== undefined && !validValues.has(maxA2ADepth)) {
+    warn('room:update:invalid_depth', { roomId: id, maxA2ADepth });
     return res.status(400).json({ error: 'maxA2ADepth must be 3, 5, 10, 0, or null' });
   }
 
@@ -139,6 +243,12 @@ roomsRouter.patch('/:id', (req, res) => {
 
   // 同步更新 in-memory store
   store.update(id, { maxA2ADepth: updated.maxA2ADepth });
+
+  info('room:update:max_depth', {
+    roomId: id,
+    maxA2ADepth: updated.maxA2ADepth,
+    effectiveMaxDepth: resolveEffectiveMaxDepth(updated.maxA2ADepth, updated.sceneId),
+  });
 
   res.json({
     ...updated,
@@ -241,8 +351,12 @@ roomsRouter.post('/:id/agents/:agentId/stop', (req, res) => {
 // POST /api/rooms/:id/report — 生成报告（无状态，系统级服务）
 roomsRouter.post('/:id/report', async (req, res) => {
   const room = store.get(req.params.id);
-  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!room) {
+    warn('room:report:not_found', { roomId: req.params.id });
+    return res.status(404).json({ error: 'Room not found' });
+  }
   if (isRoomBusy(req.params.id)) {
+    warn('room:report:busy', { roomId: req.params.id });
     return res.status(409).json({ code: 'ROOM_BUSY', error: 'Room has an Agent currently executing' });
   }
 
@@ -251,12 +365,14 @@ roomsRouter.post('/:id/report', async (req, res) => {
     .join('\n\n');
 
   if (!allContent.trim()) {
+    warn('room:report:empty', { roomId: req.params.id });
     return res.status(400).json({ error: 'No messages to generate report from' });
   }
 
   // 用第一个 WORKER 作为报告生成的执行者（无状态，系统级角色）
   const worker = room.agents.find(a => a.role === 'WORKER');
   if (!worker) {
+    warn('room:report:no_worker', { roomId: req.params.id });
     return res.status(400).json({ error: 'No expert available to generate report' });
   }
 
@@ -266,6 +382,14 @@ roomsRouter.post('/:id/report', async (req, res) => {
   store.update(req.params.id, { state: 'DONE', report: reportOutput });
   roomsRepo.update(req.params.id, { state: 'DONE', report: reportOutput });
 
+  info('room:report', {
+    roomId: req.params.id,
+    workerId: worker.id,
+    workerName: worker.name,
+    messageCount: room.messages.length,
+    reportLength: reportOutput.length,
+  });
+
   res.json({ summary: reportOutput, actionItems: [] });
 });
 
@@ -273,19 +397,25 @@ roomsRouter.post('/:id/report', async (req, res) => {
 roomsRouter.patch('/:id/archive', async (req, res) => {
   const { id } = req.params;
   const room = store.get(id);
-  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!room) {
+    warn('room:archive:not_found', { roomId: id });
+    return res.status(404).json({ error: 'Room not found' });
+  }
 
   roomsRepo.archive(id);
   store.delete(id);
   await archiveWorkspace(id).catch(() => { }); // workspace 不存在也无妨
 
   auditRepo.log('room:archive', room.topic, undefined, { roomId: id });
+  info('room:archive', { roomId: id, topic: room.topic });
   res.json({ status: 'ok' });
 });
 
 // GET /api/rooms/archived — 列出已归档讨论室
 roomsRouter.get('/archived', (_req, res) => {
-  res.json(roomsRepo.listArchived());
+  const archived = roomsRepo.listArchived();
+  debug('room:archived:list', { count: archived.length });
+  res.json(archived);
 });
 
 // POST /api/rooms/:id/agents — 运行时追加 WORKER agent 入群（F007）
@@ -294,26 +424,41 @@ roomsRouter.post('/:id/agents', (req, res) => {
   const { agentId } = req.body as { agentId?: string };
 
   const room = store.get(id);
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.state === 'DONE') return res.status(400).json({ error: 'Room 已结束，无法添加成员' });
+  if (!room) {
+    warn('room:agent_add:not_found', { roomId: id });
+    return res.status(404).json({ error: 'Room not found' });
+  }
+  if (room.state === 'DONE') {
+    warn('room:agent_add:closed', { roomId: id, agentId });
+    return res.status(400).json({ error: 'Room 已结束，无法添加成员' });
+  }
 
-  if (!agentId) return res.status(400).json({ error: 'agentId required' });
+  if (!agentId) {
+    warn('room:agent_add:invalid', { roomId: id, reason: 'missing_agent_id' });
+    return res.status(400).json({ error: 'agentId required' });
+  }
 
   // 已存在校验
   if (room.agents.some(a => a.configId === agentId)) {
+    warn('room:agent_add:duplicate', { roomId: id, agentId });
     return res.status(400).json({ error: 'Agent 已在讨论中' });
   }
 
   const cfg = getAgent(agentId);
-  if (!cfg) return res.status(404).json({ error: `Agent not found: ${agentId}` });
+  if (!cfg) {
+    warn('room:agent_add:agent_not_found', { roomId: id, agentId });
+    return res.status(404).json({ error: `Agent not found: ${agentId}` });
+  }
 
   // 角色校验：仅允许追加 WORKER
   if (cfg.role !== 'WORKER') {
+    warn('room:agent_add:invalid_role', { roomId: id, agentId, role: cfg.role });
     return res.status(400).json({ error: '无法追加 MANAGER 角色' });
   }
 
   // 启用状态校验
   if (!cfg.enabled) {
+    warn('room:agent_add:disabled', { roomId: id, agentId });
     return res.status(400).json({ error: 'Agent 未启用，无法加入讨论' });
   }
 
@@ -349,6 +494,14 @@ roomsRouter.post('/:id/agents', (req, res) => {
     emitRoomAgentJoined(id, newAgent, systemMsg, room.agents);
   }).catch(() => { });
 
+  info('room:agent_add', {
+    roomId: id,
+    agentId: newAgent.id,
+    configId: newAgent.configId,
+    agentName: newAgent.name,
+    totalAgents: room.agents.length,
+  });
+
   res.json({ room, systemMessage: systemMsg });
 });
 
@@ -356,9 +509,13 @@ roomsRouter.post('/:id/agents', (req, res) => {
 roomsRouter.delete('/archived/:id', (req, res) => {
   const { id } = req.params;
   const archived = roomsRepo.listArchived().find(r => r.id === id);
-  if (!archived) return res.status(404).json({ error: 'Archived room not found' });
+  if (!archived) {
+    warn('room:permanent_delete:not_found', { roomId: id });
+    return res.status(404).json({ error: 'Archived room not found' });
+  }
   roomsRepo.permanentDelete(id);
   sessionsRepo.deleteByRoom(id);
   auditRepo.log('room:permanent_delete', archived.topic, undefined, { roomId: id });
+  info('room:permanent_delete', { roomId: id, topic: archived.topic });
   res.json({ status: 'ok' });
 });

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { FolderTree, GitBranch } from 'lucide-react'
 
 import { fetchGitDiff, previewWorkspaceFile } from '@/lib/workspace'
+import { debug, warn } from '@/lib/logger'
 
 import { WorkspaceFilesPanel } from './WorkspaceFilesPanel'
 import { WorkspaceGitPanel } from './WorkspaceGitPanel'
@@ -65,6 +66,13 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
 
     try {
       const result = await previewWorkspaceFile(absolutePath)
+      debug('ui:workspace:file_preview_open', {
+        workspacePath,
+        path: result.path,
+        size: result.size,
+        truncated: result.truncated,
+        isBinary: result.isBinary,
+      })
       setPreview({
         open: true,
         title: result.name,
@@ -78,6 +86,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
         footer: result.truncated ? `已截断，仅显示前 ${Math.min(result.size, 128 * 1024)} 字节。` : `${result.size} bytes`,
       })
     } catch (err) {
+      warn('ui:workspace:file_preview_failed', { workspacePath, path: absolutePath, error: err })
       setPreview({
         open: true,
         title: absolutePath.split(/[/\\]/).filter(Boolean).at(-1) || absolutePath,
@@ -109,6 +118,12 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
 
     try {
       const result = await fetchGitDiff(workspacePath, { filePath, staged })
+      debug('ui:workspace:diff_preview_open', {
+        workspacePath,
+        filePath,
+        staged,
+        diffLength: result.diff.length,
+      })
       setPreview({
         open: true,
         title: filePath,
@@ -122,6 +137,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
         footer: staged ? '来自暂存区' : '来自工作区',
       })
     } catch (err) {
+      warn('ui:workspace:diff_preview_failed', { workspacePath, filePath, staged, error: err })
       setPreview({
         open: true,
         title: filePath,
@@ -153,6 +169,10 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
 
     try {
       const result = await fetchGitDiff(workspacePath, { staged: true })
+      debug('ui:workspace:staged_review_open', {
+        workspacePath,
+        diffLength: result.diff.length,
+      })
       setPreview({
         open: true,
         title: 'Staged Review',
@@ -166,6 +186,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
         footer: '以下为当前工作区已暂存改动',
       })
     } catch (err) {
+      warn('ui:workspace:staged_review_failed', { workspacePath, error: err })
       setPreview({
         open: true,
         title: 'Staged Review',
@@ -197,7 +218,10 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
-            onClick={() => setTab('files')}
+            onClick={() => {
+              debug('ui:workspace:tab_change', { workspacePath, tab: 'files' })
+              setTab('files')
+            }}
             className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-medium transition-colors ${
               tab === 'files'
                 ? 'bg-accent text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
@@ -209,7 +233,10 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
           </button>
           <button
             type="button"
-            onClick={() => setTab('git')}
+            onClick={() => {
+              debug('ui:workspace:tab_change', { workspacePath, tab: 'git' })
+              setTab('git')
+            }}
             className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-medium transition-colors ${
               tab === 'git'
                 ? 'bg-accent text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)]'

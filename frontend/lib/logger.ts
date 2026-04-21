@@ -20,6 +20,11 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   ERROR: 3,
 };
 
+const MAX_STRING_LENGTH = 320
+const MAX_ARRAY_ITEMS = 20
+const MAX_OBJECT_KEYS = 20
+const MAX_META_DEPTH = 2
+
 const currentLevel = (() => {
   try {
     const stored = localStorage.getItem('log_level');
@@ -32,6 +37,57 @@ const currentLevel = (() => {
 
 function shouldLog(level: LogLevel): boolean {
   return LEVEL_ORDER[level] >= currentLevel;
+}
+
+function truncateString(value: string): string {
+  if (value.length <= MAX_STRING_LENGTH) return value
+  return `${value.slice(0, MAX_STRING_LENGTH)}…`
+}
+
+function normalizeValue(value: unknown, depth = 0): unknown {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: truncateString(value.message),
+      ...(value.stack ? { stack: truncateString(value.stack) } : {}),
+    }
+  }
+
+  if (typeof value === 'string') {
+    return truncateString(value)
+  }
+
+  if (Array.isArray(value)) {
+    const next = value.slice(0, MAX_ARRAY_ITEMS).map(item => normalizeValue(item, depth + 1))
+    if (value.length > MAX_ARRAY_ITEMS) {
+      next.push(`…+${value.length - MAX_ARRAY_ITEMS} more`)
+    }
+    return next
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  if (depth >= MAX_META_DEPTH) {
+    return '[Object]'
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+  const normalized: Record<string, unknown> = {}
+  for (const [index, [key, entryValue]] of entries.entries()) {
+    if (index >= MAX_OBJECT_KEYS) {
+      normalized.__truncatedKeys = entries.length - MAX_OBJECT_KEYS
+      break
+    }
+    normalized[key] = normalizeValue(entryValue, depth + 1)
+  }
+  return normalized
+}
+
+function normalizeMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!meta) return undefined
+  return normalizeValue(meta) as Record<string, unknown>
 }
 
 // ── Debug log store for DebugPanel ────────────────────────────────────────────
@@ -111,14 +167,15 @@ export function logger(level: LogLevel, event: string, meta?: Record<string, unk
   if (!shouldLog(level)) return;
 
   const ts = new Date().toISOString();
-  const entry = { ts, level, event, meta };
+  const normalizedMeta = normalizeMeta(meta)
+  const entry = { ts, level, event, meta: normalizedMeta };
 
   // Store in memory (for DebugPanel)
   debugLogStore.current = [entry, ...debugLogStore.current].slice(0, DEBUG_MAX);
 
   // Human-readable output
   const prefix = `[${ts}] [${level}] ${event}`;
-  const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+  const metaStr = normalizedMeta ? ` ${JSON.stringify(normalizedMeta)}` : '';
 
   if (level === 'ERROR') {
     console.error(`${prefix}${metaStr}`);

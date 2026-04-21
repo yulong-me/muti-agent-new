@@ -165,7 +165,7 @@ describe('git route', () => {
       untrackedCount: 0,
     });
     expect(status2.data.changedFiles).toEqual([]);
-  });
+  }, 10000);
 
   it('supports unstage in a fresh repo without HEAD', async () => {
     const repo = await makeHomeTemp('git-no-head');

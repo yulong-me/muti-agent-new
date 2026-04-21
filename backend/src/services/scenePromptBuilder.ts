@@ -11,6 +11,7 @@
 import { store } from '../store.js';
 import { scenesRepo } from '../db/index.js';
 import { getEffectiveMaxDepthForRoom } from './routing/A2ARouter.js';
+import { debug, warn } from '../lib/logger.js';
 
 export interface RuntimeContext {
   /** Current user input / task text */
@@ -37,6 +38,8 @@ export interface RuntimeContext {
   }>;
   /** Workspace path (shown as 【工作目录】) */
   workspace?: string;
+  /** Human-readable effective skill summary; provider-native discovery remains primary path */
+  skillsSummary?: string;
 }
 
 /**
@@ -49,10 +52,14 @@ export function buildRoomScopedSystemPrompt(
   runtime: RuntimeContext,
 ): string | null {
   const room = store.get(roomId);
-  if (!room) return null;
+  if (!room) {
+    warn('scene:prompt:room_missing', { roomId });
+    return null;
+  }
 
   const scene = scenesRepo.get(room.sceneId);
   if (!scene) {
+    warn('scene:prompt:scene_missing', { roomId, sceneId: room.sceneId });
     throw new Error(`Scene not found: ${room.sceneId}`);
   }
 
@@ -78,7 +85,18 @@ export function buildRoomScopedSystemPrompt(
   };
   parts.push(buildRuntimeContextString(roomRuntime));
 
-  return parts.join('\n\n');
+  const prompt = parts.join('\n\n');
+  debug('scene:prompt:built', {
+    roomId,
+    sceneId: scene.id,
+    basePromptLength: basePrompt.length,
+    promptLength: prompt.length,
+    participantCount: roomRuntime.participants?.length ?? 0,
+    hasWorkspace: Boolean(roomRuntime.workspace),
+    hasSkillsSummary: Boolean(roomRuntime.skillsSummary),
+  });
+
+  return prompt;
 }
 
 function buildRuntimeContextString(runtime: RuntimeContext): string {
@@ -86,6 +104,10 @@ function buildRuntimeContextString(runtime: RuntimeContext): string {
 
   if (runtime.workspace) {
     lines.push(`【工作目录】${runtime.workspace}`);
+  }
+
+  if (runtime.skillsSummary) {
+    lines.push(`【生效 Skills】\n${runtime.skillsSummary}`);
   }
 
   if (runtime.roomTopic) {

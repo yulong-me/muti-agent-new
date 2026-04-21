@@ -28,13 +28,70 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   ERROR: 3,
 };
 
+const MAX_STRING_LENGTH = 320;
+const MAX_ARRAY_ITEMS = 20;
+const MAX_OBJECT_KEYS = 20;
+const MAX_META_DEPTH = 2;
+const isTestEnv = Boolean(process.env.VITEST) || process.env.NODE_ENV === 'test';
+
 const currentLevel = (() => {
-  const env = (process.env.LOG_LEVEL ?? 'info').toUpperCase();
+  const env = (process.env.LOG_LEVEL ?? (isTestEnv ? 'warn' : 'info')).toUpperCase();
   return LEVEL_ORDER[env as LogLevel] ?? LEVEL_ORDER.INFO;
 })();
 
 function shouldLog(level: LogLevel): boolean {
   return LEVEL_ORDER[level] >= currentLevel;
+}
+
+function truncateString(value: string): string {
+  if (value.length <= MAX_STRING_LENGTH) return value;
+  return `${value.slice(0, MAX_STRING_LENGTH)}…`;
+}
+
+function normalizeValue(value: unknown, depth = 0): unknown {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: truncateString(value.message),
+      ...(value.stack ? { stack: truncateString(value.stack) } : {}),
+    };
+  }
+
+  if (typeof value === 'string') {
+    return truncateString(value);
+  }
+
+  if (Array.isArray(value)) {
+    const next = value.slice(0, MAX_ARRAY_ITEMS).map(item => normalizeValue(item, depth + 1));
+    if (value.length > MAX_ARRAY_ITEMS) {
+      next.push(`…+${value.length - MAX_ARRAY_ITEMS} more`);
+    }
+    return next;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  if (depth >= MAX_META_DEPTH) {
+    return '[Object]';
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  const normalized: Record<string, unknown> = {};
+  for (const [index, [key, entryValue]] of entries.entries()) {
+    if (index >= MAX_OBJECT_KEYS) {
+      normalized.__truncatedKeys = entries.length - MAX_OBJECT_KEYS;
+      break;
+    }
+    normalized[key] = normalizeValue(entryValue, depth + 1);
+  }
+  return normalized;
+}
+
+function normalizeMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!meta) return undefined;
+  return normalizeValue(meta) as Record<string, unknown>;
 }
 
 // ── File persistence ───────────────────────────────────────────────────────────
@@ -49,13 +106,14 @@ const LOG_DIR = (() => {
 })();
 
 function persist(level: LogLevel, event: string, meta?: Record<string, unknown>) {
-  if (!LOG_DIR) return;
+  if (!LOG_DIR || isTestEnv) return;
   const ts = new Date().toISOString();
-  const entry: Record<string, unknown> = { ts, level, event, ...meta };
+  const normalizedMeta = normalizeMeta(meta);
+  const entry: Record<string, unknown> = { ts, level, event, ...normalizedMeta };
   const line = JSON.stringify(entry) + '\n';
 
   // Determine file: roomId gets its own file
-  const roomId = meta?.roomId as string | undefined;
+  const roomId = normalizedMeta?.roomId as string | undefined;
   const filename = roomId ? `${roomId}.log` : 'server.log';
   const filepath = join(LOG_DIR, filename);
 
@@ -71,16 +129,17 @@ export function logger(level: LogLevel, event: string, meta?: Record<string, unk
   if (!shouldLog(level)) return;
 
   const ts = new Date().toISOString();
+  const normalizedMeta = normalizeMeta(meta);
   const entry: Record<string, unknown> = {
     ts,
     level,
     event,
-    ...meta,
+    ...normalizedMeta,
   };
 
   // Human-readable prefix for console
   const prefix = `[${entry.ts}] [${level}] ${event}`;
-  const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+  const metaStr = normalizedMeta ? ` ${JSON.stringify(normalizedMeta)}` : '';
 
   if (level === 'ERROR') {
     console.error(`${prefix}${metaStr}`);
@@ -92,7 +151,7 @@ export function logger(level: LogLevel, event: string, meta?: Record<string, unk
   }
 
   // Persist to file
-  persist(level, event, meta);
+  persist(level, event, normalizedMeta);
 }
 
 // ── Convenience aliases ───────────────────────────────────────────────────────

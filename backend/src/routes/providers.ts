@@ -8,6 +8,7 @@ import {
   deleteProvider,
   updateTestResult,
 } from '../config/providerConfig.js'
+import { debug, error as logError, info, warn } from '../lib/logger.js'
 
 /**
  * Normalize subprocess stdout to UTF-8 text stream.
@@ -33,20 +34,29 @@ const router = Router()
 
 // GET /api/providers
 router.get('/', (_req, res) => {
-  res.json(getAllProviders())
+  const providers = getAllProviders()
+  debug('provider:list', { count: Object.keys(providers).length })
+  res.json(providers)
 })
 
 // GET /api/providers/:name
 router.get('/:name', (req, res) => {
   const p = getProvider(req.params.name)
-  if (!p) return res.status(404).json({ error: 'Provider not found' })
+  if (!p) {
+    warn('provider:get:not_found', { provider: req.params.name })
+    return res.status(404).json({ error: 'Provider not found' })
+  }
+  debug('provider:get', { provider: p.name, cliPath: p.cliPath, timeout: p.timeout })
   res.json(p)
 })
 
 // POST /api/providers — create or update
 router.post('/', (req, res) => {
   const { name, label, cliPath, defaultModel, apiKey, baseUrl, timeout, thinking } = req.body
-  if (!name) return res.status(400).json({ error: 'name is required' })
+  if (!name) {
+    warn('provider:upsert:invalid', { reason: 'missing_name' })
+    return res.status(400).json({ error: 'name is required' })
+  }
   const config = upsertProvider(name, {
     label: label || name,
     cliPath: cliPath || 'claude',
@@ -56,21 +66,36 @@ router.post('/', (req, res) => {
     timeout: Number(timeout) || 90,
     thinking: thinking !== false,
   })
+  info('provider:upsert', {
+    provider: name,
+    cliPath: config[name]?.cliPath,
+    timeout: config[name]?.timeout,
+    hasDefaultModel: Boolean(config[name]?.defaultModel),
+    hasBaseUrl: Boolean(config[name]?.baseUrl),
+    thinking: config[name]?.thinking,
+  })
   res.json(config[name])
 })
 
 // DELETE /api/providers/:name
 router.delete('/:name', (req, res) => {
   const name = req.params.name
-  if (name === 'claude-code') return res.status(400).json({ error: 'Cannot delete claude-code provider' })
+  if (name === 'claude-code') {
+    warn('provider:delete:forbidden', { provider: name })
+    return res.status(400).json({ error: 'Cannot delete claude-code provider' })
+  }
   deleteProvider(name)
+  info('provider:delete', { provider: name })
   res.json({ ok: true })
 })
 
 // GET /api/providers/:name/preview — show the resolved command that will be executed
 router.get('/:name/preview', (req, res) => {
   const p = getProvider(req.params.name)
-  if (!p) return res.status(404).json({ error: 'Provider not found' })
+  if (!p) {
+    warn('provider:preview:not_found', { provider: req.params.name })
+    return res.status(404).json({ error: 'Provider not found' })
+  }
 
   const cliPath = p.cliPath.replace(/^~/, process.env.HOME || '/root')
   const defaultModel = p.defaultModel.trim()
@@ -78,6 +103,12 @@ router.get('/:name/preview', (req, res) => {
     const args = ['-p', '<prompt>', '--verbose', '--output-format=stream-json', '--include-partial-messages']
     args.push('--dangerously-skip-permissions')
     if (defaultModel) args.push('--model', defaultModel)
+    debug('provider:preview', {
+      provider: p.name,
+      cliPath,
+      timeout: p.timeout,
+      hasDefaultModel: Boolean(defaultModel),
+    })
     res.json({
       provider: 'claude-code',
       cli: cliPath,
@@ -93,6 +124,13 @@ router.get('/:name/preview', (req, res) => {
     })
   } else if (p.name === 'opencode') {
     const args = ['run', ...(p.thinking ? ['--thinking'] : []), '--format', 'json', '--', '<prompt>']
+    debug('provider:preview', {
+      provider: p.name,
+      cliPath,
+      timeout: p.timeout,
+      hasDefaultModel: Boolean(defaultModel),
+      thinking: p.thinking,
+    })
     res.json({
       provider: 'opencode',
       cli: cliPath,
@@ -105,6 +143,7 @@ router.get('/:name/preview', (req, res) => {
       note: `Agent 调用时: opencode run${p.thinking ? ' --thinking' : ''} --format json -- "<prompt>"`,
     })
   } else {
+    warn('provider:preview:unknown', { provider: p.name })
     res.json({ provider: p.name, cli: cliPath, note: '未知 Provider 类型' })
   }
 })
@@ -112,7 +151,10 @@ router.get('/:name/preview', (req, res) => {
 // POST /api/providers/:name/test — run actual agent CLI command with test prompt
 router.post('/:name/test', (req, res) => {
   const p = getProvider(req.params.name)
-  if (!p) return res.status(404).json({ error: 'Provider not found' })
+  if (!p) {
+    warn('provider:test:not_found', { provider: req.params.name })
+    return res.status(404).json({ error: 'Provider not found' })
+  }
 
   const cliPath = p.cliPath.replace(/^~/, process.env.HOME || '/root')
   const timeout = Math.max((p.timeout ?? 1800) * 1000, 30000)
@@ -137,8 +179,17 @@ router.post('/:name/test', (req, res) => {
     args.push('--format', 'json', '--', testPrompt)
     resultCli = `${cliPath} ${args.join(' ')}`
   } else {
+    warn('provider:test:unknown', { provider: p.name })
     return res.status(400).json({ error: 'Unknown provider type' })
   }
+
+  info('provider:test:start', {
+    provider: p.name,
+    cliPath,
+    timeout_ms: timeout,
+    hasDefaultModel: Boolean(defaultModel),
+    thinking: p.name === 'opencode' ? p.thinking : undefined,
+  })
 
   const proc = spawn(cliPath, args, { timeout, env, cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''
@@ -208,12 +259,32 @@ router.post('/:name/test', (req, res) => {
       error: success ? undefined : stderr.trim().slice(0, 300),
     }
     updateTestResult(req.params.name, { success, version: capturedOutput.slice(0, 50) || `exit ${code}` })
+    if (success) {
+      info('provider:test:finish', {
+        provider: req.params.name,
+        success,
+        code,
+        outputLength: capturedOutput.length,
+      })
+    } else {
+      warn('provider:test:finish', {
+        provider: req.params.name,
+        success,
+        code,
+        stderr,
+      })
+    }
     respond(result)
   })
 
   proc.on('error', (err) => {
     const result = { success: false, cli: resultCli, output: undefined, rawOutput: undefined, error: err.message }
     updateTestResult(req.params.name, { success: false, error: err.message })
+    logError('provider:test:error', {
+      provider: req.params.name,
+      cli: resultCli,
+      error: err,
+    })
     respond(result)
   })
 })

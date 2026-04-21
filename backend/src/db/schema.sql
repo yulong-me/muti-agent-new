@@ -63,6 +63,42 @@ CREATE TABLE IF NOT EXISTS agents (
   tags          TEXT NOT NULL DEFAULT '[]'
 );
 
+CREATE TABLE IF NOT EXISTS skills (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL UNIQUE,
+  description     TEXT NOT NULL DEFAULT '',
+  source_type     TEXT NOT NULL CHECK (source_type IN ('managed', 'workspace')),
+  source_path     TEXT NOT NULL,
+  enabled         INTEGER NOT NULL DEFAULT 1,
+  read_only       INTEGER NOT NULL DEFAULT 0,
+  builtin         INTEGER NOT NULL DEFAULT 0,
+  provider_compat TEXT NOT NULL DEFAULT '["claude-code","opencode"]',
+  updated_at      INTEGER NOT NULL,
+  checksum        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_skill_bindings (
+  agent_id     TEXT NOT NULL,
+  skill_id     TEXT NOT NULL,
+  mode         TEXT NOT NULL CHECK (mode IN ('auto', 'required')),
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (agent_id, skill_id),
+  FOREIGN KEY (agent_id) REFERENCES agents(id),
+  FOREIGN KEY (skill_id) REFERENCES skills(id)
+);
+
+CREATE TABLE IF NOT EXISTS room_skill_bindings (
+  room_id      TEXT NOT NULL,
+  skill_id     TEXT NOT NULL,
+  mode         TEXT NOT NULL CHECK (mode IN ('auto', 'required')),
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (room_id, skill_id),
+  FOREIGN KEY (room_id) REFERENCES rooms(id),
+  FOREIGN KEY (skill_id) REFERENCES skills(id)
+);
+
 -- ⚠️ api_key stored in plaintext; production should use KMS or env-var injection
 CREATE TABLE IF NOT EXISTS providers (
   name              TEXT PRIMARY KEY,
@@ -107,3 +143,6 @@ CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_sessions_room_id ON sessions(room_id);
+CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
+CREATE INDEX IF NOT EXISTS idx_agent_skill_bindings_agent_id ON agent_skill_bindings(agent_id);
+CREATE INDEX IF NOT EXISTS idx_room_skill_bindings_room_id ON room_skill_bindings(room_id);
