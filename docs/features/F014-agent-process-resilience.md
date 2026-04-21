@@ -4,7 +4,7 @@ related_features: []
 topics: [ux, error-handling, resilience, process-management]
 doc_kind: spec
 created: 2026-04-16
-updated: 2026-04-20
+updated: 2026-04-21
 ---
 
 # F014: 专家进程容错与全链路 UX 保护保护机制（Agent Resilience & UX Recovery）
@@ -27,6 +27,7 @@ updated: 2026-04-20
 2. **异常捕获转义（Exception Translation）**：后端拦截所有非预期的子进程 Panic、Exit Code 非 0 和解析错误，不再向前端吐出原始错误堆栈，而是转化为标准化的内部错误码结构。
 3. **人类友好的界面展现（Human-Readable UX）**：在聊天窗口渲染特定状态的“错误卡片”，用清晰、温柔的提示语安抚用户（例如：“啊哦，专家构思时遇到了点小问题”）。
 4. **可操作的挽回动作（Actionable Recovery）**：所有报错必须伴随明确的下一步动作，如提供明确的 **[一键重试]**、**[复制原始提问]** 或 **[换个专家试试]** 的按钮，确保用户动作不丢失。
+5. **人工中止（Manual Stop）**：当专家已经开始流式回答时，用户可以主动停止当前这一轮回答；系统必须真正中断后端子进程，并保留已经生成的部分内容。
 
 ## In Scope
 
@@ -60,6 +61,7 @@ updated: 2026-04-20
 - [ ] AC-3: **友好提示语** - 前端严禁向终端用户直接显示如 `TypeError: Cannot read property 'map' of undefined` 等纯代码日志，所有错误走 Fallback UI 与拟人化抱歉文案。
 - [ ] AC-4: **体验连续性** - 在出现任何上述错误后，用户此前辛苦编写的长篇 Prompt / 消息内容不会白白丢失，可以在错误卡片右下角快速找回或一件重发指令。
 - [ ] AC-5: **错误上报日志** - 后端虽然对用户掩盖了错误堆栈，但必须输出标准的结构化错误日志，并携带当前的 `TraceId` / `RoomId` 供研发时候通过排错系统追溯根本原因（结合之前的 F0043 可观测性）。
+- [x] AC-6: **人工停止回答** - 当某位专家正在流式回答时，前端可直接发出“停止”请求，后端实际中断对应 provider 子进程；会话气泡保留已生成内容，并以 `AGENT_STOPPED` 告知用户这一轮是主动停止而非异常崩溃。
 
 ## Proposed Changes
 
@@ -70,10 +72,13 @@ updated: 2026-04-20
 
 - 2026-04-20: 补齐超时 phase 语义。`AGENT_TIMEOUT` 现在区分 `first_token` 与 `idle` 两种 phase；前者继续显示“响应超时”，后者改为“连接中断”，并在错误卡片上明确提示“已保留部分输出”，用于覆盖“回答进行到一半卡住”的场景。
 - 2026-04-20: 错误卡片新增“换个专家试试”恢复动作。当前房间里若还有其他 WORKER，可直接把原问题改写为发给另一位专家并回填到输入框，减少用户手工改写 @mention 的成本。
+- 2026-04-21: 新增“人工停止回答”能力。前端主操作区会在专家流式回答时显示“停止”按钮；后端通过活动运行注册表和 `AbortController` 真正中断对应 provider 子进程，并把结果标准化为 `AGENT_STOPPED`。
 
 ## Verification
 
 - `pnpm --dir backend exec vitest run tests/stateMachine.test.ts -t "超时|连接中断"`
+- `pnpm --dir backend exec vitest run tests/stateMachine.test.ts -t "停止回答"`
+- `pnpm --dir backend exec vitest run tests/rooms.http.test.ts -t "stop|停止"`
 - `pnpm --dir backend exec vitest run tests/errorRecovery.test.ts`
 - `pnpm --dir backend test`
 - `pnpm --dir backend build`

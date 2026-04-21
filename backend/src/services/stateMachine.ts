@@ -33,6 +33,11 @@ import {
   getEffectiveMaxDepthForRoom,
   updateA2AContext,
 } from './routing/A2ARouter.js';
+import {
+  registerActiveAgentRun,
+  clearActiveAgentRun,
+  stopAgentRun as requestStopAgentRun,
+} from './agentRuns.js';
 import { buildRoomScopedSystemPrompt } from './scenePromptBuilder.js';
 import { debug, info, warn, error } from '../lib/logger.js';
 
@@ -184,6 +189,16 @@ function normalizeAgentExecutionError(err: unknown): {
     };
   }
 
+  if (taggedCode === 'AGENT_STOPPED') {
+    return {
+      code: 'AGENT_STOPPED',
+      rawMessage,
+      title: '已停止回答',
+      message: '已按你的要求停止这一轮回答，当前已生成的内容会被保留。',
+      retryable: false,
+    };
+  }
+
   if (taggedCode === 'AGENT_PARSE_ERROR') {
     return {
       code: 'AGENT_PARSE_ERROR',
@@ -238,23 +253,42 @@ function handleAgentRunFailure(args: {
     toAgentName: args.requestMeta?.toAgentName,
   };
 
-  error('stream.error', {
-    traceId,
-    roomId: args.roomId,
-    agentId: args.agentId,
-    agentName: args.agentName,
-    provider: args.providerName,
-    code: normalized.code,
-    error: normalized.rawMessage,
-  });
-  auditRepo.log('agent:run_failed', normalized.rawMessage, args.agentId, {
-    traceId,
-    roomId: args.roomId,
-    agentName: args.agentName,
-    provider: args.providerName,
-    code: normalized.code,
-    messageId: args.msgId || undefined,
-  });
+  if (normalized.code === 'AGENT_STOPPED') {
+    info('stream.stopped', {
+      traceId,
+      roomId: args.roomId,
+      agentId: args.agentId,
+      agentName: args.agentName,
+      provider: args.providerName,
+      code: normalized.code,
+    });
+    auditRepo.log('agent:run_stopped', normalized.rawMessage, args.agentId, {
+      traceId,
+      roomId: args.roomId,
+      agentName: args.agentName,
+      provider: args.providerName,
+      code: normalized.code,
+      messageId: args.msgId || undefined,
+    });
+  } else {
+    error('stream.error', {
+      traceId,
+      roomId: args.roomId,
+      agentId: args.agentId,
+      agentName: args.agentName,
+      provider: args.providerName,
+      code: normalized.code,
+      error: normalized.rawMessage,
+    });
+    auditRepo.log('agent:run_failed', normalized.rawMessage, args.agentId, {
+      traceId,
+      roomId: args.roomId,
+      agentName: args.agentName,
+      provider: args.providerName,
+      code: normalized.code,
+      messageId: args.msgId || undefined,
+    });
+  }
 
   if (args.msg) {
     const r = store.get(args.roomId);
@@ -425,6 +459,10 @@ export async function routeToAgent(
   });
 }
 
+export function stopAgentRun(roomId: string, agentId: string) {
+  return requestStopAgentRun(roomId, agentId);
+}
+
 // ─── 调用 Worker ─────────────────────────────────────────────────────────────
 
 /**
@@ -580,6 +618,7 @@ async function streamingCallAgent(
   let input_tokens = 0;
   let output_tokens = 0;
   let returnedSessionId = '';
+  let activeRunController: AbortController | null = null;
   let deltaCount = 0;
   let thinkingCount = 0;
   let accumulatedToolCalls: ToolCall[] = [];
@@ -643,46 +682,60 @@ async function streamingCallAgent(
     updateAgentStatus(roomId, agentId, 'thinking');
 
     const provider = getProvider(providerName);
-    for await (const event of provider(prompt, agentId, providerOpts)) {
-      if (event.type === 'delta') {
-        deltaCount++;
-        accumulated += event.text;
-        appendMessageContent(roomId, msgId, event.text);
-        emitStreamDelta(roomId, agentId, event.text);
-      } else if (event.type === 'thinking_delta') {
-        thinkingCount++;
-        accumulatedThinking += event.thinking;
-        emitThinkingDelta(roomId, agentId, event.thinking);
-      } else if (event.type === 'tool_use') {
-        const toolCall: ToolCall = {
-          toolName: event.toolName,
-          toolInput: event.toolInput,
-          callId: event.callId,
-          timestamp: Date.now(),
-        };
-        accumulatedToolCalls = [...accumulatedToolCalls, toolCall];
-        const r = store.get(roomId);
-        if (r && msg) {
-          store.update(roomId, {
-            messages: r.messages.map(m =>
-              m.id === msg!.id
-                ? { ...m, toolCalls: accumulatedToolCalls }
-                : m,
-            ),
-          });
+    activeRunController = new AbortController();
+    providerOpts.signal = activeRunController.signal;
+    registerActiveAgentRun({
+      roomId,
+      agentId,
+      agentName,
+      abortController: activeRunController,
+    });
+
+    try {
+      for await (const event of provider(prompt, agentId, providerOpts)) {
+        if (event.type === 'delta') {
+          deltaCount++;
+          accumulated += event.text;
+          appendMessageContent(roomId, msgId, event.text);
+          emitStreamDelta(roomId, agentId, event.text);
+        } else if (event.type === 'thinking_delta') {
+          thinkingCount++;
+          accumulatedThinking += event.thinking;
+          emitThinkingDelta(roomId, agentId, event.thinking);
+        } else if (event.type === 'tool_use') {
+          const toolCall: ToolCall = {
+            toolName: event.toolName,
+            toolInput: event.toolInput,
+            callId: event.callId,
+            timestamp: Date.now(),
+          };
+          accumulatedToolCalls = [...accumulatedToolCalls, toolCall];
+          const r = store.get(roomId);
+          if (r && msg) {
+            store.update(roomId, {
+              messages: r.messages.map(m =>
+                m.id === msg!.id
+                  ? { ...m, toolCalls: accumulatedToolCalls }
+                  : m,
+              ),
+            });
+          }
+          emitToolUse(roomId, agentId, event.toolName, event.toolInput, event.callId, toolCall.timestamp);
+        } else if (event.type === 'end') {
+          duration_ms = event.duration_ms;
+          total_cost_usd = event.total_cost_usd;
+          input_tokens = event.input_tokens;
+          output_tokens = event.output_tokens;
+          if (event.sessionId) returnedSessionId = event.sessionId;
+        } else if (event.type === 'error') {
+          const providerError = new Error(event.message);
+          (providerError as Error & { code?: string }).code = 'AGENT_PROVIDER_ERROR';
+          throw providerError;
         }
-        emitToolUse(roomId, agentId, event.toolName, event.toolInput, event.callId, toolCall.timestamp);
-      } else if (event.type === 'end') {
-        duration_ms = event.duration_ms;
-        total_cost_usd = event.total_cost_usd;
-        input_tokens = event.input_tokens;
-        output_tokens = event.output_tokens;
-        if (event.sessionId) returnedSessionId = event.sessionId;
-      } else if (event.type === 'error') {
-        const providerError = new Error(event.message);
-        (providerError as Error & { code?: string }).code = 'AGENT_PROVIDER_ERROR';
-        throw providerError;
       }
+    } finally {
+      clearActiveAgentRun(roomId, agentId, activeRunController);
+      activeRunController = null;
     }
   } catch (err) {
     handleAgentRunFailure({

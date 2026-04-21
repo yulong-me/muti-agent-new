@@ -43,6 +43,7 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
     generateReport: vi.fn(),
     // Must resolve so .catch() in the route handler doesn't throw on undefined
     routeToAgent: vi.fn().mockResolvedValue(undefined),
+    stopAgentRun: vi.fn().mockReturnValue({ stopped: true, agentName: '测试员' }),
   };
 });
 
@@ -50,6 +51,7 @@ import { roomsRouter } from '../src/routes/rooms.js';
 import { store } from '../src/store.js';
 import { roomsRepo, scenesRepo } from '../src/db/index.js';
 import { getAgent } from '../src/config/agentConfig.js';
+import { stopAgentRun } from '../src/services/stateMachine.js';
 
 // Build a minimal Express app with the rooms router under test
 function makeApp() {
@@ -205,6 +207,65 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     });
 
     expect(result.status).toBe(404);
+  });
+
+  _skipIfNoPort('stops the currently running agent', async () => {
+    const mockRoom = {
+      id: 'room-running',
+      topic: 'Test',
+      state: 'RUNNING' as const,
+      agents: [{
+        id: 'worker-1',
+        role: 'WORKER' as const,
+        name: '测试员',
+        domainLabel: '测试',
+        configId: 'worker-1',
+        status: 'thinking' as const,
+      }],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 0,
+      a2aCallChain: [],
+    };
+    vi.mocked(store.get).mockReturnValue(mockRoom);
+    vi.mocked(stopAgentRun).mockReturnValueOnce({
+      stopped: true,
+      agentName: '测试员',
+      startedAt: Date.now(),
+    });
+
+    const result = await requestJson('POST', '/api/rooms/room-running/agents/worker-1/stop');
+
+    expect(result.status).toBe(200);
+    expect(result.data).toHaveProperty('status', 'stopping');
+    expect(stopAgentRun).toHaveBeenCalledWith('room-running', 'worker-1');
+  });
+
+  _skipIfNoPort('returns 409 when stop is requested for an idle agent', async () => {
+    const mockRoom = {
+      id: 'room-running',
+      topic: 'Test',
+      state: 'RUNNING' as const,
+      agents: [{
+        id: 'worker-1',
+        role: 'WORKER' as const,
+        name: '测试员',
+        domainLabel: '测试',
+        configId: 'worker-1',
+        status: 'idle' as const,
+      }],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 0,
+      a2aCallChain: [],
+    };
+    vi.mocked(store.get).mockReturnValue(mockRoom);
+    vi.mocked(stopAgentRun).mockReturnValueOnce({ stopped: false });
+
+    const result = await requestJson('POST', '/api/rooms/room-running/agents/worker-1/stop');
+
+    expect(result.status).toBe(409);
+    expect(result.data).toHaveProperty('error', 'Agent is not currently running');
   });
 
   _skipIfNoPort('preserves the user-provided topic when creating a room', async () => {

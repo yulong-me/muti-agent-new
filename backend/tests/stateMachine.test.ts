@@ -238,6 +238,82 @@ describe('F004: Manager 路由器', () => {
       );
     });
 
+    it('用户停止回答时应该保留部分输出并发出 AGENT_STOPPED 事件', async () => {
+      const { routeToAgent, stopAgentRun } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+      const { emitRoomErrorEvent } = await import('../src/services/socketEmitter.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      let providerStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        providerStarted = resolve;
+      });
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* (_prompt, _agentId, opts) {
+        const signal = opts?.signal as AbortSignal | undefined;
+        providerStarted();
+        yield { type: 'delta', agentId: 'worker-1', text: '先给你一半答案' };
+        await new Promise<void>((_resolve, reject) => {
+          if (signal?.aborted) {
+            const err = new Error('stopped');
+            (err as Error & { code?: string }).code = 'AGENT_STOPPED';
+            reject(err);
+            return;
+          }
+          signal?.addEventListener('abort', () => {
+            const err = new Error('stopped');
+            (err as Error & { code?: string }).code = 'AGENT_STOPPED';
+            reject(err);
+          }, { once: true });
+        });
+      });
+
+      const runPromise = routeToAgent('room-1', '@架构师 帮我看看这个方案', 'worker-1');
+      await started;
+
+      expect(stopAgentRun('room-1', 'worker-1')).toEqual(
+        expect.objectContaining({ stopped: true, agentName: '架构师' }),
+      );
+
+      await expect(runPromise).rejects.toMatchObject({ code: 'AGENT_STOPPED' });
+
+      expect(emitRoomErrorEvent).toHaveBeenCalledWith(
+        'room-1',
+        expect.objectContaining({
+          agentId: 'worker-1',
+          code: 'AGENT_STOPPED',
+          title: '已停止回答',
+          retryable: false,
+        }),
+      );
+      expect(messagesRepo.updateContent).toHaveBeenCalledWith(
+        expect.any(String),
+        '先给你一半答案',
+        expect.objectContaining({
+          runError: expect.objectContaining({
+            code: 'AGENT_STOPPED',
+            title: '已停止回答',
+          }),
+        }),
+      );
+    });
+
     it('专家启动前置步骤失败时也应该发出可恢复的 orphan 错误事件', async () => {
       const { routeToAgent } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');

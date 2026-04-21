@@ -31,6 +31,8 @@ export function ErrorBubble({
       ? '#DC2626'
       : error.code === 'AGENT_TIMEOUT'
       ? '#D97706'
+      : error.code === 'AGENT_STOPPED'
+      ? '#475569'
       : error.code === 'AGENT_PROVIDER_ERROR'
       ? '#7C3AED'
       : '#DC2626'

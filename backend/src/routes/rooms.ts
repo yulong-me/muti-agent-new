@@ -8,11 +8,11 @@
  */
 
 import { Router } from 'express';
-import { error } from '../lib/logger.js';
+import { error, info } from '../lib/logger.js';
 import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom } from '../types.js';
-import { routeToAgent, generateReportInline } from '../services/stateMachine.js';
+import { routeToAgent, generateReportInline, stopAgentRun } from '../services/stateMachine.js';
 import { roomsRepo, sessionsRepo, messagesRepo, scenesRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
@@ -199,10 +199,44 @@ roomsRouter.post('/:id/messages', async (req, res) => {
 // F013: toAgentId is non-null (guaranteed above); target exists (404 already returned if not)
   // 异步处理，不阻塞响应
   routeToAgent(req.params.id, content.trim(), target!.id).catch(err => {
+    const code = (err as Error & { code?: string }).code;
+    if (code === 'AGENT_STOPPED') {
+      info('route:msg_stopped', { roomId: req.params.id, agentId: target!.id });
+      return;
+    }
     error('route:msg_error', { roomId: req.params.id, error: String(err) });
   });
 
   res.json({ status: 'ok' });
+});
+
+// POST /api/rooms/:id/agents/:agentId/stop — 停止当前正在回答的 Agent
+roomsRouter.post('/:id/agents/:agentId/stop', (req, res) => {
+  const room = store.get(req.params.id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+
+  const target = room.agents.find(agent => agent.id === req.params.agentId);
+  if (!target) {
+    return res.status(404).json({ error: `Agent not found: ${req.params.agentId}` });
+  }
+
+  const result = stopAgentRun(req.params.id, req.params.agentId);
+  if (!result.stopped) {
+    return res.status(409).json({ error: 'Agent is not currently running' });
+  }
+
+  info('route:agent_stop', {
+    roomId: req.params.id,
+    agentId: req.params.agentId,
+    agentName: target.name,
+    startedAt: result.startedAt,
+  });
+
+  res.json({
+    status: 'stopping',
+    agentId: req.params.agentId,
+    agentName: target.name,
+  });
 });
 
 // POST /api/rooms/:id/report — 生成报告（无状态，系统级服务）

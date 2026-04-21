@@ -8,6 +8,7 @@ export type AgentExecutionErrorCode =
   | 'AGENT_PROCESS_EXIT'
   | 'AGENT_PROVIDER_ERROR'
   | 'AGENT_PARSE_ERROR'
+  | 'AGENT_STOPPED'
   | 'AGENT_RUNTIME_ERROR';
 
 export interface AgentRunError {

@@ -122,6 +122,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
+  const [stoppingAgentIds, setStoppingAgentIds] = useState<Set<string>>(new Set())
   const [outgoingQueue, setOutgoingQueue] = useState<OutgoingQueueItem[]>([])
   const [composerDraft, setComposerDraft] = useState('')
   const [messageErrorMap, setMessageErrorMap] = useState<Record<string, AgentRunErrorEvent>>({})
@@ -174,6 +175,14 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     streamingCount: streamingAgentIds.size,
     agents,
   }), [agents, streamingAgentIds])
+  const busyAgents = useMemo(
+    () => agents.filter(agent =>
+      streamingAgentIds.has(agent.id) ||
+      agent.status === 'thinking' ||
+      agent.status === 'waiting',
+    ),
+    [agents, streamingAgentIds],
+  )
   const recallableQueueItemId = useMemo(
     () => findRecallableOutgoingQueueItem(outgoingQueue)?.id ?? null,
     [outgoingQueue],
@@ -234,6 +243,7 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     setState('RUNNING')
     setReport('')
     setStreamingAgentIds(new Set())
+    setStoppingAgentIds(new Set())
     setOutgoingQueue([])
     setComposerDraft('')
     setMessageErrorMap({})
@@ -254,6 +264,17 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
 
 
   useEffect(() => { agentsRef.current = agents }, [agents])
+
+  useEffect(() => {
+    const busyIds = new Set(busyAgents.map(agent => agent.id))
+    setStoppingAgentIds(prev => {
+      const next = new Set(Array.from(prev).filter(id => busyIds.has(id)))
+      if (next.size === prev.size && Array.from(next).every(id => prev.has(id))) {
+        return prev
+      }
+      return next
+    })
+  }, [busyAgents])
 
   const handleAgentPanelWidthChange = useCallback((nextWidth: number) => {
     setAgentPanelWidth(clampAgentPanelWidth(nextWidth))
@@ -892,6 +913,46 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
     void copyFailedPrompt(content)
   }, [copyFailedPrompt])
 
+  const handleStopAgent = useCallback(async (agent: Agent) => {
+    if (!roomId) return
+
+    setStoppingAgentIds(prev => {
+      const next = new Set(prev)
+      next.add(agent.id)
+      return next
+    })
+
+    try {
+      const res = await fetch(`${API}/api/rooms/${roomId}/agents/${agent.id}/stop`, {
+        method: 'POST',
+      })
+      if (res.ok) return
+
+      setStoppingAgentIds(prev => {
+        const next = new Set(prev)
+        next.delete(agent.id)
+        return next
+      })
+
+      if (res.status === 409) {
+        showSendError(`${agent.name} 已经不在回答了`, 3000)
+        return
+      }
+      if (res.status === 404) {
+        showSendError(`${agent.name} 当前不可用，请刷新后重试`, 3500)
+        return
+      }
+      showSendError('停止失败，请稍后重试')
+    } catch {
+      setStoppingAgentIds(prev => {
+        const next = new Set(prev)
+        next.delete(agent.id)
+        return next
+      })
+      showSendError('停止失败，请检查网络')
+    }
+  }, [roomId, showSendError])
+
   const toggleMobileMenu = () => setMobileMenuOpen(o => !o)
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -1059,6 +1120,42 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
               </button>
             ) : roomId ? (
               <>
+                {busyAgents.length > 0 && (
+                  <div className="app-islands-item rounded-2xl border border-line bg-surface/85 px-4 py-3 shadow-sm">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-soft">
+                        正在回答
+                      </span>
+                      <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] text-ink-soft">
+                        {busyAgents.length} 位
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {busyAgents.map(agent => {
+                        const stopping = stoppingAgentIds.has(agent.id)
+                        return (
+                          <div
+                            key={agent.id}
+                            className="inline-flex items-center gap-2 rounded-xl border border-line/80 bg-bg/60 px-3 py-2"
+                          >
+                            <span className="inline-flex items-center gap-2 text-[12px] font-medium text-ink">
+                              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                              {agent.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void handleStopAgent(agent)}
+                              disabled={stopping}
+                              className="rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {stopping ? '停止中…' : '停止'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 <OutgoingMessageQueue
                   items={outgoingQueue}
                   recallableItemId={recallableQueueItemId}

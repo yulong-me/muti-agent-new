@@ -144,6 +144,7 @@ export async function* streamOpenCodeProvider(
   const firstTokenTimeoutMs = Number(opts.firstTokenTimeoutMs ?? 180000); // 3 min
   const idleTokenTimeoutMs = Number(opts.idleTokenTimeoutMs ?? 180000);
   const workspace = opts.workspace as string | undefined;
+  const signal = opts.signal as AbortSignal | undefined;
 
   debug('provider:call_start', {
     roomId,
@@ -180,6 +181,7 @@ export async function* streamOpenCodeProvider(
   let stderrBuffer = '';
   proc.stderr?.on('data', (d: Buffer) => { stderrBuffer += d.toString(); });
   let timeoutError: Error | null = null;
+  let stoppedError: Error | null = null;
   let sawToken = false;
   let firstTokenTimer: ReturnType<typeof setTimeout> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -236,6 +238,25 @@ export async function* streamOpenCodeProvider(
     }
     throw err;
   };
+
+  const stopProc = () => {
+    if (timeoutError || stoppedError) return;
+    clearTimers();
+    const err = new Error('Agent run stopped by user');
+    (err as Error & { code?: string }).code = 'AGENT_STOPPED';
+    stoppedError = err;
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      // ignore
+    }
+  };
+
+  if (signal?.aborted) {
+    stopProc();
+  } else {
+    signal?.addEventListener('abort', stopProc, { once: true });
+  }
 
   armFirstTokenTimer();
 
@@ -305,16 +326,21 @@ export async function* streamOpenCodeProvider(
   }
 
   await new Promise<void>((resolve, reject) => {
-    proc.on('close', (code, signal) => {
+    proc.on('close', (code, closeSignal) => {
       clearTimers();
+      signal?.removeEventListener('abort', stopProc);
       if (timeoutError) {
         reject(timeoutError);
+        return;
+      }
+      if (stoppedError) {
+        reject(stoppedError);
         return;
       }
       if (code !== 0) {
         const errMsg = stderrBuffer.trim() || `CLI exited with code ${code}`;
         error('provider:call_error', { roomId, agentId, agentName, stderr: errMsg.slice(0, 500) });
-        const err = new Error(signal ? `${errMsg} (signal: ${signal})` : errMsg);
+        const err = new Error(closeSignal ? `${errMsg} (signal: ${closeSignal})` : errMsg);
         (err as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
         reject(err);
       } else {
@@ -324,6 +350,11 @@ export async function* streamOpenCodeProvider(
     });
     proc.on('error', (err) => {
       clearTimers();
+      signal?.removeEventListener('abort', stopProc);
+      if (stoppedError) {
+        reject(stoppedError);
+        return;
+      }
       error('provider:error', { roomId, agentId, agentName, error: err.message });
       (err as Error & { code?: string }).code = 'AGENT_PROCESS_EXIT';
       reject(err);
