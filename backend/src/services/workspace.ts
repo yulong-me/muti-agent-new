@@ -16,7 +16,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { runtimePaths } from '../config/runtimePaths.js';
 
 // F006: Workspace path validation error
 export class WorkspaceSecurityError extends Error {
@@ -56,10 +56,8 @@ export async function validateWorkspacePath(workspacePath: string): Promise<void
   }
 }
 
-// 使用项目根目录下的 workspaces/，避免 /workspace 需要 root 权限
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WORKSPACE_BASE = path.resolve(__dirname, '../../workspaces');
-const WORKSPACE_ARCHIVE = path.resolve(__dirname, '../../workspaces-archive');
+const WORKSPACE_BASE = runtimePaths.workspaceBaseDir;
+const WORKSPACE_ARCHIVE = runtimePaths.workspaceArchiveDir;
 
 export function getWorkspacePath(roomId: string): string {
   return path.join(WORKSPACE_BASE, `room-${roomId}`);

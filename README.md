@@ -133,6 +133,12 @@ pnpm dev
 
 - `backend/data/muti-agent.db`
 
+默认运行时目录也都位于 `backend/` 下：
+
+- `backend/data/`
+- `backend/logs/`
+- `backend/workspaces/`
+
 ### 构建
 
 根目录现在提供统一构建入口：
@@ -152,6 +158,22 @@ pnpm build
 pnpm run build:backend
 pnpm run build:frontend
 ```
+
+### 正式运行
+
+先构建，再用正式启动入口运行：
+
+```bash
+pnpm build
+pnpm start
+```
+
+当前默认会同时启动：
+
+| Service | URL |
+|---------|-----|
+| Backend API | http://localhost:7001 |
+| Frontend UI | http://localhost:7002 |
 
 ### 进入产品
 

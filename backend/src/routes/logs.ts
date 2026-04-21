@@ -13,9 +13,10 @@
 import { Router } from 'express';
 import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { runtimePaths } from '../config/runtimePaths.js';
 import type { LogLevel } from '../lib/logger.js';
 
-const LOG_DIR = join(process.cwd(), 'logs');
+const LOG_DIR = runtimePaths.logsDir;
 
 const VALID_LEVELS = new Set(['DEBUG', 'INFO', 'WARN', 'ERROR']);
 

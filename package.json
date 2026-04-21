@@ -12,6 +12,8 @@
     "dev": "node scripts/dev.mjs",
     "dev:backend": "pnpm --dir backend dev",
     "dev:frontend": "pnpm --dir frontend dev",
+    "prestart": "pnpm run node:check",
+    "start": "node scripts/start.mjs",
     "prebuild": "pnpm run node:check",
     "build": "pnpm run build:backend && pnpm run build:frontend",
     "build:backend": "pnpm --dir backend build",

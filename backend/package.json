@@ -7,8 +7,10 @@
     "native:check": "node scripts/ensure-better-sqlite.mjs",
     "predev": "pnpm run node:check && pnpm run native:check",
     "dev": "LOG_LEVEL=debug tsx watch src/server.ts",
+    "prestart": "pnpm run node:check && pnpm run native:check",
+    "start": "node dist/server.js",
     "prebuild": "pnpm run node:check && pnpm run native:check",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-runtime-assets.mjs",
     "pretest": "pnpm run node:check && pnpm run native:check",
     "test": "vitest run",
     "test:watch": "vitest"

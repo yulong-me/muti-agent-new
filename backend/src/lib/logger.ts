@@ -17,6 +17,7 @@
 
 import { mkdirSync, appendFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { runtimePaths } from '../config/runtimePaths.js';
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -38,7 +39,7 @@ function shouldLog(level: LogLevel): boolean {
 
 // ── File persistence ───────────────────────────────────────────────────────────
 const LOG_DIR = (() => {
-  const dir = join(process.cwd(), 'logs');
+  const dir = runtimePaths.logsDir;
   try {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   } catch {

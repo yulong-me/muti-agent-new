@@ -2,17 +2,29 @@
  * Centralized API base URL configuration.
  *
  * Resolution order (first match wins):
- *   1. `process.env.NEXT_PUBLIC_API_URL` — explicit override (production / docker)
- *   2. `window.location.protocol + '//' + window.location.host` — same origin (dev, proxy)
+ *   1. Non-empty `process.env.NEXT_PUBLIC_API_URL` — explicit override (production / docker)
+ *   2. If current page runs on localhost:7002, talk to localhost:7001
+ *   3. `window.location.protocol + '//' + window.location.host` — same origin (proxy deployments)
  *
  * For local dev without proxy: set NEXT_PUBLIC_API_URL in frontend/.env.local
  *
  * This replaces all inline `http://localhost:7001` hardcodes across components.
  */
 
+function resolveDefaultApiUrl(): string {
+  if (typeof window === 'undefined') return 'http://localhost:7001';
+
+  const { protocol, hostname, host, port } = window.location;
+
+  // Local app default: frontend 7002, backend 7001.
+  if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '7002') {
+    return `${protocol}//${hostname}:7001`;
+  }
+
+  return `${protocol}//${host}`;
+}
+
 /** Backend API base URL (without trailing slash) */
-export const API_URL: string =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.host}`
-    : 'http://localhost:7001');
+const envApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+export const API_URL: string = envApiUrl || resolveDefaultApiUrl();

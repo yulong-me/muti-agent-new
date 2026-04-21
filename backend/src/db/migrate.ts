@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './db.js';
 import { log } from '../log.js';
+import { runtimePaths } from '../config/runtimePaths.js';
 import { BUILTIN_SCENES } from '../prompts/builtinScenes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,7 +18,13 @@ function normalizeRole(role: string): string {
 
 /** Apply DDL schema */
 export function initSchema(): void {
-  const schemaPath = path.join(__dirname, 'schema.sql');
+  const schemaPath = [
+    path.join(__dirname, 'schema.sql'),
+    path.join(runtimePaths.backendRoot, 'src', 'db', 'schema.sql'),
+  ].find(candidate => fs.existsSync(candidate));
+  if (!schemaPath) {
+    throw new Error('schema.sql not found in dist/db or src/db');
+  }
   const sql = fs.readFileSync(schemaPath, 'utf-8');
 
   // Check if tables exist (new users may have empty DB)

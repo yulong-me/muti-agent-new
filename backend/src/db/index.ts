@@ -1,4 +1,5 @@
 import { db, DB_PATH } from './db.js';
+import { resolveBootstrapAction } from './bootstrapStrategy.js';
 import { initSchema, migrateFromJson, ensureBuiltinScenes } from './migrate.js';
 import { roomsRepo, messagesRepo } from './repositories/rooms.js';
 import { sessionsRepo } from './repositories/sessions.js';
@@ -14,12 +15,9 @@ import {
   buildBuiltinProviderOptsForMigration,
   type BuiltinAgentDefinition,
 } from '../prompts/builtinAgents.js';
+import { runtimePaths } from '../config/runtimePaths.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const SEEDED_PROVIDERS = [
   { name: 'claude-code', label: 'Claude Code', cliPath: 'claude', defaultModel: 'claude-sonnet-4-6', apiKey: '', baseUrl: '', timeout: 1800, thinking: true },
@@ -43,8 +41,7 @@ function resolveBuiltinAgentPrompt(agent: BuiltinAgentDefinition): string | null
   if (agent.systemPrompt !== undefined) return agent.systemPrompt;
   if (!agent.skillId) return '';
 
-  const skillsDir = path.resolve(__dirname, '../../../.agents/skills');
-  const mdPath = path.join(skillsDir, `${agent.skillId}-perspective`, 'SKILL.md');
+  const mdPath = path.join(runtimePaths.builtinSkillsDir, `${agent.skillId}-perspective`, 'SKILL.md');
   try {
     if (fs.existsSync(mdPath)) {
       return fs.readFileSync(mdPath, 'utf-8');
@@ -128,6 +125,12 @@ const seedFreshBuiltinData = db.transaction(() => {
   return { agentsSeeded, scenesSeeded: countRows('scenes'), providersSeeded };
 });
 
+const backfillLegacyBuiltinAgents = db.transaction(() => {
+  const agentsSeeded = seedBuiltinAgents();
+  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('bootstrap_seed_version', '1')").run();
+  return { agentsSeeded };
+});
+
 
 /** Initialize DB: apply schema, migrate JSON configs, seed defaults if empty */
 export function initDB(): void {
@@ -139,25 +142,27 @@ export function initDB(): void {
   const providersCount = countRows('providers');
   const scenesCount = countRows('scenes');
   const roomsCount = countRows('rooms');
+  const bootstrapAction = resolveBootstrapAction({
+    metaPresent: Boolean(metaRow),
+    agentsCount,
+    providersCount,
+    scenesCount,
+    roomsCount,
+  });
 
-  if (!metaRow) {
-    // Determine whether this is a truly fresh empty DB or a legacy DB getting its first meta marker.
-    // Historical DB = any of agents / providers / scenes already has rows.
-    const hasHistoricalData = agentsCount > 0 || providersCount > 0 || scenesCount > 0;
-
-    if (hasHistoricalData) {
-      // Legacy DB upgrading: do NOT seed / supplement anything, just write the meta marker.
-      // Existing agents, providers, scenes are preserved as-is.
-      db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('bootstrap_seed_version', '1')").run();
-      log('INFO', 'db:seed:bootstrap:legacy', { reason: 'historical data found, meta written only' });
-    } else {
-      // Truly fresh DB: seed all builtin data once.
-      const { agentsSeeded, scenesSeeded, providersSeeded } = seedFreshBuiltinData();
-      log('INFO', 'db:seed:bootstrap:done', { agentsSeeded, scenesSeeded, providersSeeded });
-    }
-  } else if (agentsCount === 0 && scenesCount === 0 && roomsCount === 0) {
-    // Repair a partial bootstrap left by a failed first launch. This preserves user data:
-    // it only runs when no rooms exist and both editable user-facing catalogs are empty.
+  if (bootstrapAction === 'fresh_seed_all') {
+    const { agentsSeeded, scenesSeeded, providersSeeded } = seedFreshBuiltinData();
+    log('INFO', 'db:seed:bootstrap:done', { agentsSeeded, scenesSeeded, providersSeeded });
+  } else if (bootstrapAction === 'legacy_backfill_agents') {
+    const { agentsSeeded } = backfillLegacyBuiltinAgents();
+    log('INFO', 'db:seed:bootstrap:legacy_agents_backfilled', {
+      reason: 'historical data found, agents catalog was empty',
+      agentsSeeded,
+    });
+  } else if (bootstrapAction === 'legacy_mark_only') {
+    db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('bootstrap_seed_version', '1')").run();
+    log('INFO', 'db:seed:bootstrap:legacy', { reason: 'historical data found, meta written only' });
+  } else if (bootstrapAction === 'repair_partial') {
     const { agentsSeeded, scenesSeeded, providersSeeded } = seedFreshBuiltinData();
     log('WARN', 'db:seed:bootstrap:repair_partial', {
       reason: 'bootstrap marker existed but agents/scenes were empty',
@@ -166,7 +171,6 @@ export function initDB(): void {
       providersSeeded,
     });
   } else {
-    // Already bootstrapped — never auto-overwrite anything, not even "missing" builtin items
     log('INFO', 'db:seed:bootstrap:skipped', { reason: 'bootstrap_seed_version already set' });
   }
 
