@@ -210,8 +210,11 @@ const MessageBubble = memo(function MessageBubble({
 
   const validMentions = useMemo(() => {
     if (isUser) return []
+    if (msg.effectiveMentions) {
+      return msg.effectiveMentions.filter(name => agentNameSet.has(name))
+    }
     return extractMentions(msg.content, agentNames).filter(name => agentNameSet.has(name))
-  }, [agentNameSet, agentNames, isUser, msg.content])
+  }, [agentNameSet, agentNames, isUser, msg.content, msg.effectiveMentions])
   const alternateAgents = useMemo(
     () => runError
       ? Array.from(agentById.values())

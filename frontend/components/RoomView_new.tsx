@@ -704,7 +704,10 @@ export default function RoomView_new({ roomId, defaultCreateOpen = false }: Room
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, toAgentId: recipientId }),
     })
-    if (res.ok) return { ok: true }
+    if (res.ok) {
+      setCurrentA2ADepth(0)
+      return { ok: true }
+    }
     return {
       ok: false,
       status: res.status,

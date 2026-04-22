@@ -88,6 +88,8 @@ export interface Message {
   toAgentId?: string;
   /** F014: structured agent execution error persisted for reconnect/poll recovery */
   runError?: AgentRunError;
+  /** Canonical mention targets derived from the backend's effective routing rules */
+  effectiveMentions?: string[];
 }
 
 export interface DiscussionRoom {

@@ -23,24 +23,6 @@ interface AgentConfig {
   tags: string[]
 }
 
-interface ManagedSkill {
-  id: string
-  name: string
-  description: string
-  enabled: boolean
-}
-
-interface WorkspaceSkill {
-  name: string
-  description: string
-  sourcePath: string
-}
-
-interface SkillDiscoverResponse {
-  globalSkills?: WorkspaceSkill[]
-  workspaceSkills?: WorkspaceSkill[]
-}
-
 const PROVIDER_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
   'opencode': 'OpenCode',
@@ -90,11 +72,6 @@ export default function CreateRoomModal({
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [workspacePath, setWorkspacePath] = useState('')
-  const [managedSkills, setManagedSkills] = useState<ManagedSkill[]>([])
-  const [selectedRoomSkills, setSelectedRoomSkills] = useState<Record<string, { mode: 'auto' | 'required' }>>({})
-  const [globalSkills, setGlobalSkills] = useState<WorkspaceSkill[]>([])
-  const [discoveredSkills, setDiscoveredSkills] = useState<WorkspaceSkill[]>([])
-  const [discoveringSkills, setDiscoveringSkills] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [errors, setErrors] = useState<{ topic?: string; agents?: string }>({})
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
@@ -108,6 +85,10 @@ export default function CreateRoomModal({
 
   const workers = allAgents.filter(a => a.role === 'WORKER' && a.enabled)
   const sceneAgentTag = scenes.find(s => s.id === sceneId)?.name ?? null
+  const minimumWorkerCount = sceneId === 'roundtable-forum' ? 3 : 1
+  const minimumWorkerError = sceneId === 'roundtable-forum'
+    ? '圆桌论坛至少选择 3 位专家'
+    : '请至少选择 1 位专家'
 
   useEffect(() => {
     if (!isOpen) return
@@ -136,17 +117,6 @@ export default function CreateRoomModal({
         warn('ui:room_create:scenes_load_failed', { error: err })
         setLoadingScenes(false)
       })
-    fetch(`${API}/api/skills`)
-      .then(r => r.json())
-      .then((data: ManagedSkill[]) => {
-        const enabledSkills = data.filter(skill => skill.enabled)
-        setManagedSkills(enabledSkills)
-        debug('ui:room_create:managed_skills_loaded', { count: enabledSkills.length })
-      })
-      .catch((err) => {
-        warn('ui:room_create:managed_skills_load_failed', { error: err })
-        setManagedSkills([])
-      })
   }, [isOpen])
 
   useEffect(() => {
@@ -154,11 +124,6 @@ export default function CreateRoomModal({
       setSelected(new Set())
       setActiveTag(null)
       setWorkspacePath('')
-      setManagedSkills([])
-      setSelectedRoomSkills({})
-      setGlobalSkills([])
-      setDiscoveredSkills([])
-      setDiscoveringSkills(false)
       setTopic('')
       setSearchText('')
       setErrors({})
@@ -181,47 +146,6 @@ export default function CreateRoomModal({
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, onClose])
 
-  useEffect(() => {
-    if (!isOpen) return
-    let cancelled = false
-    setDiscoveringSkills(true)
-    const body = workspacePath.trim() ? { workspacePath: workspacePath.trim() } : {}
-    fetch(`${API}/api/skills/discover`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-      .then(async res => {
-        if (!res.ok) return { globalSkills: [] as WorkspaceSkill[], workspaceSkills: [] as WorkspaceSkill[] }
-        return await res.json() as SkillDiscoverResponse
-      })
-      .then(data => {
-        if (cancelled) return
-        setGlobalSkills(data.globalSkills ?? [])
-        setDiscoveredSkills(data.workspaceSkills ?? [])
-        debug('ui:room_create:skills_discovered', {
-          workspacePath: workspacePath.trim() || null,
-          globalCount: data.globalSkills?.length ?? 0,
-          workspaceCount: data.workspaceSkills?.length ?? 0,
-        })
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setGlobalSkills([])
-          setDiscoveredSkills([])
-        }
-        warn('ui:room_create:skills_discover_failed', {
-          workspacePath: workspacePath.trim() || null,
-          error: err,
-        })
-      })
-      .finally(() => {
-        if (!cancelled) setDiscoveringSkills(false)
-      })
-
-    return () => { cancelled = true }
-  }, [workspacePath, isOpen])
-
   if (!isOpen) return null
 
   function toggleAgent(id: string) {
@@ -239,22 +163,10 @@ export default function CreateRoomModal({
     router.push(buildSettingsHref('scene', pathname))
   }
 
-  function toggleRoomSkill(skillId: string, enabled: boolean) {
-    setSelectedRoomSkills(prev => {
-      const next = { ...prev }
-      if (enabled) {
-        next[skillId] = next[skillId] ?? { mode: 'auto' }
-      } else {
-        delete next[skillId]
-      }
-      return next
-    })
-  }
-
   async function handleSubmit() {
     const newErrors: { topic?: string; agents?: string } = {}
-    if (selected.size < 1) {
-      newErrors.agents = '请至少选择 1 位专家'
+    if (selected.size < minimumWorkerCount) {
+      newErrors.agents = minimumWorkerError
     }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -266,7 +178,6 @@ export default function CreateRoomModal({
     info('ui:room_create:submit', {
       topicLength: topic.trim().length,
       workerCount: selected.size,
-      roomSkillCount: Object.keys(selectedRoomSkills).length,
       hasWorkspace: Boolean(workspacePath.trim()),
       sceneId,
     })
@@ -279,11 +190,6 @@ export default function CreateRoomModal({
           workerIds: workers.filter(a => selected.has(a.id)).map(a => a.id),
           ...(workspacePath.trim() ? { workspacePath: workspacePath.trim() } : {}),
           sceneId, // F016
-          roomSkills: Object.entries(selectedRoomSkills).map(([skillId, value]) => ({
-            skillId,
-            mode: value.mode,
-            enabled: true,
-          })),
         }),
       })
       if (!res.ok) {
@@ -299,7 +205,6 @@ export default function CreateRoomModal({
           status: res.status,
           error: msg,
           workerCount: selected.size,
-          roomSkillCount: Object.keys(selectedRoomSkills).length,
           sceneId,
         })
         return
@@ -308,7 +213,6 @@ export default function CreateRoomModal({
       info('ui:room_create:success', {
         roomId: room.id,
         workerCount: selected.size,
-        roomSkillCount: Object.keys(selectedRoomSkills).length,
         sceneId,
         hasWorkspace: Boolean(workspacePath.trim()),
       })
@@ -409,85 +313,16 @@ export default function CreateRoomModal({
               </select>
               {loadingScenes && <p className="text-[11px] text-ink-soft mt-1">加载场景中…</p>}
               {!loadingScenes && sceneAgentTag && (
-                <p className="text-[11px] text-ink-soft mt-1">已默认筛选 {sceneAgentTag} 相关专家，可切换为全部。</p>
+                <p className="text-[11px] text-ink-soft mt-1">
+                  已默认筛选 {sceneAgentTag} 相关专家，可切换为全部。
+                  {sceneId === 'roundtable-forum' ? ' 圆桌论坛强制 3 人及以上。' : ''}
+                </p>
               )}
             </div>
 
             {/* Expert Section Header */}
             <div className="px-6 md:px-8 pt-4 mb-1">
               <p className="text-[11px] font-bold text-accent uppercase tracking-widest mb-2">选择专家</p>
-            </div>
-
-            <div className="px-6 md:px-8 pt-4 mb-1">
-              <p className="text-[11px] font-bold text-accent uppercase tracking-widest mb-2">Room Skills</p>
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] divide-y divide-white/[0.06]">
-                {managedSkills.length === 0 ? (
-                  <div className="px-4 py-3 text-[12px] text-ink-soft">还没有 managed skill，先去设置里创建。</div>
-                ) : managedSkills.map(skill => {
-                  const binding = selectedRoomSkills[skill.id]
-                  return (
-                    <div key={skill.id} className="px-4 py-3 flex items-start justify-between gap-3">
-                      <label className="flex items-start gap-2 cursor-pointer flex-1">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(binding)}
-                          onChange={e => toggleRoomSkill(skill.id, e.target.checked)}
-                          className="mt-0.5 accent-accent"
-                        />
-                        <span className="min-w-0">
-                          <span className="block text-[12px] font-semibold text-ink">{skill.name}</span>
-                          <span className="block text-[11px] text-ink-soft">{skill.description || '无描述'}</span>
-                        </span>
-                      </label>
-                      <select
-                        value={binding?.mode ?? 'auto'}
-                        disabled={!binding}
-                        onChange={e => setSelectedRoomSkills(prev => ({ ...prev, [skill.id]: { mode: e.target.value as 'auto' | 'required' } }))}
-                        className="settings-input rounded-lg px-2 py-1 text-[11px] text-ink disabled:opacity-40"
-                      >
-                        <option value="auto">auto</option>
-                        <option value="required">required</option>
-                      </select>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-bold text-ink-soft uppercase">Workspace Discovered</p>
-                  {discoveringSkills && <p className="text-[11px] text-ink-soft">扫描中…</p>}
-                </div>
-                {globalSkills.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-[11px] font-semibold text-ink-soft mb-1">System Global</p>
-                    <div className="flex flex-wrap gap-2">
-                      {globalSkills.map(skill => (
-                        <span key={`global:${skill.name}:${skill.sourcePath}`} className="text-[11px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-ink-soft">
-                          {skill.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {workspacePath.trim() ? (
-                  discoveredSkills.length > 0 ? (
-                    <div className="mt-2">
-                      <p className="text-[11px] font-semibold text-ink-soft mb-1">Workspace Local</p>
-                      <div className="flex flex-wrap gap-2">
-                        {discoveredSkills.map(skill => (
-                          <span key={`${skill.name}:${skill.sourcePath}`} className="text-[11px] px-2 py-1 rounded-lg bg-accent/10 border border-accent/20 text-accent">
-                            {skill.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-[12px] text-ink-soft">这个 workspace 里暂未发现 project-local skills。</p>
-                  )
-                ) : (
-                  <p className="mt-2 text-[12px] text-ink-soft">未选择 external workspace 时，默认只加载系统全局 skills；选择后会额外扫描项目内的 `.agents/.claude/.opencode`。</p>
-                )}
-              </div>
             </div>
 
             {/* Search + Tag Filter */}
@@ -643,7 +478,9 @@ export default function CreateRoomModal({
                     <span className="text-ink">{ag.name}</span>
                   </span>
                 )) : (
-                  <span className="text-[12px] text-ink-soft italic">{selected.size < 1 ? '请选择至少 1 位专家' : '尚未选择专家'}</span>
+                  <span className="text-[12px] text-ink-soft italic">
+                    {selected.size < minimumWorkerCount ? minimumWorkerError : '尚未选择专家'}
+                  </span>
                 )}
               </div>
             </div>
@@ -653,7 +490,7 @@ export default function CreateRoomModal({
               type="button"
               className="w-full bg-ink text-bg font-bold py-4 rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:active:scale-100"
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || selected.size < minimumWorkerCount}
             >
               <Play className="w-4 h-4 fill-current" aria-hidden/>
               {submitting ? '创建中…' : '创建讨论'}

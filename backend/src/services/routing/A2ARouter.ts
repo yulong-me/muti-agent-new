@@ -9,6 +9,7 @@
 
 import { store } from '../../store.js';
 import { scenesRepo } from '../../db/index.js';
+import type { Agent } from '../../types.js';
 
 /**
  * 获取有效最大 A2A 深度
@@ -46,12 +47,93 @@ export function getEffectiveMaxDepthForRoom(roomId: string): number {
  * // => ['Ilya Sutskever']
  */
 export function scanForA2AMentions(text: string, agentNames: string[] = []): string[] {
-  // 排除 code block 内容（```...``` 或 `...` 包裹的内容）
-  const withoutCodeBlocks = text
-    // 匹配 ``` 开头的 code block
-    .replace(/```[\s\S]*?```/g, '')
-    // 匹配行内 `code` 片段
-    .replace(/`[^`]+`/g, '');
+  return collectMentions(text, agentNames, true);
+}
+
+export function scanForInlineA2AMentions(text: string, agentNames: string[] = []): string[] {
+  return collectMentions(text, agentNames, false);
+}
+
+export function detectRoundtableHandoff(
+  text: string,
+  agentNames: string[] = [],
+): {
+  mention: string;
+  source: 'standalone_last_line' | 'inline_last_line_fallback' | 'standalone_with_trailing_text_fallback';
+} | null {
+  const withoutCodeBlocks = stripCodeBlocks(text);
+  const nonEmptyLines = withoutCodeBlocks
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  const lastLine = nonEmptyLines.at(-1);
+
+  if (!lastLine) return null;
+
+  const standaloneMentions = nonEmptyLines
+    .map(line => matchStandaloneMentionLine(line, agentNames))
+    .filter((mention): mention is string => Boolean(mention));
+
+  if (standaloneMentions.length > 1) {
+    return null;
+  }
+
+  const standalone = matchStandaloneMentionLine(lastLine, agentNames);
+  if (standalone) {
+    return { mention: standalone, source: 'standalone_last_line' };
+  }
+
+  const allMentions = scanForInlineA2AMentions(withoutCodeBlocks, agentNames);
+
+  if (standaloneMentions.length === 1 && allMentions.length === 1 && standaloneMentions[0] === allMentions[0]) {
+    return { mention: standaloneMentions[0], source: 'standalone_with_trailing_text_fallback' };
+  }
+
+  const lastLineMentions = scanForInlineA2AMentions(lastLine, agentNames);
+  if (lastLineMentions.length === 1 && allMentions.length === 1 && lastLineMentions[0] === allMentions[0]) {
+    return { mention: lastLineMentions[0]!, source: 'inline_last_line_fallback' };
+  }
+
+  return null;
+}
+
+function buildCanonicalMentionAliasMap(agents: Agent[]): Map<string, string> {
+  const aliasMap = new Map<string, string>();
+  for (const agent of agents) {
+    for (const alias of [agent.name, agent.domainLabel, agent.configId].map(value => value.trim()).filter(Boolean)) {
+      aliasMap.set(alias.toLocaleLowerCase(), agent.name);
+    }
+  }
+  return aliasMap;
+}
+
+function buildMentionCandidates(agents: Agent[]): string[] {
+  return Array.from(
+    new Set(
+      agents.flatMap(agent => [agent.name, agent.domainLabel, agent.configId].map(value => value.trim()).filter(Boolean)),
+    ),
+  );
+}
+
+export function computeEffectiveMessageMentions(
+  text: string,
+  sceneId: string,
+  agents: Agent[],
+): string[] {
+  const aliasMap = buildCanonicalMentionAliasMap(agents);
+  const mentionCandidates = buildMentionCandidates(agents);
+  const normalize = (mention: string) => aliasMap.get(mention.toLocaleLowerCase()) ?? mention;
+
+  if (sceneId === 'roundtable-forum') {
+    const handoff = detectRoundtableHandoff(text, mentionCandidates);
+    return handoff ? [normalize(handoff.mention)] : [];
+  }
+
+  return scanForA2AMentions(text, mentionCandidates).map(normalize);
+}
+
+function collectMentions(text: string, agentNames: string[] = [], requireLineStart: boolean): string[] {
+  const withoutCodeBlocks = stripCodeBlocks(text);
 
   const seen = new Set<string>();
   const names: string[] = [];
@@ -60,9 +142,11 @@ export function scanForA2AMentions(text: string, agentNames: string[] = []): str
     for (let i = 0; i < withoutCodeBlocks.length; i++) {
       if (withoutCodeBlocks[i] !== '@') continue;
 
-      const lineStart = withoutCodeBlocks.lastIndexOf('\n', i - 1) + 1;
-      const before = withoutCodeBlocks.slice(lineStart, i);
-      if (!/^[ \t]*$/.test(before)) continue;
+      if (requireLineStart) {
+        const lineStart = withoutCodeBlocks.lastIndexOf('\n', i - 1) + 1;
+        const before = withoutCodeBlocks.slice(lineStart, i);
+        if (!/^[ \t]*$/.test(before)) continue;
+      }
 
       const match = /^([^\s@()[\]{}<>，。！？；：,.;!?]+)/u.exec(withoutCodeBlocks.slice(i + 1));
       const matchedName = match?.[1]?.trim();
@@ -84,10 +168,11 @@ export function scanForA2AMentions(text: string, agentNames: string[] = []): str
   for (let i = 0; i < withoutCodeBlocks.length; i++) {
     if (withoutCodeBlocks[i] !== '@') continue;
 
-    // Line-start check: everything between previous newline and this @ must be whitespace-only
-    const lineStart = withoutCodeBlocks.lastIndexOf('\n', i - 1) + 1;
-    const before = withoutCodeBlocks.slice(lineStart, i);
-    if (!/^[ \t]*$/.test(before)) continue;
+    if (requireLineStart) {
+      const lineStart = withoutCodeBlocks.lastIndexOf('\n', i - 1) + 1;
+      const before = withoutCodeBlocks.slice(lineStart, i);
+      if (!/^[ \t]*$/.test(before)) continue;
+    }
 
     const rest = withoutCodeBlocks.slice(i + 1);
     let matchedName: string | null = null;
@@ -116,6 +201,12 @@ export function scanForA2AMentions(text: string, agentNames: string[] = []): str
   return names;
 }
 
+function stripCodeBlocks(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`]+`/g, '');
+}
+
 const MIDDLE_DOT_PATTERN = /[·・•‧⋅･.．]/;
 
 function buildAgentMentionPattern(agentName: string): RegExp {
@@ -134,6 +225,31 @@ function buildAgentMentionPattern(agentName: string): RegExp {
   return new RegExp(pattern, 'iu');
 }
 
+function matchStandaloneMentionLine(line: string, agentNames: string[]): string | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('@')) return null;
+
+  if (agentNames.length === 0) {
+    const match = /^@([^\s@()[\]{}<>，。！？；：,.;!?]+)\s*$/u.exec(trimmed);
+    return match?.[1]?.trim() ?? null;
+  }
+
+  const rest = trimmed.slice(1);
+  const matchers: Array<{ name: string; pattern: RegExp }> = agentNames
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .map(name => ({ name, pattern: buildAgentMentionPattern(name) }));
+
+  for (const { name, pattern } of matchers) {
+    const result = pattern.exec(rest);
+    if (!result) continue;
+    if (rest.slice(result[0].length).trim() !== '') continue;
+    return name;
+  }
+
+  return null;
+}
+
 /**
  * 更新 Room 的 A2A 追踪状态
  */
@@ -144,5 +260,19 @@ export function updateA2AContext(roomId: string, depth: number, callChain: strin
   store.update(roomId, {
     a2aDepth: depth,
     a2aCallChain: callChain,
+  });
+}
+
+/**
+ * Reset room-level A2A tracking when a human manually restarts the thread.
+ * This lets the next manual turn consume the full depth budget again.
+ */
+export function resetA2AContext(roomId: string): void {
+  const room = store.get(roomId);
+  if (!room) return;
+
+  store.update(roomId, {
+    a2aDepth: 0,
+    a2aCallChain: [],
   });
 }

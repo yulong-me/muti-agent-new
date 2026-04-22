@@ -239,6 +239,36 @@ describe('F016: scenesRouter — HTTP-level tests', () => {
 });
 
 describe('F016: rooms POST /api/rooms — sceneId validation (P2-4)', () => {
+  it('rejects roundtable room creation with fewer than 3 workers', async () => {
+    const { getAgent } = await import('../src/config/agentConfig.js');
+
+    mockScenesRepo.get.mockReturnValue({
+      id: 'roundtable-forum',
+      name: '圆桌论坛',
+      prompt: 'p',
+      builtin: true,
+    });
+    vi.mocked(getAgent).mockImplementation((id: string) => {
+      if (!/^worker-[123]$/.test(id)) return undefined;
+      return {
+        id,
+        name: `测试员${id.slice(-1)}`,
+        role: 'WORKER',
+        roleLabel: '测试',
+        provider: 'claude-code',
+        systemPrompt: '你是一个测试员',
+        enabled: true,
+      };
+    });
+
+    const res = await reqJson('POST', '/api/rooms', {
+      workerIds: ['worker-1', 'worker-2'],
+      sceneId: 'roundtable-forum',
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.data.error).toContain('至少选择 3 位专家');
+  });
 
   _skip('rejects room creation with unknown sceneId → 400', async () => {
     mockScenesRepo.get.mockReturnValue(undefined);
@@ -253,13 +283,27 @@ describe('F016: rooms POST /api/rooms — sceneId validation (P2-4)', () => {
   });
 
   _skip('accepts room creation with valid builtin sceneId', async () => {
+    const { getAgent } = await import('../src/config/agentConfig.js');
+
     mockScenesRepo.get.mockReturnValue({
       id: 'roundtable-forum', name: '圆桌论坛', prompt: 'p', builtin: true,
     });
     mockScenesRepo.list.mockReturnValue([]);
+    vi.mocked(getAgent).mockImplementation((id: string) => {
+      if (!/^worker-[123]$/.test(id)) return undefined;
+      return {
+        id,
+        name: `测试员${id.slice(-1)}`,
+        role: 'WORKER',
+        roleLabel: '测试',
+        provider: 'claude-code',
+        systemPrompt: '你是一个测试员',
+        enabled: true,
+      };
+    });
 
     const res = await reqJson('POST', '/api/rooms', {
-      workerIds: ['worker-1'],
+      workerIds: ['worker-1', 'worker-2', 'worker-3'],
       sceneId: 'roundtable-forum',
     });
 
@@ -338,6 +382,8 @@ describe('F016: scenePromptBuilder — real export', () => {
     expect(prompt).toContain('- 架构师（架构设计）');
     expect(prompt).toContain('- Reviewer（代码审查）');
     expect(prompt).toContain('需要协作时，另起一行行首 @专家名');
+    expect(prompt).toContain('【回复区输出协议】');
+    expect(prompt).toContain('回复区只保留结论、反驳、决定或下一步');
   });
 
   it('injects current A2A depth and effective max depth into runtime context', async () => {
@@ -373,6 +419,42 @@ describe('F016: scenePromptBuilder — real export', () => {
     });
 
     expect(prompt).toContain('【A2A 协作深度】当前 2 层 / 最大 10 层');
+  });
+
+  it('skips terse reply protocol for report mode', async () => {
+    const { buildRoomScopedSystemPrompt } = await import('../src/services/scenePromptBuilder.js');
+    const { store } = await import('../src/store.js');
+
+    vi.mocked(store.get).mockReturnValue({
+      id: 'room-report',
+      topic: '实现登录态持久化',
+      state: 'RUNNING' as const,
+      agents: [
+        { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'architect', status: 'idle' as const },
+      ],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 0,
+      a2aCallChain: [],
+      sceneId: 'software-development',
+      maxA2ADepth: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    mockScenesRepo.get.mockReturnValue({
+      id: 'software-development',
+      name: '软件开发',
+      prompt: '软件开发场景',
+      builtin: true,
+      maxA2ADepth: 5,
+    });
+
+    const prompt = buildRoomScopedSystemPrompt('room-report', 'base prompt', {
+      userMessage: '请输出报告',
+      outputMode: 'report',
+    });
+
+    expect(prompt).not.toContain('【回复区输出协议】');
   });
 });
 

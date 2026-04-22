@@ -17,7 +17,7 @@ import { roomsRepo, sessionsRepo, messagesRepo, scenesRepo } from '../db/index.j
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
-import { resolveEffectiveMaxDepth } from '../services/routing/A2ARouter.js';
+import { computeEffectiveMessageMentions, resolveEffectiveMaxDepth } from '../services/routing/A2ARouter.js';
 import {
   discoverWorkspaceSkills,
   getRoomWorkspace,
@@ -87,6 +87,15 @@ roomsRouter.post('/', async (req, res) => {
   if (disabled.length > 0) {
     warn('room:create:invalid_workers', { reason: 'disabled_or_non_worker', invalid: disabled });
     return res.status(400).json({ error: `Invalid workers (must be enabled WORKER): ${disabled.join(', ')}` });
+  }
+
+  if (effectiveSceneId === 'roundtable-forum' && workerIds.length < 3) {
+    warn('room:create:invalid_workers', {
+      reason: 'insufficient_workers_for_roundtable',
+      workerCount: workerIds.length,
+      sceneId: effectiveSceneId,
+    });
+    return res.status(400).json({ error: '圆桌论坛至少选择 3 位专家' });
   }
 
   const workerEntries = workerIds.map(id => {
@@ -263,9 +272,15 @@ roomsRouter.get('/:id/messages', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({
     state: room.state,
-    messages: room.messages,
+    messages: room.messages.map(message => ({
+      ...message,
+      effectiveMentions: message.agentRole === 'USER'
+        ? []
+        : computeEffectiveMessageMentions(message.content, room.sceneId, room.agents),
+    })),
     agents: room.agents,
     report: room.report,
+    sceneId: room.sceneId,
     maxA2ADepth: room.maxA2ADepth, // F017: room override (null = inherit scene)
     a2aDepth: room.a2aDepth ?? 0, // F017: current A2A depth
     effectiveMaxDepth: resolveEffectiveMaxDepth(room.maxA2ADepth, room.sceneId), // F017: computed max depth

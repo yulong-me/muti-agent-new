@@ -59,6 +59,7 @@ export interface Message {
   input_tokens?: number
   output_tokens?: number
   toAgentId?: string
+  effectiveMentions?: string[]
   runError?: AgentRunErrorEvent
 }
 

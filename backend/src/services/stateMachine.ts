@@ -3,7 +3,6 @@
  *
  * 核心职责：
  * - routeToAgent(): 用户消息直接发送给指定 Worker
- * - generateReportInline(): 使用 Worker 生成当前 room 的系统总结
  * - A2A 编排: Worker 输出后扫描 @mention → 路由
  */
 
@@ -32,8 +31,11 @@ import {
   resolveEffectiveSkills,
 } from './skills.js';
 import {
+  detectRoundtableHandoff,
   scanForA2AMentions,
+  scanForInlineA2AMentions,
   getEffectiveMaxDepthForRoom,
+  resetA2AContext,
   updateA2AContext,
 } from './routing/A2ARouter.js';
 import {
@@ -374,6 +376,16 @@ export async function routeToAgent(
   }
   debug('route.to', { roomId, toAgentId, toAgentName: target.name, toAgentRole: 'WORKER', path: 'routeToAgent' });
 
+  if ((room.a2aDepth ?? 0) > 0 || (room.a2aCallChain?.length ?? 0) > 0) {
+    debug('a2a:reset:user_trigger', {
+      roomId,
+      previousDepth: room.a2aDepth ?? 0,
+      previousCallChain: room.a2aCallChain ?? [],
+      toAgentName: target.name,
+    });
+    resetA2AContext(roomId);
+  }
+
   // 保存用户消息，标记 toAgentId
   addUserMessage(roomId, content, target.id);
   info('msg.user', { roomId, contentLength: content.length, toAgentId: target.id, toAgentName: target.name, toAgentRole: 'WORKER' });
@@ -405,43 +417,17 @@ export async function routeToAgent(
   });
 }
 
-export function stopAgentRun(roomId: string, agentId: string) {
-  return requestStopAgentRun(roomId, agentId);
-}
-
-/**
- * F012: 系统级报告生成（无状态，不依赖 MANAGER）
- * 使用 room 内的第一个 WORKER 作为执行者
- */
 export async function generateReportInline(
   topic: string,
   allContent: string,
   worker: Agent,
   roomId: string,
 ): Promise<string> {
-  const prompt = `你是一个专业的讨论主持人。请根据以下讨论内容，输出一份结构化的讨论总结报告。
-
-## 讨论主题
-${topic}
-
-## 讨论内容
-${allContent}
-
-请按以下格式输出：
-1. 核心讨论要点（3-5条）
-2. 各方主要观点
-3. 达成的共识或结论
-4. 待进一步探讨的问题
-
-请用中文输出，语言精炼专业。`;
-
-  telemetry('report:inline:start', { roomId, workerName: worker.name });
-
-  const result = await streamingCallAgent(
+  return streamingCallAgent(
     {
-      domainLabel: '讨论主持人',
-      systemPrompt: '你是一个专业的讨论主持人，擅长整理讨论结论',
-      userMessage: prompt,
+      domainLabel: worker.domainLabel,
+      systemPrompt: `专业${worker.domainLabel}，负责将讨论重组成结构化报告`,
+      userMessage: `请基于以下讨论内容输出一份简明报告。\n\n【议题】${topic}\n\n【讨论内容】\n${allContent}`,
     },
     roomId,
     worker.id,
@@ -450,10 +436,13 @@ ${allContent}
     'report',
     'WORKER',
   );
-
-  telemetry('report:inline:done', { roomId, reportLength: result.length });
-  return result;
 }
+
+export function stopAgentRun(roomId: string, agentId: string) {
+  return requestStopAgentRun(roomId, agentId);
+}
+
+
 
 // ─── 流式调用 ───────────────────────────────────────────────────────────────
 
@@ -535,6 +524,7 @@ async function streamingCallAgent(
       a2aCallChain: room?.a2aCallChain,
       workspace,
       skillsSummary: buildEffectiveSkillSummary(skillState.effective),
+      outputMode: msgType === 'report' ? 'report' : 'discussion',
     }) ?? `${basePrompt}\n\n${ctx.userMessage}`;
 
     const existingSessionId = room?.sessionIds[agentName];
@@ -721,8 +711,53 @@ export async function a2aOrchestrate(
   const room = store.get(roomId);
   if (!room) return;
 
-  let mentions = scanForA2AMentions(outputText, room.agents.map(a => a.name));
-  debug('a2a:scan', { roomId, fromAgentName, mentions });
+  const mentionTargets = Array.from(
+    new Set(
+      room.agents.flatMap(a => [a.name, a.domainLabel, a.configId].map(v => v.trim())).filter(Boolean),
+    ),
+  );
+  let mentions: string[] = [];
+  let mentionSource = 'line_start';
+
+  if (room.sceneId === 'roundtable-forum') {
+    const handoff = detectRoundtableHandoff(outputText, mentionTargets);
+    if (handoff) {
+      mentions = [handoff.mention];
+      mentionSource = handoff.source;
+      if (handoff.source === 'inline_last_line_fallback') {
+        warn('a2a:mention_fallback_inline_last_line', {
+          roomId,
+          fromAgentName,
+          mention: handoff.mention,
+        });
+      } else if (handoff.source === 'standalone_with_trailing_text_fallback') {
+        warn('a2a:mention_fallback_trailing_text_after_standalone', {
+          roomId,
+          fromAgentName,
+          mention: handoff.mention,
+        });
+      }
+    } else {
+      mentionSource = 'roundtable_invalid_or_missing';
+      const inlineMentions = scanForInlineA2AMentions(outputText, mentionTargets);
+      if (inlineMentions.length > 0) {
+        warn('a2a:invalid_mention_format', {
+          roomId,
+          fromAgentName,
+          mentions: inlineMentions,
+          sceneId: room.sceneId,
+        });
+        addSystemMessage(
+          roomId,
+          `[系统提示] ${fromAgentName} 使用了非标准圆桌交棒格式。圆桌论坛请在最后一行单独写 @专家名；本轮未自动接力。`,
+        );
+      }
+    }
+  } else {
+    mentions = scanForA2AMentions(outputText, mentionTargets);
+  }
+
+  debug('a2a:scan', { roomId, fromAgentName, mentions, mentionSource, sceneId: room.sceneId });
   if (mentions.length === 0) return;
 
   // Output guard: only applies to Manager (host) agents in Clarify mode.
@@ -761,6 +796,7 @@ export async function a2aOrchestrate(
     const targetAgent = room.agents.find(
       a =>
         a.name.toLowerCase() === mention.toLowerCase() ||
+        a.domainLabel.toLowerCase() === mention.toLowerCase() ||
         a.configId.toLowerCase() === mention.toLowerCase(),
     );
 
@@ -801,7 +837,8 @@ export async function a2aOrchestrate(
 ${fromAgentName} 的输出：
 ${filteredOutput}
 
-你是 ${targetAgent.domainLabel}。请基于以上上下文继续深入讨论或补充观点。
+你是 ${targetAgent.domainLabel}。请基于以上上下文继续短打推进：先给结论或反驳，再补 1 个核心理由。
+详细论证放到思考过程；回复区不要写成长文。
 如果需要其他专家参与，请使用行首 @mention 格式（不要 @ 自己）。`;
 
     await streamingCallAgent(

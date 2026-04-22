@@ -220,6 +220,37 @@ describe('F004: Manager 路由器', () => {
       );
     });
 
+    it('人工手动触发新一轮消息时，应该重置房间级 A2A 深度和调用链', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '架构师', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 5,
+        a2aCallChain: ['需求分析师', '架构师', 'Reviewer', '实现工程师', '测试工程师'],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await routeToAgent('room-1', '@架构师 我来手动开启新一轮', 'worker-1');
+
+      expect(store.update).toHaveBeenCalledWith(
+        'room-1',
+        expect.objectContaining({
+          a2aDepth: 0,
+          a2aCallChain: [],
+        }),
+      );
+    });
+
     it('用户停止回答时应该保留部分输出并发出 AGENT_STOPPED 事件', async () => {
       const { routeToAgent, stopAgentRun } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');
@@ -646,6 +677,36 @@ describe('F004: Manager 路由器', () => {
       expect(mentions).not.toContain('不应该触发');
       expect(mentions).toContain('应该触发');
     });
+
+    it('圆桌论坛只把最后一行的 @ 当成交棒，兼容旧格式末句 inline @', async () => {
+      const { detectRoundtableHandoff } = await import('../src/services/routing/A2ARouter.js');
+
+      expect(detectRoundtableHandoff('我反对这个判断。\n@芒格', ['查理·芒格', '芒格'])).toEqual({
+        mention: '芒格',
+        source: 'standalone_last_line',
+      });
+
+      expect(detectRoundtableHandoff('我反对这个判断。\n@芒格 你怎么看？', ['查理·芒格', '芒格'])).toEqual({
+        mention: '芒格',
+        source: 'inline_last_line_fallback',
+      });
+
+      expect(detectRoundtableHandoff('@乔布斯 你这个前提错了。\n真正的问题是权限模型。', ['乔布斯']))
+        .toBeNull();
+
+      expect(detectRoundtableHandoff('我不同意这个判断。\n@芒格\n（张一鸣收）', ['查理·芒格', '芒格'])).toEqual({
+        mention: '芒格',
+        source: 'standalone_with_trailing_text_fallback',
+      });
+
+      expect(detectRoundtableHandoff('我不同意这个判断。\n@乔布斯\n你刚才说得对，但我再补一句', ['乔布斯'])).toEqual({
+        mention: '乔布斯',
+        source: 'standalone_with_trailing_text_fallback',
+      });
+
+      expect(detectRoundtableHandoff('我不同意这个判断。\n@张一鸣\n@芒格', ['张一鸣', '查理·芒格', '芒格']))
+        .toBeNull();
+    });
   });
 
   describe('F017: A2A 协作深度', () => {
@@ -819,6 +880,152 @@ describe('F004: Manager 路由器', () => {
           agentName: '系统',
           type: 'system',
           content: expect.stringContaining('检测到重复协作链路'),
+        }),
+      );
+      expect(getProvider).not.toHaveBeenCalled();
+    });
+
+    it('圆桌论坛支持用专家简称交棒，并路由到对应参与者', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-roundtable-alias',
+        topic: '苹果 AI OS',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '乔布斯', domainLabel: '乔布斯', configId: 'steve-jobs', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '张一鸣', domainLabel: '张一鸣', configId: 'zhang-yiming', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '查理·芒格', domainLabel: '芒格', configId: 'munger', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+        sceneId: 'roundtable-forum',
+        maxA2ADepth: 5,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate('room-roundtable-alias', 'worker-2', '张一鸣', '我不同意这个判断。\n@芒格');
+
+      expect(getProvider).toHaveBeenCalledTimes(1);
+    });
+
+    it('圆桌论坛写出独立交棒行后又继续补正文时，仍然自动接力到该专家', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-roundtable-invalid-handoff',
+        topic: '苹果 AI OS',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '乔布斯', domainLabel: '乔布斯', configId: 'steve-jobs', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '张一鸣', domainLabel: '张一鸣', configId: 'zhang-yiming', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '查理·芒格', domainLabel: '芒格', configId: 'munger', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 1,
+        a2aCallChain: ['乔布斯'],
+        sceneId: 'roundtable-forum',
+        maxA2ADepth: 5,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate('room-roundtable-invalid-handoff', 'worker-2', '张一鸣', '我不同意这个判断。\n@芒格\n（张一鸣收）');
+
+      expect(getProvider).toHaveBeenCalledTimes(1);
+    });
+
+    it('圆桌论坛只有开头 inline @ 没有独立交棒行时，追加系统提示并停止自动接力', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-roundtable-invalid-inline',
+        topic: '苹果 AI OS',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '乔布斯', domainLabel: '乔布斯', configId: 'steve-jobs', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '张一鸣', domainLabel: '张一鸣', configId: 'zhang-yiming', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '查理·芒格', domainLabel: '芒格', configId: 'munger', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 1,
+        a2aCallChain: ['乔布斯'],
+        sceneId: 'roundtable-forum',
+        maxA2ADepth: 5,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate('room-roundtable-invalid-inline', 'worker-2', '张一鸣', '@乔布斯 你这个问题问得好。\n真正的问题是上下文失真。');
+
+      expect(messagesRepo.insert).toHaveBeenCalledWith(
+        'room-roundtable-invalid-inline',
+        expect.objectContaining({
+          agentName: '系统',
+          type: 'system',
+          content: expect.stringContaining('本轮未自动接力'),
+        }),
+      );
+      expect(getProvider).not.toHaveBeenCalled();
+    });
+
+    it('圆桌论坛出现多个独立交棒行时，追加系统提示并停止自动接力', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-roundtable-multi-handoff',
+        topic: '苹果 AI OS',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '乔布斯', domainLabel: '乔布斯', configId: 'steve-jobs', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '张一鸣', domainLabel: '张一鸣', configId: 'zhang-yiming', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '查理·芒格', domainLabel: '芒格', configId: 'munger', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 1,
+        a2aCallChain: ['乔布斯'],
+        sceneId: 'roundtable-forum',
+        maxA2ADepth: 5,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate('room-roundtable-multi-handoff', 'worker-1', '乔布斯', '我不同意这个判断。\n@张一鸣\n@芒格');
+
+      expect(messagesRepo.insert).toHaveBeenCalledWith(
+        'room-roundtable-multi-handoff',
+        expect.objectContaining({
+          agentName: '系统',
+          type: 'system',
+          content: expect.stringContaining('本轮未自动接力'),
         }),
       );
       expect(getProvider).not.toHaveBeenCalled();

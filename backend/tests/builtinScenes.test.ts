@@ -10,6 +10,32 @@ import {
 } from '../src/prompts/builtinAgents.js';
 
 describe('builtin scene prompts', () => {
+  it('roundtable-forum scene enforces crossfire instead of disconnected monologues', () => {
+    const scene = BUILTIN_SCENES.find(s => s.id === 'roundtable-forum');
+
+    expect(scene?.prompt).toContain('圆桌推进协议');
+    expect(scene?.prompt).toContain('优先回应上一位');
+    expect(scene?.prompt).toContain('反驳链');
+    expect(scene?.prompt).toContain('最后一行单独成行，只写 @ 一位最关键的专家');
+    expect(scene?.prompt).toContain('不要在正文开头用 @名字');
+    expect(scene?.prompt).toContain('每轮控制在 2-4 段');
+    expect(scene?.prompt).toContain('不要把所有人的话温和拼盘成“大家都对”');
+    expect(scene?.prompt).toContain('显示名或括号内简称');
+    expect(scene?.prompt).toContain('写完交棒行就结束输出');
+    expect(scene?.prompt).toContain('@芒格 你怎么看？');
+    expect(scene?.prompt).toContain('（张一鸣收）');
+    expect(scene?.prompt).toContain('你刚才说得对，但我再补一句');
+    expect(scene?.prompt).toContain('哪怕还想补一句，也必须删掉并挪到交棒行之前');
+  });
+
+  it('roundtable-forum scene stops handoff when user explicitly asks one expert to conclude', () => {
+    const scene = BUILTIN_SCENES.find(s => s.id === 'roundtable-forum');
+
+    expect(scene?.prompt).toContain('如果用户已经明确点名你来“裁决 / 总结 / 收束 / 给结论”');
+    expect(scene?.prompt).toContain('这类收束回答默认不要再点名下一位');
+    expect(scene?.prompt).toContain('用户已经要求“不要再扩散讨论”，你还继续点名下一位把讨论传下去');
+  });
+
   it('software-development scene carries development workflow guardrails', () => {
     const scene = BUILTIN_SCENES.find(s => s.id === 'software-development');
 
