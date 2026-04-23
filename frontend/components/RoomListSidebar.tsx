@@ -8,7 +8,7 @@ import {
 } from '../lib/agents'
 
 // Simple palette for sidebar avatar circles (indexable array)
-const AVATAR_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899']
+const AVATAR_COLORS = ['#c43a2f', '#d17a24', '#3d8a61', '#9b5c44', '#8c6a58', '#b55d3d']
 
 interface SidebarRoom {
   id: string
@@ -34,6 +34,42 @@ interface RoomListSidebarProps {
   mobileMenuOpen?: boolean
   onToggleMobileMenu?: () => void
   onCloseMobileMenu?: () => void
+}
+
+function SidebarBrand() {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[15px] font-extrabold tracking-[-0.02em] text-ink">OpenCouncil</p>
+    </div>
+  )
+}
+
+function SidebarHistoryHeader({
+  roomCount,
+  onNewRoom,
+}: {
+  roomCount: number
+  onNewRoom: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-1 py-0.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <p className="text-[12px] font-semibold text-ink">讨论历史</p>
+        <span className="inline-flex rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-medium text-ink-soft shadow-sm">
+          {roomCount}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onNewRoom}
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-soft transition-colors hover:border-accent/25 hover:text-accent"
+        aria-label="创建对话"
+        title="创建对话"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+    </div>
+  )
 }
 
 function RoomItem({
@@ -73,22 +109,22 @@ function RoomItem({
     : null
 
   return (
-    <div className="relative mb-2">
+    <div className="relative">
       {/* Overlay delete confirmation — does NOT replace the card */}
       {showDeleteConfirm && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-surface/95 backdrop-blur-sm border border-red-400/30 shadow-xl p-3">
+        <div className="tone-danger-panel absolute inset-0 z-10 flex items-center justify-center rounded-2xl border bg-surface p-3 shadow-xl">
           <div className="text-center">
-            <p className="text-[12px] font-medium text-red-400 mb-2.5">删除「{room.topic}」？</p>
+            <p className="tone-danger-text mb-2.5 text-[12px] font-medium">删除「{room.topic}」？</p>
             <div className="flex gap-2 justify-center">
               <button
                 onClick={confirmDelete}
-                className="px-3 py-1.5 text-[12px] rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+                className="tone-danger-button rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors"
               >
                 删除
               </button>
               <button
                 onClick={cancelDelete}
-                className="px-3 py-1.5 text-[12px] rounded-lg bg-white/10 text-ink hover:bg-white/20 transition-colors"
+                className="px-3 py-1.5 text-[12px] rounded-lg bg-surface-muted text-ink hover:bg-bg transition-colors"
               >
                 取消
               </button>
@@ -112,80 +148,158 @@ function RoomItem({
             handleDelete(e)
           }
         }}
-        className={`w-full text-left p-3.5 rounded-xl transition-colors border group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 cursor-pointer select-none ${
+        className={`app-window-surface relative w-full cursor-pointer select-none rounded-2xl border p-3.5 text-left transition-all duration-150 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
           isActive
-            ? 'bg-white/[0.06] border-white/[0.10]'
-            : 'border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]'
+            ? 'border-line shadow-[0_16px_28px_rgba(0,0,0,0.14)] -translate-y-px'
+            : 'border-line hover:-translate-y-px hover:shadow-[0_12px_22px_rgba(0,0,0,0.09)]'
         }`}
       >
-        {/* Top row: title + status badge + overflow menu */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <MessageSquare className="w-3.5 h-3.5 text-ink-soft/50 flex-shrink-0 mt-0.5" />
-            <span className="text-[14px] font-medium text-ink truncate">{room.topic}</span>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-              room.state === 'RUNNING'
-                ? 'bg-emerald-500/15 text-emerald-400'
-                : 'bg-white/10 text-ink-soft/60'
-            }`}>
-              {room.state === 'RUNNING' ? '进行中' : '已完成'}
-            </span>
-            {/* Delete — always visible; stop Enter/Space from bubbling to outer role="button" */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowDeleteConfirm(true)
-              }}
-              onKeyDown={(e) => { e.stopPropagation() }}
-              className="p-1 rounded-md text-ink-soft/60 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all"
-              aria-label={`删除讨论：${room.topic}`}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Summary row: agent count + preview */}
-        <div className="mt-1.5 pl-5.5 space-y-0.5">
-          <div className="flex items-center gap-1.5">
-            <div className="flex -space-x-1.5">
-              {Array.from({ length: Math.min(room.agentCount, 3) }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-4 h-4 rounded-full border border-white/20 flex items-center justify-center text-[9px] font-bold text-white/80"
-                  style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
-                >
-                  {i + 1}
-                </div>
-              ))}
+        {isActive && <span className="pointer-events-none absolute inset-y-3 left-0 w-1 rounded-r-full bg-accent" aria-hidden />}
+        <div className="pl-2.5">
+          {/* Top row: title + status badge + overflow menu */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0 flex-1">
+              <div className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border ${
+                isActive
+                  ? 'border-accent/20 bg-accent/10 text-accent'
+                  : 'border-line bg-surface-muted text-ink-soft/60'
+              }`}>
+                <MessageSquare className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-ink">{room.topic}</span>
+                <span className="mt-0.5 block text-[10px] text-ink-soft/45">
+                  {formatRelativeTime(room.updatedAt)} 更新
+                </span>
+              </div>
             </div>
-            <span className="text-[11px] text-ink-soft/60">
-              {room.agentCount} 位专家{room.agentCount > 3 ? '+' : ''}
-            </span>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                room.state === 'RUNNING'
+                  ? 'tone-success-pill border'
+                  : 'bg-surface-muted text-ink-soft/70'
+              }`}>
+                {room.state === 'RUNNING' ? '进行中' : '已完成'}
+              </span>
+              {/* Delete — always visible; stop Enter/Space from bubbling to outer role="button" */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowDeleteConfirm(true)
+                }}
+                onKeyDown={(e) => { e.stopPropagation() }}
+                className="tone-danger-icon rounded-md p-1 transition-all md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100"
+                aria-label={`删除讨论：${room.topic}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-          {room.preview && (
-            <p className="text-[12px] text-ink-soft/60 line-clamp-2 leading-relaxed">{room.preview}</p>
-          )}
-        </div>
 
-        {/* Bottom row: time + workspace */}
-        <div className="mt-1.5 pl-5.5 flex items-center justify-between gap-2">
-          <span className="text-[11px] text-ink-soft/40">{formatRelativeTime(room.updatedAt)}</span>
-          {workspaceShort && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowWorkspace(v => !v) }}
-              onKeyDown={(e) => { e.stopPropagation() }}
-              className={`text-[10px] text-ink-soft/40 hover:text-ink-soft/70 transition-colors ${showWorkspace ? 'whitespace-normal break-all max-w-[200px]' : 'truncate max-w-[120px]'}`}
-              title={showWorkspace ? undefined : room.workspace}
-            >
-              {showWorkspace ? room.workspace : workspaceShort}
-            </button>
+          {/* Summary row: agent count + workspace */}
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-1.5">
+                {Array.from({ length: Math.min(room.agentCount, 3) }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-4 h-4 rounded-full border border-white/20 flex items-center justify-center text-[9px] font-bold text-white/80 shadow-sm"
+                    style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+                  >
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+              <span className="text-[11px] text-ink-soft/60">
+                {room.agentCount} 位成员{room.agentCount > 3 ? '+' : ''}
+              </span>
+            </div>
+            {workspaceShort && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowWorkspace(v => !v) }}
+                onKeyDown={(e) => { e.stopPropagation() }}
+                className={`rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] text-ink-soft/55 transition-colors hover:text-ink-soft/80 ${showWorkspace ? 'whitespace-normal break-all max-w-[200px]' : 'truncate max-w-[120px]'}`}
+                title={showWorkspace ? undefined : room.workspace}
+              >
+                {showWorkspace ? room.workspace : workspaceShort}
+              </button>
+            )}
+          </div>
+
+          {room.preview && (
+            <div className="mt-2 border-t border-line pt-2">
+              <p className="line-clamp-2 text-[11px] leading-relaxed text-ink-soft/68">{room.preview}</p>
+            </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function RoomListSection({
+  rooms,
+  currentRoomId,
+  onSelectRoom,
+  onDeleteRoom,
+  onAfterSelect,
+}: {
+  rooms: SidebarRoom[]
+  currentRoomId?: string
+  onSelectRoom: (roomId: string) => void
+  onDeleteRoom: (roomId: string) => void
+  onAfterSelect?: () => void
+}) {
+  if (rooms.length === 0) {
+    return <p className="py-6 text-center text-xs text-ink-soft/50">暂无讨论记录</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {rooms.map(room => (
+        <RoomItem
+          key={room.id}
+          room={room}
+          isActive={room.id === currentRoomId}
+          onClick={() => {
+            onSelectRoom(room.id)
+            onAfterSelect?.()
+          }}
+          onDelete={onDeleteRoom}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SidebarConversationSection({
+  rooms,
+  currentRoomId,
+  onNewRoom,
+  onSelectRoom,
+  onDeleteRoom,
+  onAfterSelect,
+}: {
+  rooms: SidebarRoom[]
+  currentRoomId?: string
+  onNewRoom: () => void
+  onSelectRoom: (roomId: string) => void
+  onDeleteRoom: (roomId: string) => void
+  onAfterSelect?: () => void
+}) {
+  return (
+    <div className="app-window-surface rounded-[26px] border border-line p-2.5 shadow-sm">
+      <SidebarHistoryHeader roomCount={rooms.length} onNewRoom={onNewRoom} />
+      <div className="mt-3 border-t border-line pt-3">
+        <RoomListSection
+          rooms={rooms}
+          currentRoomId={currentRoomId}
+          onSelectRoom={onSelectRoom}
+          onDeleteRoom={onDeleteRoom}
+          onAfterSelect={onAfterSelect}
+        />
       </div>
     </div>
   )
@@ -206,15 +320,15 @@ function SidebarSystemControls({
   }
 
   return (
-    <div className="shrink-0 border-t border-white/[0.06] p-3 space-y-2">
-      <p className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-ink-soft/50">系统</p>
-      <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 bg-white/[0.03]">
+    <div className="shrink-0 border-t border-line p-3 space-y-2">
+      <p className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-ink-soft/50">系统设置</p>
+      <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 bg-surface-muted">
         <span className="text-[12px] font-medium text-ink-soft">外观</span>
         {mounted && (
           <button
             type="button"
             onClick={onToggleTheme}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-white/[0.08] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface transition-colors"
             aria-label={isDark ? '切换亮色模式' : '切换暗色模式'}
           >
             {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
@@ -225,9 +339,9 @@ function SidebarSystemControls({
       <button
         type="button"
         onClick={openSystemSettings}
-        className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-[12px] font-medium text-ink-soft hover:text-ink hover:bg-white/[0.06] transition-colors"
+        className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-[12px] font-medium text-ink-soft hover:text-ink hover:bg-surface-muted transition-colors"
       >
-        <span>系统设置</span>
+        <span>打开设置</span>
         <Settings className="w-3.5 h-3.5" />
       </button>
     </div>
@@ -248,30 +362,18 @@ export function RoomListSidebarDesktop({
   onOpenSystemSettings,
 }: Omit<RoomListSidebarProps, 'mobileMenuOpen' | 'onToggleMobileMenu' | 'onCloseMobileMenu'>) {
   return (
-    <div className="app-islands-panel hidden md:flex w-[280px] bg-surface border-r border-white/[0.08] flex-col z-20">
-      <div className="p-5 border-b border-white/[0.06] flex items-center justify-between shrink-0">
-        <h2 className="text-[15px] font-bold text-ink">讨论历史</h2>
-        <button
-          onClick={onNewRoom}
-          className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-ink hover:text-accent hover:bg-white/[0.10] transition-colors"
-          aria-label="发起讨论"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+    <div className="app-islands-panel hidden md:flex w-[280px] bg-surface border-r border-line flex-col z-20">
+      <div className="p-5 border-b border-line shrink-0">
+        <SidebarBrand />
       </div>
       <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-        {rooms.map(room => (
-          <RoomItem
-            key={room.id}
-            room={room}
-            isActive={room.id === currentRoomId}
-            onClick={() => onSelectRoom(room.id)}
-            onDelete={onDeleteRoom}
-          />
-        ))}
-        {rooms.length === 0 && (
-          <p className="text-xs text-ink-soft/50 text-center mt-6">暂无讨论记录</p>
-        )}
+        <SidebarConversationSection
+          rooms={rooms}
+          currentRoomId={currentRoomId}
+          onNewRoom={onNewRoom}
+          onSelectRoom={onSelectRoom}
+          onDeleteRoom={onDeleteRoom}
+        />
       </div>
       <SidebarSystemControls
         theme={theme}
@@ -296,50 +398,38 @@ export function RoomListSidebarMobile({
   onToggleTheme,
   onOpenSystemSettings,
   mobileMenuOpen,
-  onToggleMobileMenu,
   onCloseMobileMenu,
 }: RoomListSidebarProps) {
   if (!mobileMenuOpen) return null
 
   return (
-    <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl" onClick={onToggleMobileMenu}>
+    <div className="md:hidden fixed inset-0 z-40 bg-[color:var(--overlay-scrim)]" onClick={onCloseMobileMenu}>
       <div
-        className="absolute right-0 top-0 bottom-0 w-[80%] max-w-[300px] bg-surface border-l border-white/[0.08] flex flex-col"
+        className="absolute left-0 top-0 bottom-0 w-[82%] max-w-[300px] bg-surface border-r border-line flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-white/[0.06] flex items-center justify-between shrink-0">
-          <h2 className="text-[15px] font-bold text-ink">讨论历史</h2>
-          <button
-            onClick={onCloseMobileMenu}
-            aria-label="关闭菜单"
-            className="p-2 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-3 shrink-0">
-          <button
-            onClick={() => { onNewRoom(); onCloseMobileMenu?.() }}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-accent text-white hover:bg-accent/90 transition-colors text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            发起新讨论
-          </button>
+        <div className="p-5 border-b border-line shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <SidebarBrand />
+            <button
+              onClick={onCloseMobileMenu}
+              aria-label="关闭菜单"
+              className="p-2 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-          {rooms.map(room => (
-            <RoomItem
-              key={room.id}
-              room={room}
-              isActive={room.id === currentRoomId}
-              onClick={() => { onSelectRoom(room.id); onCloseMobileMenu?.() }}
-              onDelete={onDeleteRoom}
-            />
-          ))}
-          {rooms.length === 0 && (
-            <p className="text-xs text-ink-soft/50 text-center mt-6">暂无讨论记录</p>
-          )}
-        </div>
+        <SidebarConversationSection
+          rooms={rooms}
+          currentRoomId={currentRoomId}
+          onNewRoom={() => { onNewRoom(); onCloseMobileMenu?.() }}
+          onSelectRoom={onSelectRoom}
+          onDeleteRoom={onDeleteRoom}
+          onAfterSelect={onCloseMobileMenu}
+        />
+      </div>
         <SidebarSystemControls
           theme={theme}
           mounted={mounted}

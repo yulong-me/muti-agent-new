@@ -216,12 +216,12 @@ export default function SettingsModal({
 
   return (
     <>
-      <button type="button" aria-label="关闭" className="fixed inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl z-40 transition-opacity cursor-default" onClick={onClose} />
+      <button type="button" aria-label="关闭" className="fixed inset-0 bg-[color:var(--overlay-scrim)] z-40 transition-opacity cursor-default" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex justify-end">
         <div className="w-full md:w-[640px] h-full settings-panel relative flex flex-col animate-in slide-in-from-right duration-300">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] settings-nav shrink-0">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-line settings-nav shrink-0">
             <SettingsTabSwitcher tab={tab} onChange={setTab} />
-            <button type="button" onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-full transition-colors">
+            <button type="button" onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-full transition-colors">
               <X className="w-4 h-4" aria-hidden />
             </button>
           </div>

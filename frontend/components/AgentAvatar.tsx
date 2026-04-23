@@ -10,14 +10,14 @@ interface AgentAvatarProps {
 }
 
 const FALLBACK_COLORS = [
-  '#4F46E5',
-  '#D97706',
-  '#059669',
-  '#DC2626',
-  '#7C3AED',
-  '#0284C7',
-  '#0D9488',
-  '#EA580C',
+  '#c43a2f',
+  '#d17a24',
+  '#3d8a61',
+  '#9b5c44',
+  '#8c6a58',
+  '#b55d3d',
+  '#6e7f48',
+  '#a04938',
 ]
 
 function hashName(name: string): number {

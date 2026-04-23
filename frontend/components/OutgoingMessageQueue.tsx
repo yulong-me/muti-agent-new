@@ -53,7 +53,7 @@ export function OutgoingMessageQueue({
                     @{item.toAgentName}
                   </span>
                   {isDispatching && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                    <span className="tone-warning-text inline-flex items-center gap-1 text-[10px] font-medium">
                       <Clock3 className="h-3 w-3 animate-pulse" />
                       发送中…
                     </span>
@@ -68,7 +68,7 @@ export function OutgoingMessageQueue({
                   <button
                     type="button"
                     onClick={() => onCancel(item.id)}
-                    className="rounded-lg p-1.5 text-ink-soft transition-colors hover:bg-red-50 hover:text-red-500"
+                    className="tone-danger-icon rounded-lg p-1.5 transition-colors"
                     title="取消此条队列消息"
                     aria-label="取消此条队列消息"
                   >
@@ -79,7 +79,7 @@ export function OutgoingMessageQueue({
                       type="button"
                       onClick={() => onRecall(item.id)}
                       disabled={inputHasDraft}
-                      className="rounded-lg p-1.5 text-ink-soft transition-colors hover:bg-blue-50 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-1.5 text-ink-soft transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
                       title={inputHasDraft ? '输入框里还有草稿，先处理当前内容' : '撤回到输入框'}
                       aria-label="撤回到输入框"
                     >

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BrainCircuit, Edit2, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { BrainCircuit, Copy, Edit2, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 
 import { API_URL } from '@/lib/api'
 import { info, warn } from '@/lib/logger'
@@ -57,7 +57,7 @@ function SceneCreateForm({ onCreated }: { onCreated: (scene: SceneConfig) => voi
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-white/10 rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-line rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2"
       >
         <Plus className="w-4 h-4" aria-hidden />
         新建场景
@@ -104,9 +104,9 @@ function SceneCreateForm({ onCreated }: { onCreated: (scene: SceneConfig) => voi
           className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono placeholder:text-ink-soft/40"
         />
       </div>
-      {error && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{error}</p>}
+      {error && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{error}</p>}
       <div className="flex gap-2 justify-end">
-        <button type="button" onClick={() => { setOpen(false); setError('') }} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+        <button type="button" onClick={() => { setOpen(false); setError('') }} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
         <button type="button" onClick={handleCreate} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5" aria-hidden />
           {saving ? '创建中…' : '创建'}
@@ -118,10 +118,12 @@ function SceneCreateForm({ onCreated }: { onCreated: (scene: SceneConfig) => voi
 
 function SceneRow({
   scene,
+  onCreated,
   onUpdate,
   onDelete,
 }: {
   scene: SceneConfig
+  onCreated: (scene: SceneConfig) => void
   onUpdate: (scene: SceneConfig) => void
   onDelete: (id: string) => void
 }) {
@@ -130,8 +132,11 @@ function SceneRow({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+  const [duplicateError, setDuplicateError] = useState('')
 
-  const canEditName = scene.canEditName && !scene.builtin
+  const canEditPrompt = scene.canEditPrompt && !scene.builtin
+  const canEditName = scene.canEditName && canEditPrompt
   const canDelete = scene.canDelete && !scene.builtin
 
   useEffect(() => {
@@ -187,9 +192,41 @@ function SceneRow({
     }
   }
 
+  async function handleDuplicateBuiltin() {
+    setDuplicateError('')
+    setDuplicating(true)
+    try {
+      const response = await fetch(`${API}/api/scenes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${scene.name} 副本`,
+          description: scene.description ?? '',
+          prompt: scene.prompt,
+        }),
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || '复制失败')
+      }
+      const created = await response.json() as SceneConfig
+      onCreated(created)
+      info('ui:settings:scene_duplicated', {
+        sourceSceneId: scene.id,
+        createdSceneId: created.id,
+        sourceBuiltin: scene.builtin,
+      })
+    } catch (error) {
+      warn('ui:settings:scene_duplicate_failed', { sceneId: scene.id, error })
+      setDuplicateError(fmtErr(error, '复制失败'))
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   return (
     <div className="settings-surface rounded-xl p-5">
-      {editing ? (
+      {editing && canEditPrompt ? (
         <div className="flex flex-col gap-3">
           <p className="text-[13px] font-bold text-ink">
             编辑场景
@@ -225,9 +262,9 @@ function SceneRow({
               className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono"
             />
           </div>
-          {saveError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{saveError}</p>}
+          {saveError && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{saveError}</p>}
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setEditing(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+            <button type="button" onClick={() => setEditing(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
             <button type="button" onClick={handleSave} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
               <Save className="w-3.5 h-3.5" aria-hidden />
               {saving ? '保存中…' : '保存'}
@@ -235,7 +272,7 @@ function SceneRow({
           </div>
         </div>
       ) : (
-        <div>
+        <div className="space-y-3">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
@@ -250,23 +287,42 @@ function SceneRow({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors">
-                <Edit2 className="w-3.5 h-3.5" aria-hidden />
-              </button>
+              {canEditPrompt ? (
+                <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-md transition-colors">
+                  <Edit2 className="w-3.5 h-3.5" aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDuplicateBuiltin}
+                  disabled={duplicating}
+                  aria-label="复制为自定义场景"
+                  className="p-1.5 text-ink-soft hover:text-accent hover:bg-surface-muted rounded-md transition-colors disabled:opacity-50"
+                  title="复制为自定义场景"
+                >
+                  {duplicating ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Copy className="w-3.5 h-3.5" aria-hidden />}
+                </button>
+              )}
               {canDelete && (
-                <button type="button" onClick={handleDelete} disabled={deleting} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors">
+                <button type="button" onClick={handleDelete} disabled={deleting} aria-label="删除" className="tone-danger-icon rounded-md p-1.5 transition-colors">
                   {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Trash2 className="w-3.5 h-3.5" aria-hidden />}
                 </button>
               )}
             </div>
           </div>
-          <div className="bg-white/[0.03] rounded-xl px-3 py-2 border border-white/[0.05]">
+          <div className="bg-surface-muted rounded-xl px-3 py-2 border border-line">
             <p className="text-[10px] font-bold text-ink-soft uppercase mb-1">Prompt</p>
             <p className="text-[11px] text-ink font-mono whitespace-pre-wrap">
               {scene.prompt.slice(0, 120)}
               {scene.prompt.length > 120 ? '…' : ''}
             </p>
           </div>
+          {scene.builtin ? (
+            <div className="rounded-xl border border-line bg-surface px-3 py-2 text-[11px] text-ink-soft">
+              内置场景为只读真相源，不能直接修改。需要调整提示词时，请先复制为自定义场景，再编辑副本。
+            </div>
+          ) : null}
+          {duplicateError ? <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{duplicateError}</p> : null}
         </div>
       )}
     </div>
@@ -289,7 +345,7 @@ export function SceneSettingsTab({
       <SceneCreateForm onCreated={onCreated} />
       <div className="flex flex-col gap-3">
         {scenes.map(scene => (
-          <SceneRow key={scene.id} scene={scene} onUpdate={onUpdate} onDelete={onDelete} />
+          <SceneRow key={scene.id} scene={scene} onCreated={onCreated} onUpdate={onUpdate} onDelete={onDelete} />
         ))}
       </div>
     </>

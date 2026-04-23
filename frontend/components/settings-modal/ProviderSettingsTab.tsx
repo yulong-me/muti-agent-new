@@ -6,7 +6,11 @@ import { CheckCircle2, Edit2, Loader2, Play, Save, X, XCircle } from 'lucide-rea
 import { API_URL } from '@/lib/api'
 import { debug, info, warn } from '@/lib/logger'
 
-import type { ProviderConfig } from './types'
+import {
+  PROVIDER_DOTS,
+  PROVIDER_SWATCHES,
+  type ProviderConfig,
+} from './types'
 
 const API = API_URL
 
@@ -94,8 +98,7 @@ function ProviderDetail({
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[14px] font-bold shadow-sm"
-          style={{ backgroundColor: provider.name === 'claude-code' ? '#0071E3' : '#7C3AED' }}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center text-[14px] font-bold ${PROVIDER_SWATCHES[provider.name as keyof typeof PROVIDER_SWATCHES]}`}
         >
           {provider.label.slice(0, 1)}
         </div>
@@ -128,13 +131,13 @@ function ProviderDetail({
               placeholder="claude"
               className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
-            {saveError && <p className="text-[11px] text-red-400">{saveError}</p>}
+            {saveError && <p className="tone-danger-text text-[11px]">{saveError}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={saving}
-                className="flex-1 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors flex items-center justify-center gap-1"
+                className="flex-1 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors flex items-center justify-center gap-1"
               >
                 <XCircle className="w-3.5 h-3.5" aria-hidden />
                 取消
@@ -173,27 +176,27 @@ function ProviderDetail({
         )}
       </button>
       {result && (
-        <div className="border border-line rounded-xl overflow-hidden">
-          <div className="bg-[#1e1e1e] px-4 py-2 font-mono text-[11px] text-gray-400 border-b border-[#333] flex items-center gap-2">
+        <div className="overflow-hidden rounded-xl border border-line bg-surface-muted">
+          <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2 font-mono text-[11px] text-ink-soft">
             {result.success ? (
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <CheckCircle2 className="tone-success-text w-3 h-3" />
             ) : (
-              <X className="w-3 h-3 text-red-400" />
+              <X className="tone-danger-text w-3 h-3" />
             )}
             命令
           </div>
           {result.cli && (
-            <div className="bg-[#1e1e1e] px-4 py-2.5 font-mono text-[12px] text-emerald-400 whitespace-pre-wrap break-all" aria-label="执行的命令">
+            <div className="bg-surface-muted px-4 py-2.5 font-mono text-[12px] text-ink whitespace-pre-wrap break-all" aria-label="执行的命令">
               {result.cli}
             </div>
           )}
           {result.error && (
-            <div className="bg-[#1e1e1e] px-4 py-2.5 font-mono text-[12px] text-red-400 whitespace-pre-wrap break-all" aria-label="错误信息">
+            <div className="tone-danger-text bg-surface-muted px-4 py-2.5 font-mono text-[12px] whitespace-pre-wrap break-all" aria-label="错误信息">
               {result.error}
             </div>
           )}
           {result.output && (
-            <div className="bg-[#1e1e1e] px-4 py-2.5 font-mono text-[12px] text-emerald-300/80 whitespace-pre-wrap break-all border-t border-[#333] max-h-48 overflow-y-auto" aria-label="命令输出">
+            <div className="max-h-48 overflow-y-auto border-t border-line bg-surface px-4 py-2.5 font-mono text-[12px] text-ink-soft whitespace-pre-wrap break-all" aria-label="命令输出">
               {result.output}
             </div>
           )}
@@ -224,20 +227,19 @@ export function ProviderSettingsTab({
             type="button"
             key={provider.name}
             onClick={() => onSelectProvider(provider.name)}
-            className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 ${selectedProvider === provider.name ? 'settings-surface border-2 border-accent shadow-sm' : 'settings-surface border-2 border-transparent hover:border-white/15'}`}
+            className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 ${selectedProvider === provider.name ? 'settings-surface border-2 border-accent shadow-sm' : 'settings-surface border-2 border-transparent hover:border-line'}`}
           >
             <span
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: provider.name === 'claude-code' ? '#0071E3' : '#7C3AED' }}
+              className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${PROVIDER_DOTS[provider.name as keyof typeof PROVIDER_DOTS]}`}
             />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-bold text-ink truncate">{provider.label}</p>
               <p className="text-[11px] text-ink-soft font-mono truncate">{provider.name}</p>
             </div>
             {provider.lastTestResult && (provider.lastTestResult.success ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" aria-hidden />
+              <CheckCircle2 className="tone-success-text w-4 h-4 flex-shrink-0" aria-hidden />
             ) : (
-              <X className="w-4 h-4 text-red-400 flex-shrink-0" aria-hidden />
+              <X className="tone-danger-text w-4 h-4 flex-shrink-0" aria-hidden />
             ))}
           </button>
         ))}

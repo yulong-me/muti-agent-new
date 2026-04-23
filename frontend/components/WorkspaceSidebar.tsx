@@ -204,7 +204,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
 
   return (
     <>
-      <div className="space-y-2.5 rounded-2xl border border-white/[0.06] bg-black/[0.08] px-2.5 py-2.5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset]">
+      <div className="space-y-2.5 rounded-2xl border border-line bg-surface-muted px-2.5 py-2.5 shadow-sm">
         <div className="space-y-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-soft/45">Workspace</p>
           <p className="truncate text-[12px] font-medium text-ink" title={workspacePath}>
@@ -225,7 +225,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
             className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-medium transition-colors ${
               tab === 'files'
                 ? 'bg-accent text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
-                : 'border border-white/[0.08] bg-white/[0.03] text-ink-soft hover:text-ink'
+                : 'border border-line bg-surface text-ink-soft hover:text-ink hover:bg-surface-muted'
             }`}
           >
             <FolderTree className="h-3.5 w-3.5" />
@@ -240,7 +240,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
             className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-medium transition-colors ${
               tab === 'git'
                 ? 'bg-accent text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
-                : 'border border-white/[0.08] bg-white/[0.03] text-ink-soft hover:text-ink'
+                : 'border border-line bg-surface text-ink-soft hover:text-ink hover:bg-surface-muted'
             }`}
           >
             <GitBranch className="h-3.5 w-3.5" />

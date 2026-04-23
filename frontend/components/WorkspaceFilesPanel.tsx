@@ -67,7 +67,7 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFile
           <button
             type="button"
             onClick={() => browseResult?.parent && void loadPath(browseResult.parent)}
-            className="ml-auto rounded p-0.5 text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink"
+            className="ml-auto rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
             title="返回上级"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -95,7 +95,7 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFile
       </div>
 
       {loading && <p className="py-2 text-[11px] text-ink-soft/60">加载中…</p>}
-      {!loading && error && <p className="py-2 text-[11px] text-red-400">{error}</p>}
+      {!loading && error && <p className="tone-danger-text py-2 text-[11px]">{error}</p>}
       {!loading && !error && browseResult?.entries.length === 0 && (
         <p className="py-2 text-[11px] text-ink-soft/60">空目录</p>
       )}
@@ -114,7 +114,7 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFile
                 onOpenFile(entry.path)
               }}
               title={entry.path}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/[0.06]"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-muted"
             >
               {entry.isDirectory
                 ? <Folder className="h-3.5 w-3.5 shrink-0 text-[#c4a882]" />

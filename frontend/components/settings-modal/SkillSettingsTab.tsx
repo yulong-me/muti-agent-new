@@ -54,7 +54,7 @@ function SkillCreateForm({ onCreated }: { onCreated: (skill: SkillConfig) => voi
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-white/10 rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-line rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2"
       >
         <Plus className="w-4 h-4" aria-hidden />
         手动创建
@@ -98,9 +98,9 @@ function SkillCreateForm({ onCreated }: { onCreated: (skill: SkillConfig) => voi
           className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono"
         />
       </div>
-      {error && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{error}</p>}
+      {error && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{error}</p>}
       <div className="flex gap-2 justify-end">
-        <button type="button" onClick={() => setOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+        <button type="button" onClick={() => setOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
         <button type="button" onClick={handleCreate} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5" aria-hidden />
           {saving ? '创建中…' : '创建'}
@@ -152,7 +152,7 @@ function SkillImportForm({ onImported }: { onImported: (skill: SkillConfig) => v
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-white/10 rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-line rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2"
       >
         <Plus className="w-4 h-4" aria-hidden />
         导入文件夹
@@ -173,9 +173,9 @@ function SkillImportForm({ onImported }: { onImported: (skill: SkillConfig) => v
         placeholder="/Users/.../my-skill"
       />
       <p className="text-[11px] text-ink-soft">选择包含 `SKILL.md` 的 skill bundle 目录，系统会把整个文件夹导入为 managed skill。</p>
-      {error && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{error}</p>}
+      {error && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{error}</p>}
       <div className="flex gap-2 justify-end">
-        <button type="button" onClick={() => setOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+        <button type="button" onClick={() => setOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
         <button type="button" onClick={handleImport} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
           <Save className="w-3.5 h-3.5" aria-hidden />
           {saving ? '导入中…' : '导入'}
@@ -289,9 +289,9 @@ function SkillRow({
               className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono"
             />
           </div>
-          {saveError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{saveError}</p>}
+          {saveError && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{saveError}</p>}
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setEditing(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+            <button type="button" onClick={() => setEditing(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
             <button type="button" onClick={handleSave} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
               <Save className="w-3.5 h-3.5" aria-hidden />
               {saving ? '保存中…' : '保存'}
@@ -304,21 +304,21 @@ function SkillRow({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-[14px] font-bold text-ink">{skill.name}</p>
-                {!skill.enabled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-ink-soft font-bold">停用</span>}
+                {!skill.enabled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-muted border border-line text-ink-soft font-bold">停用</span>}
               </div>
               <p className="text-[11px] text-ink-soft mt-0.5">{skill.description || '无描述'}</p>
               <p className="text-[10px] text-ink-soft/70 mt-1">绑定：Agent {skill.usage.agentCount} / Room {skill.usage.roomCount}</p>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors">
+              <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-md transition-colors">
                 <Edit2 className="w-3.5 h-3.5" aria-hidden />
               </button>
-              <button type="button" onClick={handleDelete} disabled={deleting} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors">
+              <button type="button" onClick={handleDelete} disabled={deleting} aria-label="删除" className="tone-danger-icon rounded-md p-1.5 transition-colors">
                 {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> : <Trash2 className="w-3.5 h-3.5" aria-hidden />}
               </button>
             </div>
           </div>
-          <div className="bg-white/[0.03] rounded-xl px-3 py-2 border border-white/[0.05]">
+          <div className="bg-surface-muted rounded-xl px-3 py-2 border border-line">
             <p className="text-[10px] font-bold text-ink-soft uppercase mb-1">Preview</p>
             <p className="text-[11px] text-ink font-mono whitespace-pre-wrap">
               {skill.content.slice(0, 180)}
@@ -369,10 +369,10 @@ export function SkillSettingsTab({
         ) : (
           <div className="space-y-2">
             {globalSkills.map(skill => (
-              <div key={`${skill.name}:${skill.sourcePath}`} className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-3">
+              <div key={`${skill.name}:${skill.sourcePath}`} className="rounded-xl border border-line bg-surface-muted px-3 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] font-semibold text-ink">{skill.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-ink-soft font-bold uppercase">{skill.sourceType}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-line text-ink-soft font-bold uppercase">{skill.sourceType}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-ink-soft">{skill.description || '无描述'}</p>
                 <p className="mt-1 text-[10px] text-ink-soft/70 font-mono break-all">{skill.sourcePath}</p>

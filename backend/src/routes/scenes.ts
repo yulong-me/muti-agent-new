@@ -20,7 +20,7 @@ scenesRouter.get('/', (_req, res) => {
     ...s,
     canDelete: !s.builtin,
     canEditName: !s.builtin,
-    canEditPrompt: true, // both builtin and custom can edit prompt
+    canEditPrompt: !s.builtin,
   }));
   res.json(result);
 });
@@ -68,8 +68,8 @@ scenesRouter.put('/:id', (req, res) => {
     return res.status(404).json({ error: 'Scene not found' });
   }
 
-  if (existing.builtin && name !== undefined) {
-    return res.status(403).json({ code: 'BUILTIN_NAME_LOCKED', error: 'Cannot rename builtin scene' });
+  if (existing.builtin) {
+    return res.status(403).json({ code: 'BUILTIN_SCENE_READONLY', error: 'Cannot modify builtin scene' });
   }
 
   // P2-5: reject empty name (but allow omitting it via undefined)
@@ -88,7 +88,7 @@ scenesRouter.put('/:id', (req, res) => {
   });
 
   if (!updated) {
-    return res.status(403).json({ code: 'BUILTIN_NAME_LOCKED', error: 'Cannot rename builtin scene' });
+    return res.status(403).json({ code: 'BUILTIN_SCENE_READONLY', error: 'Cannot modify builtin scene' });
   }
 
   log('INFO', 'scene:update', { id: updated.id });

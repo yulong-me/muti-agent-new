@@ -73,20 +73,20 @@ export interface OutgoingQueueItem {
 }
 
 export const AGENT_COLORS: Record<string, { bg: string; text: string }> = {
-  主持人: { bg: '#4F46E5', text: '#FFFFFF' },
-  司马迁: { bg: '#D97706', text: '#FFFFFF' },
-  诸葛亮: { bg: '#059669', text: '#FFFFFF' },
-  李世民: { bg: '#DC2626', text: '#FFFFFF' },
-  孔子: { bg: '#4D7C0F', text: '#FFFFFF' },
-  曹操: { bg: '#9F1239', text: '#FFFFFF' },
-  马斯克: { bg: '#2563EB', text: '#FFFFFF' },
-  乔布斯: { bg: '#7C3AED', text: '#FFFFFF' },
-  爱因斯坦: { bg: '#0284C7', text: '#FFFFFF' },
-  图灵: { bg: '#0D9488', text: '#FFFFFF' },
-  马云: { bg: '#EA580C', text: '#FFFFFF' },
+  主持人: { bg: '#b87933', text: '#FFFFFF' },
+  司马迁: { bg: '#d17a24', text: '#FFFFFF' },
+  诸葛亮: { bg: '#3d8a61', text: '#FFFFFF' },
+  李世民: { bg: '#c43a2f', text: '#FFFFFF' },
+  孔子: { bg: '#6e7f48', text: '#FFFFFF' },
+  曹操: { bg: '#8f5e46', text: '#FFFFFF' },
+  马斯克: { bg: '#9b5c44', text: '#FFFFFF' },
+  乔布斯: { bg: '#a04938', text: '#FFFFFF' },
+  爱因斯坦: { bg: '#8c6a58', text: '#FFFFFF' },
+  图灵: { bg: '#3d8a61', text: '#FFFFFF' },
+  马云: { bg: '#b55d3d', text: '#FFFFFF' },
 }
 
-export const DEFAULT_AGENT_COLOR = { bg: '#10B981', text: '#FFFFFF' }
+export const DEFAULT_AGENT_COLOR = { bg: '#3d8a61', text: '#FFFFFF' }
 export const TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

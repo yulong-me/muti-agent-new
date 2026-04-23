@@ -28,24 +28,30 @@ export function ErrorBubble({
 }: ErrorBubbleProps) {
   const accent =
     error.code === 'AGENT_TIMEOUT' && error.timeoutPhase === 'idle'
-      ? '#DC2626'
+      ? 'var(--danger)'
       : error.code === 'AGENT_TIMEOUT'
-      ? '#D97706'
+      ? 'var(--warning)'
       : error.code === 'AGENT_STOPPED'
-      ? '#475569'
+      ? 'var(--ink-soft)'
       : error.code === 'AGENT_PROVIDER_ERROR'
-      ? '#7C3AED'
-      : '#DC2626'
+      ? 'var(--provider-opencode)'
+      : 'var(--danger)'
 
   return (
     <div
       className="rounded-2xl border px-4 py-3.5 shadow-sm"
-      style={{ borderColor: `${accent}40`, backgroundColor: `${accent}12` }}
+      style={{
+        borderColor: `color-mix(in srgb, ${accent} 24%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${accent} 10%, transparent)`,
+      }}
     >
       <div className="flex items-start gap-3">
         <div
           className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${accent}22`, color: accent }}
+          style={{
+            backgroundColor: `color-mix(in srgb, ${accent} 14%, transparent)`,
+            color: accent,
+          }}
         >
           <AlertTriangle className="h-4 w-4" />
         </div>
@@ -54,7 +60,7 @@ export function ErrorBubble({
             <span className="text-[13px] font-bold text-ink">{error.title}</span>
             <span className="text-[11px] text-ink-soft">{error.agentName}</span>
             {error.code === 'AGENT_TIMEOUT' && error.timeoutPhase === 'idle' && (
-              <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-500">
+              <span className="tone-danger-panel rounded-full border px-2 py-0.5 text-[10px] font-semibold">
                 已保留部分输出
               </span>
             )}

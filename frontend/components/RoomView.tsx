@@ -112,6 +112,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     () => agents.map(agent => agent.configId ?? ''),
     [agents],
   )
+  const currentRoomTopic = useMemo(
+    () => rooms.find(room => room.id === roomId)?.topic,
+    [roomId, rooms],
+  )
   const lastActiveWorkerId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index]
@@ -315,6 +319,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         <div className="app-islands-panel flex-1 flex flex-col relative min-w-0">
           <RoomHeader
             roomId={roomId}
+            currentRoomTopic={currentRoomTopic}
             maxA2ADepth={maxA2ADepth}
             currentA2ADepth={currentA2ADepth}
             displayMaxDepth={displayMaxDepth}

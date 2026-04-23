@@ -313,7 +313,7 @@ const MessageBubble = memo(function MessageBubble({
             {formattedTime}
           </span>
           {isStreaming && (
-            <span className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
+            <span className="tone-success-text flex items-center gap-1 text-[11px] font-medium">
               <span className="animate-pulse">● 回答中</span>
             </span>
           )}
@@ -423,33 +423,33 @@ const ToolCalls = memo(function ToolCalls({
               </span>
               {isHovered && (
                 <div
-                  className="absolute z-[9999] left-0 top-full mt-1 w-80 bg-black/80 border border-line rounded-lg shadow-xl text-xs select-text backdrop-blur-sm"
+                  className="absolute z-[9999] left-0 top-full mt-1 w-80 bg-surface border border-line rounded-lg shadow-xl text-xs select-text"
                   onMouseEnter={() => {
                     if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current)
                     onHoverToolCall(key)
                   }}
                   onMouseLeave={() => onHoverToolCall(null)}
                 >
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-                    <span className="font-medium text-white/80">{tool.toolName}</span>
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-line">
+                    <span className="font-medium text-ink-soft">{tool.toolName}</span>
                     <div className="flex gap-1">
                       <button
                         onClick={() => onToggleExpandedToolCall(isExpanded ? null : key)}
-                        className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                        className="p-1 rounded hover:bg-surface-muted text-ink-soft hover:text-ink transition-colors"
                         title={isExpanded ? '收起' : '全屏'}
                       >
                         <Maximize2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => navigator.clipboard.writeText(JSON.stringify(tool.toolInput, null, 2))}
-                        className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                        className="p-1 rounded hover:bg-surface-muted text-ink-soft hover:text-ink transition-colors"
                         title="复制全部"
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                  <pre className={`text-[11px] text-white/90 whitespace-pre-wrap break-all p-3 ${isExpanded ? 'max-h-none overflow-y-visible' : 'max-h-48 overflow-y-auto'}`}>{JSON.stringify(tool.toolInput, null, 2)}</pre>
+                  <pre className={`text-[11px] text-ink whitespace-pre-wrap break-all p-3 ${isExpanded ? 'max-h-none overflow-y-visible' : 'max-h-48 overflow-y-auto'}`}>{JSON.stringify(tool.toolInput, null, 2)}</pre>
                 </div>
               )}
             </div>

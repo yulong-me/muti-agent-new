@@ -55,7 +55,7 @@ export function RoomActionArea({
   onRecipientSelected,
 }: RoomActionAreaProps) {
   return (
-    <div className="bg-nav-bg backdrop-blur-xl border-t border-line px-4 md:px-8 py-4 flex flex-col gap-3">
+    <div className="bg-nav-bg border-t border-line px-4 md:px-8 py-4 flex flex-col gap-3">
       {state === 'DONE' ? (
         <button
           type="button"
@@ -67,7 +67,7 @@ export function RoomActionArea({
       ) : roomId ? (
         <>
           {busyAgents.length > 0 && (
-            <div className="app-islands-item rounded-2xl border border-line bg-surface/85 px-4 py-3 shadow-sm">
+            <div className="app-islands-item rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm">
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-soft">
                   正在回答
@@ -82,10 +82,10 @@ export function RoomActionArea({
                   return (
                     <div
                       key={agent.id}
-                      className="inline-flex items-center gap-2 rounded-xl border border-line/80 bg-bg/60 px-3 py-2"
+                      className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface-muted px-3 py-2"
                     >
                       <span className="inline-flex items-center gap-2 text-[12px] font-medium text-ink">
-                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="tone-success-dot inline-block h-2 w-2 rounded-full animate-pulse" />
                         {agent.name}
                       </span>
                       <button

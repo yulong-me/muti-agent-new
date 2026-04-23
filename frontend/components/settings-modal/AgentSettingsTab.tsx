@@ -26,11 +26,11 @@ function ConfirmDeleteDialog({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[color:var(--overlay-scrim)]">
       <div className="settings-surface rounded-2xl shadow-2xl p-6 w-full max-w-xs mx-4">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-            <Trash2 className="w-5 h-5 text-red-400" />
+          <div className="tone-danger-panel flex h-10 w-10 items-center justify-center rounded-full border">
+            <Trash2 className="tone-danger-text w-5 h-5" />
           </div>
           <div>
             <h3 className="text-[15px] font-bold text-ink">确认删除</h3>
@@ -43,8 +43,8 @@ function ConfirmDeleteDialog({
           吗？
         </p>
         <div className="flex gap-3">
-          <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
-          <button type="button" onClick={onConfirm} className="flex-1 px-4 py-2 text-[13px] font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">删除</button>
+          <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
+          <button type="button" onClick={onConfirm} className="tone-danger-button flex-1 rounded-xl px-4 py-2 text-[13px] font-bold transition-colors">删除</button>
         </div>
       </div>
     </div>
@@ -149,16 +149,16 @@ function AgentRow({
 
   if (!editing) {
     return (
-      <tr className="border-b border-line hover:bg-white/[0.03] transition-colors group">
+      <tr className="border-b border-line hover:bg-surface-muted transition-colors group">
         <td className="px-4 py-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shadow-sm flex-shrink-0" style={{ backgroundColor: isHost ? '#EA580C' : '#4F46E5' }}>
+            <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${isHost ? 'provider-orb provider-swatch-host' : 'provider-orb provider-swatch-worker'}`}>
               {agent.name.slice(0, 1)}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-ink text-[13px]">{agent.name}</span>
-                {isHost && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold">主持</span>}
+                {isHost && <span className="tone-warning-pill rounded border px-1.5 py-0.5 text-[10px] font-bold">主持</span>}
               </div>
               <span className="text-[11px] text-ink-soft">{agent.roleLabel}</span>
               {enabledSkillBindings.length > 0 && (
@@ -183,7 +183,7 @@ function AgentRow({
         <td className="px-4 py-3.5">
           <div className="flex flex-wrap gap-1">
             {agent.tags.map(tag => (
-              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-ink-soft">{tag}</span>
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-md bg-surface-muted border border-line text-ink-soft">{tag}</span>
             ))}
             {agent.tags.length === 0 && <span className="text-[11px] text-ink-soft/40">—</span>}
           </div>
@@ -193,11 +193,11 @@ function AgentRow({
         </td>
         <td className="px-4 py-3.5 text-right">
           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {saved && <span className="text-[11px] text-emerald-500 flex items-center gap-1 mr-1" aria-live="polite"><CheckCircle2 className="w-3 h-3" aria-hidden />已保存</span>}
+            {saved && <span className="tone-success-text mr-1 flex items-center gap-1 text-[11px]" aria-live="polite"><CheckCircle2 className="w-3 h-3" aria-hidden />已保存</span>}
             {isHost ? <span className="text-[11px] text-ink-soft/40 mr-2">—</span> : (
               <>
-                <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/5 rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden /></button>
-                <button type="button" onClick={() => onDeleteRequest(agent)} aria-label="删除" className="p-1.5 text-ink-soft hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden /></button>
+                <button type="button" onClick={() => setEditing(true)} aria-label="编辑" className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5" aria-hidden /></button>
+                <button type="button" onClick={() => onDeleteRequest(agent)} aria-label="删除" className="tone-danger-icon rounded-md p-1.5 transition-colors"><Trash2 className="w-3.5 h-3.5" aria-hidden /></button>
               </>
             )}
           </div>
@@ -207,7 +207,7 @@ function AgentRow({
   }
 
   return (
-    <tr className="border-b border-line bg-white/[0.03]">
+    <tr className="border-b border-line bg-surface-muted">
       <td colSpan={6} className="px-4 py-4">
         <div className="flex flex-col gap-4">
           <span className="text-[13px] font-bold text-ink">
@@ -234,7 +234,7 @@ function AgentRow({
             </div>
             <div>
               <label className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">推理</label>
-              <button type="button" onClick={() => opt('thinking', !form.providerOpts.thinking)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.providerOpts.thinking ? 'bg-accent' : 'bg-white/10'}`}>
+              <button type="button" onClick={() => opt('thinking', !form.providerOpts.thinking)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.providerOpts.thinking ? 'bg-accent' : 'bg-surface'}`}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.providerOpts.thinking ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
@@ -249,7 +249,7 @@ function AgentRow({
           </div>
           <div>
             <label className="block text-[11px] font-bold text-ink-soft uppercase mb-2">Default Skills</label>
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] divide-y divide-white/[0.06]">
+            <div className="rounded-2xl border border-line bg-surface divide-y divide-line">
               {availableSkills.length === 0 ? (
                 <div className="px-3 py-3 text-[12px] text-ink-soft">还没有 managed skill，先去 Skill 标签里创建。</div>
               ) : availableSkills.map(skill => {
@@ -272,9 +272,9 @@ function AgentRow({
               })}
             </div>
           </div>
-          {saveError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{saveError}</p>}
+          {saveError && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{saveError}</p>}
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={handleCancel} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+            <button type="button" onClick={handleCancel} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface rounded-xl transition-colors">取消</button>
             <button type="button" onClick={handleSave} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-ink text-bg rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5">
               <Save className="w-3.5 h-3.5" aria-hidden />
               {saving ? '保存中…' : '保存'}
@@ -389,9 +389,9 @@ export function AgentSettingsTab({
             <label htmlFor="add-agent-prompt" className="block text-[11px] font-bold text-ink-soft uppercase mb-1.5">System Prompt</label>
             <textarea id="add-agent-prompt" value={addForm.systemPrompt} onChange={event => setAddForm(previous => ({ ...previous, systemPrompt: event.target.value }))} rows={2} className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none font-mono" />
           </div>
-          {addError && <p className="text-[12px] text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl">{addError}</p>}
+          {addError && <p className="tone-danger-panel rounded-xl border px-3 py-1.5 text-[12px]">{addError}</p>}
           <div className="flex gap-2 justify-end">
-            <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-white/5 rounded-xl transition-colors">取消</button>
+            <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-1.5 text-[12px] text-ink-soft hover:text-ink hover:bg-surface-muted rounded-xl transition-colors">取消</button>
             <button type="button" onClick={handleAddAgent} disabled={saving} className="px-4 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5" aria-hidden />
               {saving ? '创建中…' : '创建'}
@@ -399,7 +399,7 @@ export function AgentSettingsTab({
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => setAddOpen(true)} className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-white/10 rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2">
+        <button type="button" onClick={() => setAddOpen(true)} className="w-full py-3 text-[13px] font-bold text-ink-soft border border-dashed border-line rounded-xl hover:border-accent/50 hover:text-accent transition-colors flex items-center justify-center gap-2">
           <Plus className="w-4 h-4" aria-hidden />
           新增 Agent
         </button>
@@ -408,7 +408,7 @@ export function AgentSettingsTab({
       <div className="settings-surface rounded-xl overflow-hidden">
         <table className="w-full text-left">
           <thead>
-            <tr className="border-b border-line bg-white/[0.02]">
+            <tr className="border-b border-line bg-surface-muted">
               <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">名称</th>
               <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">Provider</th>
               <th className="px-4 py-3 text-[11px] font-bold text-ink-soft uppercase">模型</th>

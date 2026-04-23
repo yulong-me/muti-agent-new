@@ -185,20 +185,20 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* 遮罩 */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl" onClick={onCancel} />
+      <div className="absolute inset-0 bg-[color:var(--overlay-scrim)]" onClick={onCancel} />
 
       {/* 弹窗 */}
-      <div className="relative z-10 bg-surface backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-white/[0.08]"
+      <div className="relative z-10 bg-surface rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-line"
            style={{ maxHeight: '70vh' }}
            role="dialog"
            aria-modal="true"
            aria-labelledby="directory-browser-title">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line flex-shrink-0">
           <h2 id="directory-browser-title" className="text-base font-bold text-ink">选择工作目录</h2>
           <button
             onClick={onCancel}
-            className="p-1.5 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-lg transition-colors"
+            className="p-1.5 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-lg transition-colors"
             aria-label="关闭"
           >
             <X className="w-4 h-4" />
@@ -206,7 +206,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
         </div>
 
         {/* 面包屑 + 新建文件夹 */}
-        <div className="flex items-center gap-1 px-5 h-10 bg-white/[0.04] border-b border-white/[0.06] flex-shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1 px-5 h-10 bg-surface-muted border-b border-line flex-shrink-0 overflow-x-auto">
           {segments.map((seg, i) => (
             <span key={seg.path || `_${i}`} className="flex items-center gap-1 flex-shrink-0">
               {i > 0 && (
@@ -285,7 +285,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
                   取消
                 </button>
               </div>
-              {mkdirError && <p className="text-[10px] text-red-500 mt-1 ml-6">{mkdirError}</p>}
+              {mkdirError && <p className="tone-danger-text mt-1 ml-6 text-[10px]">{mkdirError}</p>}
             </div>
           )}
 
@@ -303,7 +303,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
 
           {error && (
             <div className="px-3 py-1.5 mb-1">
-              <p className="text-xs text-red-500">{error}</p>
+              <p className="tone-danger-text text-xs">{error}</p>
             </div>
           )}
 
@@ -318,7 +318,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
               key={entry.path}
               type="button"
               onClick={() => fetchDirectory(entry.path)}
-              className="w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center gap-2.5 hover:bg-white/[0.06]"
+              className="w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center gap-2.5 hover:bg-surface-muted"
               title={entry.path}
             >
               <FolderIcon className="text-[#c4a882] flex-shrink-0" />
@@ -331,7 +331,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
         </div>
 
         {/* 路径输入 */}
-        <div className="px-5 py-3 border-t border-white/[0.06] space-y-2 flex-shrink-0">
+        <div className="px-5 py-3 border-t border-line space-y-2 flex-shrink-0">
           <div className="flex gap-2">
             <TerminalIcon />
             <label htmlFor="directory-browser-path" className="sr-only">输入路径</label>
@@ -342,13 +342,13 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
               onChange={e => setPathInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handlePathSubmit() }}
               placeholder="输入路径…"
-              className="flex-1 text-xs px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+              className="flex-1 text-xs px-3 py-2 rounded-xl bg-surface border border-line text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
             />
             {pathInput.trim() && (
               <button
                 type="button"
                 onClick={handlePathSubmit}
-                className="px-2.5 py-2 rounded-xl border border-white/[0.08] bg-white/[0.04] text-ink-soft hover:text-ink hover:bg-white/[0.06] transition-colors"
+                className="px-2.5 py-2 rounded-xl border border-line bg-surface text-ink-soft hover:text-ink hover:bg-surface-muted transition-colors"
                 aria-label="跳转到路径"
               >
                 <svg aria-hidden="true" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -391,7 +391,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
                   setError('无法打开系统选择器')
                 }
               }}
-              className="px-3 py-2 rounded-xl border border-white/[0.08] text-ink-soft text-xs font-medium transition-colors hover:bg-white/[0.06] hover:text-ink flex items-center gap-1"
+              className="px-3 py-2 rounded-xl border border-line text-ink-soft text-xs font-medium transition-colors hover:bg-surface-muted hover:text-ink flex items-center gap-1"
               title="使用 macOS 原生文件夹选择器"
             >
               <FolderIcon className="w-3.5 h-3.5" />
@@ -400,7 +400,7 @@ export function DirectoryBrowser({ initialPath, onSelect, onCancel }: DirectoryB
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 rounded-xl border border-white/[0.08] text-ink-soft text-xs font-medium transition-colors hover:bg-white/[0.06] hover:text-ink"
+              className="px-4 py-2 rounded-xl border border-line text-ink-soft text-xs font-medium transition-colors hover:bg-surface-muted hover:text-ink"
             >
               取消
             </button>

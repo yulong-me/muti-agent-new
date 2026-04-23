@@ -76,6 +76,16 @@ export const PROVIDER_LABELS: Record<ProviderName, string> = {
 }
 
 export const PROVIDER_COLORS: Record<ProviderName, string> = {
-  'claude-code': 'text-accent bg-accent/10 border-accent/20',
-  'opencode': 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+  'claude-code': 'provider-badge-claude-code',
+  'opencode': 'provider-badge-opencode',
+}
+
+export const PROVIDER_SWATCHES: Record<ProviderName, string> = {
+  'claude-code': 'provider-swatch provider-orb provider-swatch-claude-code',
+  'opencode': 'provider-swatch provider-orb provider-swatch-opencode',
+}
+
+export const PROVIDER_DOTS: Record<ProviderName, string> = {
+  'claude-code': 'provider-swatch-claude-code',
+  'opencode': 'provider-swatch-opencode',
 }

@@ -19,10 +19,10 @@ interface WorkspaceGitPanelProps {
 }
 
 function statusTone(file: GitChangedFile) {
-  if (file.untracked) return 'bg-sky-500/15 text-sky-300 border-sky-500/20'
-  if (file.indexStatus === 'D' || file.worktreeStatus === 'D') return 'bg-red-500/15 text-red-300 border-red-500/20'
-  if (file.indexStatus === 'R' || file.worktreeStatus === 'R') return 'bg-amber-500/15 text-amber-300 border-amber-500/20'
-  return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
+  if (file.untracked) return 'border tone-warning-pill'
+  if (file.indexStatus === 'D' || file.worktreeStatus === 'D') return 'border tone-danger-panel'
+  if (file.indexStatus === 'R' || file.worktreeStatus === 'R') return 'border provider-badge-opencode'
+  return 'border tone-success-pill'
 }
 
 function GitFileRow({
@@ -39,7 +39,7 @@ function GitFileRow({
   onPreview: () => void
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-2">
+    <div className="rounded-lg border border-line bg-surface px-2.5 py-2">
       <div className="flex items-start gap-2">
         <button
           type="button"
@@ -64,7 +64,7 @@ function GitFileRow({
           type="button"
           onClick={onAction}
           disabled={actionDisabled}
-          className="shrink-0 rounded-md border border-white/[0.08] px-2 py-1 text-[10px] font-medium text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded-md border border-line px-2 py-1 text-[10px] font-medium text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
         >
           {actionLabel}
         </button>
@@ -167,7 +167,7 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
         <button
           type="button"
           onClick={() => void loadStatus()}
-          className="ml-auto rounded p-0.5 text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink"
+          className="ml-auto rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
           title="刷新 Git 状态"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -175,17 +175,17 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
       </div>
 
       {loading && <p className="py-2 text-[11px] text-ink-soft/60">加载中…</p>}
-      {!loading && error && <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">{error}</p>}
+      {!loading && error && <p className="tone-danger-panel rounded-lg border px-3 py-2 text-[11px]">{error}</p>}
 
       {!loading && !error && status && !status.isRepo && (
-        <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-[11px] text-ink-soft/70">
+        <div className="rounded-lg border border-line bg-surface px-3 py-2 text-[11px] text-ink-soft/70">
           当前工作区不是 Git 仓库，无法显示暂存区和提交操作。
         </div>
       )}
 
       {!loading && !error && status?.isRepo && (
         <>
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+          <div className="rounded-lg border border-line bg-surface px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-[12px] font-medium text-ink">
@@ -196,7 +196,7 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
                 </p>
               </div>
               {notice && (
-                <div className="flex items-center gap-1 text-[10px] text-emerald-300">
+                <div className="tone-success-text flex items-center gap-1 text-[10px]">
                   <Check className="h-3.5 w-3.5" />
                   <span>{notice}</span>
                 </div>
@@ -204,15 +204,15 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
             </div>
 
             <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
-              <div className="rounded-md border border-white/[0.06] bg-bg/60 px-2 py-1.5 text-center text-ink-soft">
+              <div className="rounded-md border border-line bg-surface-muted px-2 py-1.5 text-center text-ink-soft">
                 <div className="text-[11px] font-semibold text-ink">{stagedFiles.length}</div>
                 <div>staged</div>
               </div>
-              <div className="rounded-md border border-white/[0.06] bg-bg/60 px-2 py-1.5 text-center text-ink-soft">
+              <div className="rounded-md border border-line bg-surface-muted px-2 py-1.5 text-center text-ink-soft">
                 <div className="text-[11px] font-semibold text-ink">{unstagedFiles.length}</div>
                 <div>modified</div>
               </div>
-              <div className="rounded-md border border-white/[0.06] bg-bg/60 px-2 py-1.5 text-center text-ink-soft">
+              <div className="rounded-md border border-line bg-surface-muted px-2 py-1.5 text-center text-ink-soft">
                 <div className="text-[11px] font-semibold text-ink">{untrackedFiles.length}</div>
                 <div>untracked</div>
               </div>
@@ -224,7 +224,7 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
               type="button"
               onClick={() => void runAction(() => stageGitPaths(workspacePath), '已暂存工作区')}
               disabled={submitting || changedFiles.length === 0}
-              className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[10px] font-medium text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md border border-line px-2.5 py-1.5 text-[10px] font-medium text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
             >
               Stage All
             </button>
@@ -232,7 +232,7 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
               type="button"
               onClick={() => void runAction(() => unstageGitPaths(workspacePath), '已取消全部暂存')}
               disabled={submitting || stagedFiles.length === 0}
-              className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[10px] font-medium text-ink-soft transition-colors hover:bg-white/[0.06] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md border border-line px-2.5 py-1.5 text-[10px] font-medium text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
             >
               Unstage All
             </button>
@@ -276,7 +276,7 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
             onPreview={(file) => onOpenDiff(file.path, false)}
           />
 
-          <div className="space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-3">
+          <div className="space-y-2 rounded-lg border border-line bg-surface px-3 py-3">
             <div className="flex items-center justify-between">
               <label htmlFor="git-commit-message" className="text-[11px] font-semibold text-ink-soft">
                 Commit Message
@@ -288,7 +288,7 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
               placeholder="feat: add workspace git panel"
-              className="min-h-[74px] w-full rounded-lg border border-white/[0.08] bg-bg/60 px-3 py-2 text-[12px] text-ink outline-none transition-colors placeholder:text-ink-soft/40 focus:border-accent/40"
+              className="min-h-[74px] w-full rounded-lg border border-line bg-surface-muted px-3 py-2 text-[12px] text-ink outline-none transition-colors placeholder:text-ink-soft/40 focus:border-accent/40"
             />
             <button
               type="button"

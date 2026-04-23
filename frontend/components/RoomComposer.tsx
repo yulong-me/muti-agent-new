@@ -273,7 +273,7 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
 
   return (
     <div className="flex flex-col gap-2 relative">
-      {sendError && <div className="text-xs text-red-500 px-1">{sendError}</div>}
+      {sendError && <div className="tone-danger-text px-1 text-xs">{sendError}</div>}
       {mentionPickerOpen && (
         <MentionPicker
           agents={filteredAgents}

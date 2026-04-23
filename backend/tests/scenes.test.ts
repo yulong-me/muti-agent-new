@@ -135,7 +135,7 @@ function reqJson(
 
 describe('F016: scenesRouter — HTTP-level tests', () => {
 
-  describe('PUT /api/scenes/:id — builtin name lock', () => {
+  describe('PUT /api/scenes/:id — builtin readonly guard', () => {
     _skip('returns 403 when builtin scene receives a name in body', async () => {
       mockScenesRepo.get.mockReturnValue({
         id: 'roundtable-forum', name: '圆桌论坛',
@@ -148,30 +148,23 @@ describe('F016: scenesRouter — HTTP-level tests', () => {
       });
 
       expect(res.status).toBe(403);
-      expect(res.data).toHaveProperty('code', 'BUILTIN_NAME_LOCKED');
+      expect(res.data).toHaveProperty('code', 'BUILTIN_SCENE_READONLY');
       expect(mockScenesRepo.update).not.toHaveBeenCalled();
     });
 
-    _skip('allows prompt/description update on builtin when name is omitted', async () => {
+    _skip('returns 403 when builtin scene receives a prompt-only update', async () => {
       mockScenesRepo.get.mockReturnValue({
         id: 'roundtable-forum', name: '圆桌论坛',
         prompt: '旧 prompt', builtin: true,
       });
-      mockScenesRepo.update.mockReturnValue({
-        id: 'roundtable-forum', name: '圆桌论坛',
-        prompt: '新 prompt', builtin: true,
-      });
 
       const res = await reqJson('PUT', '/api/scenes/roundtable-forum', {
-        // name intentionally omitted
         prompt: '新 prompt',
       });
 
-      expect(res.status).toBe(200);
-      expect(mockScenesRepo.update).toHaveBeenCalledWith(
-        'roundtable-forum',
-        expect.objectContaining({ prompt: '新 prompt' }),
-      );
+      expect(res.status).toBe(403);
+      expect(res.data).toHaveProperty('code', 'BUILTIN_SCENE_READONLY');
+      expect(mockScenesRepo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -221,8 +214,8 @@ describe('F016: scenesRouter — HTTP-level tests', () => {
     });
   });
 
-  describe('GET /api/scenes — returns canEditName flag', () => {
-    _skip('builtin scenes have canEditName=false', async () => {
+  describe('GET /api/scenes — returns permission flags', () => {
+    _skip('builtin scenes have canEditName=false and canEditPrompt=false', async () => {
       mockScenesRepo.list.mockReturnValue([
         { id: 'roundtable-forum', name: '圆桌论坛', prompt: 'p', builtin: true },
         { id: 'custom', name: '自定义', prompt: 'p', builtin: false },
@@ -233,7 +226,9 @@ describe('F016: scenesRouter — HTTP-level tests', () => {
       expect(res.status).toBe(200);
       const scenes = res.data as Array<Record<string, unknown>>;
       expect(scenes.find(s => s.id === 'roundtable-forum')).toHaveProperty('canEditName', false);
+      expect(scenes.find(s => s.id === 'roundtable-forum')).toHaveProperty('canEditPrompt', false);
       expect(scenes.find(s => s.id === 'custom')).toHaveProperty('canEditName', true);
+      expect(scenes.find(s => s.id === 'custom')).toHaveProperty('canEditPrompt', true);
     });
   });
 });

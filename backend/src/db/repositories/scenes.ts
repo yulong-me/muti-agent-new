@@ -65,7 +65,7 @@ export const scenesRepo = {
     return { id, name: input.name, description: input.description, prompt: input.prompt, builtin: false, maxA2ADepth: 5 };
   },
 
-  /** Update scene fields. builtin scenes can only update prompt/description. */
+  /** Update scene fields. builtin scenes are read-only. */
   update(
     id: string,
     input: { name?: string; description?: string; prompt?: string },
@@ -73,15 +73,7 @@ export const scenesRepo = {
     const existing = this.get(id);
     if (!existing) return undefined;
     if (existing.builtin) {
-      // builtin: only prompt and description are editable
-      if (input.name !== undefined) return undefined; // name locked
-      db.prepare(`
-        UPDATE scenes SET description = @description, prompt = @prompt WHERE id = @id
-      `).run({
-        id,
-        description: input.description ?? existing.description ?? null,
-        prompt: input.prompt ?? existing.prompt,
-      });
+      return undefined;
     } else {
       // custom: name, description, prompt all editable
       db.prepare(`

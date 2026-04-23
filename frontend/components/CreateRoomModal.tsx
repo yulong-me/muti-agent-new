@@ -49,8 +49,8 @@ function getTagStyle(tag: string) {
 }
 
 const AGENT_COLORS = [
-  '#D97706', '#059669', '#DC2626', '#4D7C0F', '#9F1239',
-  '#2563EB', '#7C3AED', '#0284C7', '#0D9488', '#EA580C',
+  '#c43a2f', '#d17a24', '#3d8a61', '#9b5c44', '#8c6a58',
+  '#b55d3d', '#6e7f48', '#a04938', '#b87933', '#8f5e46',
 ]
 function agentColor(name: string): string {
   let hash = 0
@@ -242,7 +242,7 @@ export default function CreateRoomModal({
         role="button"
         tabIndex={0}
         aria-label="关闭"
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xl -webkit-backdrop-blur-xl"
+        className="fixed inset-0 z-50 bg-[color:var(--overlay-scrim)]"
         onClick={onClose}
         onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') onClose() }}
       />
@@ -258,14 +258,14 @@ export default function CreateRoomModal({
           <div className="flex-1 overflow-y-auto">
 
             {/* Header */}
-            <div className="flex items-start justify-between px-6 md:px-8 pt-6 md:pt-8 pb-5 border-b border-white/[0.06] shrink-0">
+            <div className="flex items-start justify-between px-6 md:px-8 pt-6 md:pt-8 pb-5 border-b border-line shrink-0">
               <div>
                 <h1 className="text-2xl font-bold text-ink flex items-center gap-2">
                   <BrainCircuit className="w-6 h-6 text-accent" aria-hidden/> 发起新讨论
                 </h1>
                 <p className="text-ink-soft mt-1 text-[14px]">选择专家，开启多智能体协作讨论</p>
               </div>
-              <button onClick={onClose} aria-label="关闭" className="p-2 text-ink-soft hover:text-ink hover:bg-white/[0.06] rounded-full transition-colors">
+              <button onClick={onClose} aria-label="关闭" className="p-2 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-full transition-colors">
                 <X className="w-5 h-5" aria-hidden/>
               </button>
             </div>
@@ -279,12 +279,12 @@ export default function CreateRoomModal({
                 value={topic}
                 onChange={e => { setTopic(e.target.value); setErrors(prev => ({ ...prev, topic: undefined })) }}
                 placeholder="例如：比较 Claude Code 和 OpenCode 的协作策略…"
-                className={`w-full bg-white/[0.04] border rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all ${
-                  errors.topic ? 'border-red-400 ring-1 ring-red-400/50' : 'border-white/[0.08]'
+                className={`w-full bg-surface border rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all ${
+                  errors.topic ? 'border-[color:var(--danger)] ring-1 ring-[color:var(--danger)]/40' : 'border-line'
                 }`}
                 maxLength={100}
               />
-              {errors.topic && <p className="text-xs text-red-400 mt-1.5">{errors.topic}</p>}
+              {errors.topic && <p className="tone-danger-text mt-1.5 text-xs">{errors.topic}</p>}
             </div>
 
             {/* F016: Scene Selector */}
@@ -303,7 +303,7 @@ export default function CreateRoomModal({
                 value={sceneId}
                 onChange={e => setSceneId(e.target.value)}
                 disabled={loadingScenes}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all appearance-none cursor-pointer"
+                className="w-full bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all appearance-none cursor-pointer"
               >
                 {scenes.map(s => (
                   <option key={s.id} value={s.id}>
@@ -335,7 +335,7 @@ export default function CreateRoomModal({
                   value={searchText}
                   onChange={e => setSearchText(e.target.value)}
                   placeholder="搜索专家姓名或角色…"
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-9 pr-4 py-2.5 text-[13px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+                  className="w-full bg-surface border border-line rounded-xl pl-9 pr-4 py-2.5 text-[13px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
                 />
               </div>
               {/* Tag pills */}
@@ -347,7 +347,7 @@ export default function CreateRoomModal({
                     className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-all ${
                       activeTag === null
                         ? 'bg-ink text-bg border-ink shadow-sm'
-                        : 'bg-white/[0.04] text-ink-soft border-white/[0.08] hover:border-white/[0.15]'
+                        : 'bg-surface text-ink-soft border-line hover:border-accent/40 hover:bg-surface-muted'
                     }`}
                   >
                     全部
@@ -361,7 +361,7 @@ export default function CreateRoomModal({
                         type="button"
                         onClick={() => setActiveTag(isActive ? null : tag)}
                         className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-all ${
-                          isActive ? '' : 'bg-white/[0.04] text-ink-soft border-white/[0.08] hover:border-white/[0.15]'
+                          isActive ? '' : 'bg-surface text-ink-soft border-line hover:border-accent/40 hover:bg-surface-muted'
                         }`}
                         style={isActive ? { backgroundColor: dc.bg, color: dc.text, borderColor: dc.border } : {}}
                         aria-pressed={isActive}
@@ -406,7 +406,7 @@ export default function CreateRoomModal({
                         type="button"
                         onClick={() => { toggleAgent(ag.id); setErrors(prev => ({ ...prev, agents: undefined })) }}
                         className={`flex flex-col items-center p-4 rounded-2xl border-2 transition-all text-left ${
-                          isSelected ? 'border-accent bg-accent/5 shadow-sm' : 'border-white/[0.08] bg-white/[0.04] hover:border-accent/40'
+                          isSelected ? 'border-accent bg-accent/5 shadow-sm' : 'border-line bg-surface hover:border-accent/40 hover:bg-surface-muted'
                         }`}
                         aria-pressed={isSelected}
                       >
@@ -435,7 +435,7 @@ export default function CreateRoomModal({
                   })}
                 </div>
               )}
-              {errors.agents && <p className="text-xs text-red-400 mt-2">{errors.agents}</p>}
+              {errors.agents && <p className="tone-danger-text mt-2 text-xs">{errors.agents}</p>}
             </div>
 
             {/* Collapsible Workspace Section */}
@@ -449,7 +449,7 @@ export default function CreateRoomModal({
                 工作目录（可选）
               </button>
               {workspaceOpen && (
-                <div className="mt-2 p-4 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
+                <div className="mt-2 p-4 bg-surface-muted rounded-2xl border border-line">
                   <DirectoryPicker
                     value={workspacePath}
                     onChange={setWorkspacePath}
@@ -464,14 +464,14 @@ export default function CreateRoomModal({
           </div>
 
           {/* Sticky Footer: Config Summary + CTA */}
-          <div className="shrink-0 border-t border-white/[0.06] px-6 md:px-8 py-4 bg-surface/80 backdrop-blur-md">
+          <div className="shrink-0 border-t border-line px-6 md:px-8 py-4 bg-surface">
 
             {/* Config Summary */}
             <div className="mb-3">
               <p className="text-[11px] font-bold text-accent uppercase tracking-widest mb-2">配置摘要</p>
               <div className="flex flex-wrap gap-2">
                 {selectedWorkers.length > 0 ? selectedWorkers.map(ag => (
-                  <span key={ag.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] bg-white/[0.04] border border-white/[0.08]">
+                  <span key={ag.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] bg-surface-muted border border-line">
                     <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: agentColor(ag.name) }}>
                       {ag.name.slice(0, 1)}
                     </span>

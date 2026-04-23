@@ -11,9 +11,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   const isScenes = pathname === '/settings/scenes'
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="ambient-canvas min-h-screen bg-bg">
       {/* Top nav */}
-      <div className="bg-surface border-b border-line sticky top-0 z-10 backdrop-blur-xl">
+      <div className="bg-surface border-b border-line sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2 text-ink-soft hover:text-ink text-[13px] transition-colors">
             <ChevronLeft className="w-4 h-4" /> 讨论室
