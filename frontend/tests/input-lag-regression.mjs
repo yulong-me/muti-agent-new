@@ -4,24 +4,25 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const roomView = readFileSync(resolve(root, 'components/RoomView_new.tsx'), 'utf8')
+const roomView = readFileSync(resolve(root, 'components/RoomView.tsx'), 'utf8')
+const roomActionArea = readFileSync(resolve(root, 'components/room-view/RoomActionArea.tsx'), 'utf8')
 
 assert.match(
   roomView,
   /import\s+\{\s*MessageList\s*\}\s+from\s+['"]\.\/MessageList['"]/,
-  'RoomView_new must delegate history rendering to MessageList so composer input does not re-render every message.',
+  'RoomView must delegate history rendering to MessageList so composer input does not re-render every message.',
 )
 
 assert.match(
-  roomView,
-  /import\s+\{\s*RoomComposer\s*\}\s+from\s+['"]\.\/RoomComposer['"]/,
-  'RoomView_new must delegate draft input state to RoomComposer.',
+  roomActionArea,
+  /import\s+\{\s*RoomComposer,\s*type\s+RoomComposerHandle\s*\}\s+from\s+['"]\.\.\/RoomComposer['"]/,
+  'RoomActionArea must delegate draft input state to RoomComposer.',
 )
 
 assert.doesNotMatch(
   roomView,
   /sortedMessages\.map\(\s*msg\s*=>/,
-  'RoomView_new must not inline map over all messages in its own render path.',
+  'RoomView must not inline map over all messages in its own render path.',
 )
 
 const messageList = readFileSync(resolve(root, 'components/MessageList.tsx'), 'utf8')
@@ -50,5 +51,5 @@ assert.match(
 assert.doesNotMatch(
   roomView,
   /const\s+\[userInput,\s*setUserInput\]\s*=\s*useState\(/,
-  'RoomView_new must not subscribe to draft input state.',
+  'RoomView must not subscribe to draft input state.',
 )

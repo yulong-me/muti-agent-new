@@ -1,6 +1,6 @@
 'use client'
 
-import RoomView from '@/components/RoomView_new'
+import RoomView from '@/components/RoomView'
 
 export default function HomePage() {
   return <RoomView />

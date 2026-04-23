@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-const roomView = readFileSync(resolve(root, 'components/RoomView_new.tsx'), 'utf8')
+const roomView = readFileSync(resolve(root, 'components/RoomView.tsx'), 'utf8')
 assert.match(
   roomView,
   /router\.push\(`\/room\/\$\{id\}`,\s*\{\s*scroll:\s*false\s*\}\)/,
@@ -14,12 +14,12 @@ assert.match(
 assert.doesNotMatch(
   roomView,
   /scrollIntoView\(/,
-  'RoomView_new must not use scrollIntoView for message auto-follow because it can scroll the whole page.',
+  'RoomView must not use scrollIntoView for message auto-follow because it can scroll the whole page.',
 )
 assert.match(
   roomView,
   /scrollTo\(\{\s*top:\s*el\.scrollHeight,\s*behavior\s*\}\)/,
-  'RoomView_new must scroll the message container directly when following the latest message.',
+  'RoomView must scroll the message container directly when following the latest message.',
 )
 
 const createRoomModal = readFileSync(resolve(root, 'components/CreateRoomModal.tsx'), 'utf8')
