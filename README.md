@@ -25,9 +25,17 @@
 
 ## 系统架构
 
+生产模式使用统一入口 `7000`，开发模式默认仍保持前后端分离：
+
 ```text
 ┌─────────────────────────────────────┐
-│           Browser (Next.js)         │  :7002
+│       Gateway (production only)     │  :7000
+│  /api/*, /socket.io/* -> backend    │
+│  everything else       -> frontend  │
+└────────────┬────────────────────────┘
+             │
+┌─────────────────────────────────────┐
+│           Frontend (Next.js)        │  :7002
 │  /                房间列表 + 对话     │
 │  /room/[id]       专家协作房间        │
 │  /settings/*      Agent/Provider/Scene 设置
@@ -116,18 +124,37 @@ LOG_LEVEL=info
 NEXT_PUBLIC_API_URL=http://localhost:7001
 ```
 
+默认情况下不需要设置这个变量：
+
+- `pnpm dev` 会在浏览器访问 `7002` 时自动请求 `7001`
+- `pnpm dev:gateway` / `pnpm start` 会在浏览器访问 `7000` 时自动走同源入口
+
 ### 启动本地开发环境
 
 ```bash
 pnpm dev
 ```
 
-当前默认会同时启动：
+当前默认会同时启动分离开发模式：
 
 | Service | URL |
 |---------|-----|
 | Backend API | http://localhost:7001 |
 | Frontend UI | http://localhost:7002 |
+
+如果你想在本地模拟生产统一入口，可选运行：
+
+```bash
+pnpm dev:gateway
+```
+
+此时会启动：
+
+| Service | URL |
+|---------|-----|
+| Gateway | http://localhost:7000 |
+| Backend API (internal) | http://localhost:7001 |
+| Frontend UI (internal) | http://localhost:7002 |
 
 首次启动时会自动创建 SQLite 数据库：
 
@@ -168,16 +195,33 @@ pnpm build
 pnpm start
 ```
 
-当前默认会同时启动：
+生产模式会启动统一入口网关，对外默认访问地址为 `7000`：
 
 | Service | URL |
 |---------|-----|
-| Backend API | http://localhost:7001 |
-| Frontend UI | http://localhost:7002 |
+| Gateway | http://localhost:7000 |
+| Backend API (internal) | http://localhost:7001 |
+| Frontend UI (internal) | http://localhost:7002 |
+
+如果本机 `7000` 已被占用，可临时覆盖：
+
+```bash
+GATEWAY_PORT=7100 pnpm start
+GATEWAY_PORT=7100 pnpm dev:gateway
+```
 
 ### 进入产品
 
+开发分离模式：
+
 1. 打开 [http://localhost:7002](http://localhost:7002)
+2. 进入设置，先配置 Provider
+3. 创建房间，选择一个或多个专家
+4. 在输入框中通过 `@专家名` 或 mention picker 指定接收专家后发送消息
+
+生产统一入口模式：
+
+1. 打开 [http://localhost:7000](http://localhost:7000)
 2. 进入设置，先配置 Provider
 3. 创建房间，选择一个或多个专家
 4. 在输入框中通过 `@专家名` 或 mention picker 指定接收专家后发送消息

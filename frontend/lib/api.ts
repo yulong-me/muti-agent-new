@@ -3,10 +3,12 @@
  *
  * Resolution order (first match wins):
  *   1. Non-empty `process.env.NEXT_PUBLIC_API_URL` — explicit override (production / docker)
- *   2. If current page runs on localhost:7002, talk to localhost:7001
- *   3. `window.location.protocol + '//' + window.location.host` — same origin (proxy deployments)
+ *   2. If current page runs on localhost:7002, talk to localhost:7001 (split dev mode)
+ *   3. `window.location.protocol + '//' + window.location.host` — same origin (gateway / proxy deployments)
  *
- * For local dev without proxy: set NEXT_PUBLIC_API_URL in frontend/.env.local
+ * This supports:
+ *   - dev: `7002` -> backend `7001`
+ *   - dev:gateway / prod gateway: browser hits same-origin `7000`
  *
  * This replaces all inline `http://localhost:7001` hardcodes across components.
  */
@@ -16,7 +18,7 @@ function resolveDefaultApiUrl(): string {
 
   const { protocol, hostname, host, port } = window.location;
 
-  // Local app default: frontend 7002, backend 7001.
+  // Split dev default: frontend 7002, backend 7001.
   if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '7002') {
     return `${protocol}//${hostname}:7001`;
   }

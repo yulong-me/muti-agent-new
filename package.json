@@ -10,6 +10,8 @@
     "node:check": "node scripts/check-node-version.mjs",
     "predev": "pnpm run node:check",
     "dev": "node scripts/dev.mjs",
+    "predev:gateway": "pnpm run node:check",
+    "dev:gateway": "node scripts/dev-gateway.mjs",
     "dev:backend": "pnpm --dir backend dev",
     "dev:frontend": "pnpm --dir frontend dev",
     "prestart": "pnpm run node:check",

@@ -2,7 +2,9 @@
 /**
  * Cross-platform dev launcher.
  * Kills ports BE_PORT/FE_PORT, starts backend and frontend concurrently.
- * Passes NEXT_PUBLIC_API_URL=BE_URL so frontend knows where to find the API.
+ * Default dev mode stays split:
+ *   - backend:  http://localhost:7001
+ *   - frontend: http://localhost:7002
  *
  * Works on macOS, Linux, and Windows.
  */
@@ -11,8 +13,6 @@ import { platform } from 'os';
 
 const BE_PORT = 7001;
 const FE_PORT = 7002;
-const BE_URL  = `http://localhost:${BE_PORT}`;
-const FE_URL  = `http://localhost:${FE_PORT}`;
 
 const PORTS = [BE_PORT, FE_PORT];
 
@@ -51,8 +51,17 @@ function safeListPids(port) {
   }
 }
 
+async function ensurePortFreed(port) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    killPort(port);
+    const pids = safeListPids(port);
+    if (pids.length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
 for (const port of PORTS) {
-  killPort(port);
+  await ensurePortFreed(port);
   // Verify port is actually free
   const pids = safeListPids(port);
   if (pids.length > 0) {
@@ -75,7 +84,7 @@ function prefix(name, color) {
 function startProc(name, cwd, color, extraEnv) {
   const proc = spawn(npmCmd, ['dev'], {
     cwd, shell, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NEXT_PUBLIC_API_URL: BE_URL, ...extraEnv }
+    env: { ...process.env, ...extraEnv }
   });
   const write = prefix(name, color);
   proc.stdout.on('data', d => d.toString().split('\n').filter(Boolean).forEach(write));
