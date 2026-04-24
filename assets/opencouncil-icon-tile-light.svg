@@ -1,0 +1,10 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OpenCouncil light tile icon</title>
+  <desc id="desc">A warm light tile version of the OpenCouncil open ring and focus mark.</desc>
+
+  <rect width="1024" height="1024" rx="224" fill="#FAF6F1"/>
+  <g transform="translate(512 512) scale(0.88) translate(-512 -512)">
+    <path d="M666 292A286 286 0 1 0 666 732" stroke="#1A1410" stroke-width="126" stroke-linecap="round"/>
+    <circle cx="746" cy="512" r="78" fill="#C43A2F"/>
+  </g>
+</svg>
