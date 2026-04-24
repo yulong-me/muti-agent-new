@@ -3,8 +3,8 @@
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "engines": {
-    "node": "22.x",
-    "pnpm": "10.x"
+    "node": ">=20.19.0 <21 || >=22.12.0 <26",
+    "pnpm": ">=10 <11"
   },
   "scripts": {
     "node:check": "node scripts/check-node-version.mjs",
@@ -20,6 +20,7 @@
     "build": "pnpm run build:backend && pnpm run build:frontend",
     "build:backend": "pnpm --dir backend build",
     "build:frontend": "pnpm --dir frontend build",
+    "test:node-version": "node tests/check-node-version.test.mjs",
     "install:all": "pnpm -r install"
   },
   "devDependencies": {
