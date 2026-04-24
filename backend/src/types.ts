@@ -61,6 +61,38 @@ export interface ToolCall {
   timestamp?: number;
 }
 
+export interface InvocationUsage {
+  provider?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  lastTurnInputTokens?: number;
+  contextWindowSize?: number;
+  costUsd?: number;
+  latencyMs?: number;
+}
+
+export interface ContextHealth {
+  usedTokens: number;
+  windowSize: number;
+  leftTokens: number;
+  leftPct: number;
+  fillRatio: number;
+  source: 'exact' | 'approx';
+  state: 'healthy' | 'warn' | 'danger';
+}
+
+export interface SessionTelemetry {
+  sessionId: string;
+  invocationUsage?: InvocationUsage;
+  contextHealth?: ContextHealth;
+  measuredAt: number;
+}
+
 export interface Message {
   id: string;
   agentRole: AgentRole | 'USER';
@@ -77,6 +109,9 @@ export interface Message {
   total_cost_usd?: number;
   input_tokens?: number;
   output_tokens?: number;
+  sessionId?: string;
+  invocationUsage?: InvocationUsage;
+  contextHealth?: ContextHealth;
   /** Temporary ID used during streaming (replaced by real id after completion) */
   tempMsgId?: string;
   /** A2A 调用链信息 */
@@ -105,8 +140,10 @@ export interface DiscussionRoom {
   sceneId: string;
   createdAt: number;
   updatedAt: number;
-  /** agentId → session ID for CLI resume/continue support */
+  /** agentConfigId → session ID for CLI resume/continue support */
   sessionIds: Record<string, string>;
+  /** agentConfigId → latest session telemetry snapshot */
+  sessionTelemetryByAgent?: Record<string, SessionTelemetry>;
   /** A2A 深度追踪（每次 A2A 调用递增） */
   a2aDepth: number;
   /** A2A 调用链 */

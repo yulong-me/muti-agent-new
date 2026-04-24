@@ -26,6 +26,7 @@ const opencodeProvider = {
   label: 'OpenCode',
   cliPath: '~/.opencode/bin/opencode',
   defaultModel: 'MiniMax-M2.7',
+  contextWindow: 200000,
   apiKey: '',
   baseUrl: '',
   timeout: 1800,

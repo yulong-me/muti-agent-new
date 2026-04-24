@@ -54,6 +54,14 @@ export function scanForInlineA2AMentions(text: string, agentNames: string[] = []
   return collectMentions(text, agentNames, false);
 }
 
+export function detectSingleInlineMentionFallback(text: string, agentNames: string[] = []): string | null {
+  const lineStartMentions = scanForA2AMentions(text, agentNames);
+  if (lineStartMentions.length > 0) return null;
+
+  const inlineMentions = scanForInlineA2AMentions(text, agentNames);
+  return inlineMentions.length === 1 ? inlineMentions[0] ?? null : null;
+}
+
 export function detectRoundtableHandoff(
   text: string,
   agentNames: string[] = [],
@@ -130,11 +138,23 @@ export function computeEffectiveMessageMentions(
   }
 
   const mentions = scanForA2AMentions(text, mentionCandidates).map(normalize);
-  if (sceneId === 'software-development') {
-    return mentions.slice(0, 1);
+  if (mentions.length > 0) {
+    if (sceneId === 'software-development') {
+      return mentions.slice(0, 1);
+    }
+    return mentions;
   }
 
-  return mentions;
+  const inlineFallback = detectSingleInlineMentionFallback(text, mentionCandidates);
+  if (inlineFallback) {
+    return [normalize(inlineFallback)];
+  }
+
+  if (sceneId === 'software-development') {
+    return [];
+  }
+
+  return [];
 }
 
 function collectMentions(text: string, agentNames: string[] = [], requireLineStart: boolean): string[] {

@@ -4,7 +4,7 @@
  * Must be initialized by server.ts at startup.
  */
 import type { Server as SocketIOServer } from 'socket.io';
-import type { AgentRunError } from '../types.js';
+import type { AgentRunError, ContextHealth, InvocationUsage } from '../types.js';
 import { debug, error, info } from '../lib/logger.js';
 
 let _io: SocketIOServer | null = null;
@@ -28,9 +28,9 @@ export function emitStreamDelta(roomId: string, agentId: string, text: string) {
 }
 
 /** Emit streaming start — frontend creates a placeholder message */
-export function emitStreamStart(roomId: string, agentId: string, agentName: string, timestamp: number, id: string, agentRole: string) {
-  debug('socket:emit:stream_start', { roomId, agentId, agentName, messageId: id, agentRole });
-  getIO().to(roomId).emit('stream_start', { roomId, agentId, agentName, timestamp, id, agentRole });
+export function emitStreamStart(roomId: string, agentId: string, agentConfigId: string, agentName: string, timestamp: number, id: string, agentRole: string) {
+  debug('socket:emit:stream_start', { roomId, agentId, agentConfigId, agentName, messageId: id, agentRole });
+  getIO().to(roomId).emit('stream_start', { roomId, agentId, agentConfigId, agentName, timestamp, id, agentRole });
 }
 
 /** Emit streaming end — frontend finalizes the message with timing/stats */
@@ -38,7 +38,16 @@ export function emitStreamEnd(
   roomId: string,
   agentId: string,
   id: string,
-  stats: { duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number },
+  stats: {
+    duration_ms: number;
+    total_cost_usd: number;
+    input_tokens: number;
+    output_tokens: number;
+    agentConfigId?: string;
+    sessionId?: string;
+    invocationUsage?: InvocationUsage;
+    contextHealth?: ContextHealth;
+  },
 ) {
   debug('socket:emit:stream_end', { roomId, agentId, messageId: id, duration_ms: stats.duration_ms, output_tokens: stats.output_tokens });
   getIO().to(roomId).emit('stream_end', { roomId, agentId, id, ...stats });

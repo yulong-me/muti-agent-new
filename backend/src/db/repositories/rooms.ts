@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import type { DiscussionRoom, Message } from '../../types.js';
 import { agentsRepo } from './agents.js';
+import { sessionsRepo } from './sessions.js';
 import { v4 as uuid } from 'uuid';
 
 function stringifyToolCalls(toolCalls: Message['toolCalls']): string | null {
@@ -12,6 +13,19 @@ function parseToolCalls(value: unknown): Message['toolCalls'] | undefined {
   try {
     const parsed = JSON.parse(value as string) as Message['toolCalls'];
     return Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function stringifyJson<T>(value: T | undefined): string | null {
+  return value ? JSON.stringify(value) : null;
+}
+
+function parseJson<T>(value: unknown): T | undefined {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value as string) as T;
   } catch {
     return undefined;
   }
@@ -57,7 +71,8 @@ export const roomsRepo = {
       updatedAt: row.updated_at as number,
       agents,
       messages: messagesRepo.listByRoom(row.id as string),
-      sessionIds: {},
+      sessionIds: sessionsRepo.getByRoom(row.id as string),
+      sessionTelemetryByAgent: sessionsRepo.getTelemetryByRoom(row.id as string),
       a2aDepth: 0,
       a2aCallChain: [],
       maxA2ADepth: (row.max_a2a_depth as number | null) ?? null,
@@ -192,8 +207,8 @@ export const roomsRepo = {
 export const messagesRepo = {
   insert(roomId: string, msg: Message): Message {
     db.prepare(`
-      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, tool_calls_json, duration_ms, total_cost_usd, input_tokens, output_tokens, temp_msg_id, to_agent_id, run_error_json)
-      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @toolCallsJson, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @tempMsgId, @toAgentId, @runErrorJson)
+      INSERT INTO messages (id, room_id, agent_role, agent_name, content, timestamp, type, thinking, tool_calls_json, duration_ms, total_cost_usd, input_tokens, output_tokens, session_id, invocation_usage_json, context_health_json, temp_msg_id, to_agent_id, run_error_json)
+      VALUES (@id, @roomId, @agentRole, @agentName, @content, @timestamp, @type, @thinking, @toolCallsJson, @durationMs, @totalCostUsd, @inputTokens, @outputTokens, @sessionId, @invocationUsageJson, @contextHealthJson, @tempMsgId, @toAgentId, @runErrorJson)
     `).run({
       id: msg.id,
       roomId,
@@ -208,6 +223,9 @@ export const messagesRepo = {
       totalCostUsd: msg.total_cost_usd ?? null,
       inputTokens: msg.input_tokens ?? null,
       outputTokens: msg.output_tokens ?? null,
+      sessionId: msg.sessionId ?? null,
+      invocationUsageJson: stringifyJson(msg.invocationUsage),
+      contextHealthJson: stringifyJson(msg.contextHealth),
       tempMsgId: msg.tempMsgId ?? null,
       toAgentId: msg.toAgentId ?? null,
       runErrorJson: msg.runError ? JSON.stringify(msg.runError) : null,
@@ -225,6 +243,9 @@ export const messagesRepo = {
         total_cost_usd = @totalCostUsd,
         input_tokens = @inputTokens,
         output_tokens = @outputTokens,
+        session_id = @sessionId,
+        invocation_usage_json = @invocationUsageJson,
+        context_health_json = @contextHealthJson,
         run_error_json = @runErrorJson
       WHERE id = @id
     `).run({
@@ -236,6 +257,9 @@ export const messagesRepo = {
       totalCostUsd: meta?.total_cost_usd ?? null,
       inputTokens: meta?.input_tokens ?? null,
       outputTokens: meta?.output_tokens ?? null,
+      sessionId: meta?.sessionId ?? null,
+      invocationUsageJson: stringifyJson(meta?.invocationUsage),
+      contextHealthJson: stringifyJson(meta?.contextHealth),
       runErrorJson: meta?.runError ? JSON.stringify(meta.runError) : null,
     });
   },
@@ -254,6 +278,8 @@ export const messagesRepo = {
         }
       }
       const toolCalls = parseToolCalls(r.tool_calls_json);
+      const invocationUsage = parseJson<Message['invocationUsage']>(r.invocation_usage_json);
+      const contextHealth = parseJson<Message['contextHealth']>(r.context_health_json);
 
       return {
         id: r.id as string,
@@ -268,6 +294,9 @@ export const messagesRepo = {
         total_cost_usd: r.total_cost_usd as number | undefined,
         input_tokens: r.input_tokens as number | undefined,
         output_tokens: r.output_tokens as number | undefined,
+        sessionId: (r.session_id as string) ?? undefined,
+        invocationUsage,
+        contextHealth,
         tempMsgId: r.temp_msg_id as string | undefined,
         toAgentId: (r.to_agent_id as string) ?? undefined,
         runError,

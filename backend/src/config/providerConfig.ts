@@ -4,6 +4,7 @@ export interface ProviderConfig {
   label: string
   cliPath: string
   defaultModel: string
+  contextWindow: number
   apiKey: string
   baseUrl: string
   timeout: number

@@ -25,6 +25,7 @@ function ProviderDetail({
   const [result, setResult] = useState(provider.lastTestResult)
   const [editing, setEditing] = useState(false)
   const [editCliPath, setEditCliPath] = useState(provider.cliPath)
+  const [editContextWindow, setEditContextWindow] = useState(String(provider.contextWindow || 200000))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
@@ -34,6 +35,7 @@ function ProviderDetail({
 
   useEffect(() => {
     setEditCliPath(provider.cliPath)
+    setEditContextWindow(String(provider.contextWindow || 200000))
   }, [provider])
 
   function handleTest() {
@@ -68,6 +70,7 @@ function ProviderDetail({
           label: provider.label,
           cliPath: editCliPath,
           defaultModel: provider.defaultModel,
+          contextWindow: Math.max(Number(editContextWindow) || 200000, 1),
           apiKey: provider.apiKey,
           baseUrl: provider.baseUrl,
           timeout: provider.timeout,
@@ -91,6 +94,7 @@ function ProviderDetail({
   function handleCancel() {
     setEditing(false)
     setEditCliPath(provider.cliPath)
+    setEditContextWindow(String(provider.contextWindow || 200000))
     setSaveError('')
   }
 
@@ -132,6 +136,19 @@ function ProviderDetail({
               className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
             {saveError && <p className="tone-danger-text text-[11px]">{saveError}</p>}
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold text-ink-soft uppercase">上下文窗口</p>
+              <input
+                type="number"
+                min={1}
+                step={1000}
+                value={editContextWindow}
+                onChange={event => setEditContextWindow(event.target.value)}
+                placeholder="200000"
+                className="w-full settings-input rounded-xl px-3 py-2 text-[12px] text-ink font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+              <p className="text-[11px] text-ink-soft">CLI 未返回窗口时，telemetry 默认按这里的值计算。默认 200000。</p>
+            </div>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -145,7 +162,13 @@ function ProviderDetail({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || editCliPath === provider.cliPath}
+                disabled={
+                  saving
+                  || (
+                    editCliPath === provider.cliPath
+                    && Math.max(Number(editContextWindow) || 200000, 1) === (provider.contextWindow || 200000)
+                  )
+                }
                 className="flex-1 py-1.5 text-[12px] font-bold bg-accent text-white rounded-xl hover:bg-accent-deep disabled:opacity-50 transition-all flex items-center justify-center gap-1"
               >
                 <Save className="w-3.5 h-3.5" aria-hidden />
@@ -154,7 +177,13 @@ function ProviderDetail({
             </div>
           </div>
         ) : (
-          <p className="text-[12px] text-ink font-mono settings-input rounded-xl px-3 py-2">{provider.cliPath}</p>
+          <div className="space-y-2">
+            <p className="text-[12px] text-ink font-mono settings-input rounded-xl px-3 py-2">{provider.cliPath}</p>
+            <div>
+              <p className="mb-1.5 text-[11px] font-bold text-ink-soft uppercase">上下文窗口</p>
+              <p className="text-[12px] text-ink font-mono settings-input rounded-xl px-3 py-2">{provider.contextWindow || 200000}</p>
+            </div>
+          </div>
         )}
       </div>
       <button

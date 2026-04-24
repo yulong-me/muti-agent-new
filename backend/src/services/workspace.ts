@@ -14,6 +14,7 @@
  * └── .done-B.md           ← Agent B 交接文档
  */
 
+import type { Dirent } from 'node:fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { runtimePaths } from '../config/runtimePaths.js';
@@ -63,6 +64,29 @@ export async function validateWorkspacePath(workspacePath: string): Promise<void
 
 const WORKSPACE_BASE = runtimePaths.workspaceBaseDir;
 const WORKSPACE_ARCHIVE = runtimePaths.workspaceArchiveDir;
+const WORKSPACE_SNAPSHOT_IGNORED_DIRS = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+  'coverage',
+  '.turbo',
+  '.cache',
+]);
+
+export interface WorkspaceSnapshot {
+  files: Record<string, { size: number; mtimeMs: number }>;
+}
+
+export interface WorkspaceChangeSummary {
+  hasChanges: boolean;
+  created: string[];
+  modified: string[];
+  deleted: string[];
+}
 
 export function getWorkspacePath(roomId: string): string {
   return path.join(WORKSPACE_BASE, `room-${roomId}`);
@@ -82,6 +106,80 @@ export async function ensureWorkspace(roomId: string, customWorkspace?: string):
   await fs.mkdir(workspacePath, { recursive: true });
   debug(existed ? 'workspace:reuse' : 'workspace:create', { roomId, workspacePath });
   return workspacePath;
+}
+
+export async function captureWorkspaceSnapshot(workspacePath: string): Promise<WorkspaceSnapshot> {
+  const files: WorkspaceSnapshot['files'] = {};
+
+  async function walk(dir: string, relativeDir = ''): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw err;
+    }
+
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory() && WORKSPACE_SNAPSHOT_IGNORED_DIRS.has(entry.name)) continue;
+
+      const relativePath = relativeDir
+        ? path.posix.join(relativeDir, entry.name)
+        : entry.name;
+      const absolutePath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        await walk(absolutePath, relativePath);
+        continue;
+      }
+
+      if (!entry.isFile()) continue;
+
+      const stat = await fs.stat(absolutePath);
+      files[relativePath] = {
+        size: stat.size,
+        mtimeMs: stat.mtimeMs,
+      };
+    }
+  }
+
+  await walk(workspacePath);
+  return { files };
+}
+
+export function summarizeWorkspaceChanges(
+  before: WorkspaceSnapshot,
+  after: WorkspaceSnapshot,
+): WorkspaceChangeSummary {
+  const created: string[] = [];
+  const modified: string[] = [];
+  const deleted: string[] = [];
+
+  for (const [relativePath, nextMeta] of Object.entries(after.files)) {
+    const previousMeta = before.files[relativePath];
+    if (!previousMeta) {
+      created.push(relativePath);
+      continue;
+    }
+
+    if (previousMeta.size !== nextMeta.size || previousMeta.mtimeMs !== nextMeta.mtimeMs) {
+      modified.push(relativePath);
+    }
+  }
+
+  for (const relativePath of Object.keys(before.files)) {
+    if (!(relativePath in after.files)) {
+      deleted.push(relativePath);
+    }
+  }
+
+  return {
+    hasChanges: created.length > 0 || modified.length > 0 || deleted.length > 0,
+    created: created.sort(),
+    modified: modified.sort(),
+    deleted: deleted.sort(),
+  };
 }
 
 /**

@@ -11,6 +11,7 @@ export const providersRepo = {
         label: r.label as string,
         cliPath: r.cli_path as string,
         defaultModel: r.default_model as string,
+        contextWindow: r.context_window as number,
         apiKey: r.api_key as string,
         baseUrl: r.base_url as string,
         timeout: r.timeout as number,
@@ -32,6 +33,7 @@ export const providersRepo = {
       label: r.label as string,
       cliPath: r.cli_path as string,
       defaultModel: r.default_model as string,
+      contextWindow: r.context_window as number,
       apiKey: r.api_key as string,
       baseUrl: r.base_url as string,
       timeout: r.timeout as number,
@@ -49,13 +51,14 @@ export const providersRepo = {
    */
   upsert(name: string, data: Omit<ProviderConfig, 'name' | 'lastTested' | 'lastTestResult'>): void {
     db.prepare(`
-      INSERT OR REPLACE INTO providers (name, label, cli_path, default_model, api_key, base_url, timeout, thinking, last_tested, last_test_result)
-      VALUES (@name, @label, @cliPath, @defaultModel, @apiKey, @baseUrl, @timeout, @thinking, NULL, NULL)
+      INSERT OR REPLACE INTO providers (name, label, cli_path, default_model, context_window, api_key, base_url, timeout, thinking, last_tested, last_test_result)
+      VALUES (@name, @label, @cliPath, @defaultModel, @contextWindow, @apiKey, @baseUrl, @timeout, @thinking, NULL, NULL)
     `).run({
       name,
       label: data.label ?? name,
       cliPath: data.cliPath,
       defaultModel: data.defaultModel,
+      contextWindow: data.contextWindow,
       apiKey: data.apiKey,
       baseUrl: data.baseUrl,
       timeout: data.timeout,
@@ -69,14 +72,15 @@ export const providersRepo = {
    */
   insertIfNotExists(name: string, data: Omit<ProviderConfig, 'name' | 'lastTested' | 'lastTestResult'>): void {
     db.prepare(`
-      INSERT INTO providers (name, label, cli_path, default_model, api_key, base_url, timeout, thinking)
-      SELECT @name, @label, @cliPath, @defaultModel, @apiKey, @baseUrl, @timeout, @thinking
+      INSERT INTO providers (name, label, cli_path, default_model, context_window, api_key, base_url, timeout, thinking)
+      SELECT @name, @label, @cliPath, @defaultModel, @contextWindow, @apiKey, @baseUrl, @timeout, @thinking
       WHERE NOT EXISTS (SELECT 1 FROM providers WHERE name = @name)
     `).run({
       name,
       label: data.label ?? name,
       cliPath: data.cliPath,
       defaultModel: data.defaultModel,
+      contextWindow: data.contextWindow,
       apiKey: data.apiKey,
       baseUrl: data.baseUrl,
       timeout: data.timeout,

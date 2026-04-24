@@ -25,8 +25,8 @@ import fs from 'fs';
 import path from 'path';
 
 const SEEDED_PROVIDERS = [
-  { name: 'claude-code', label: 'Claude Code', cliPath: 'claude', defaultModel: 'claude-sonnet-4-6', apiKey: '', baseUrl: '', timeout: 1800, thinking: true },
-  { name: 'opencode',    label: 'OpenCode',    cliPath: '~/.opencode/bin/opencode', defaultModel: 'MiniMax-M2.7', apiKey: '', baseUrl: '', timeout: 1800, thinking: true },
+  { name: 'claude-code', label: 'Claude Code', cliPath: 'claude', defaultModel: 'claude-sonnet-4-6', contextWindow: 200000, apiKey: '', baseUrl: '', timeout: 1800, thinking: true },
+  { name: 'opencode',    label: 'OpenCode',    cliPath: '~/.opencode/bin/opencode', defaultModel: 'MiniMax-M2.7', contextWindow: 200000, apiKey: '', baseUrl: '', timeout: 1800, thinking: true },
 ] as const;
 
 function countRows(tableName: 'agents' | 'providers' | 'scenes' | 'rooms'): number {

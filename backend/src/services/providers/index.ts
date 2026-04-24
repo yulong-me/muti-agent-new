@@ -13,7 +13,22 @@ export type ClaudeEvent =
   | { type: 'delta'; agentId: string; text: string }
   | { type: 'thinking_delta'; agentId: string; thinking: string }
   | { type: 'tool_use'; agentId: string; toolName: string; toolInput: Record<string, unknown>; callId?: string }
-  | { type: 'end'; agentId: string; duration_ms: number; total_cost_usd: number; input_tokens: number; output_tokens: number; sessionId?: string }
+  | {
+      type: 'end';
+      agentId: string;
+      duration_ms: number;
+      total_cost_usd: number;
+      input_tokens: number;
+      output_tokens: number;
+      sessionId?: string;
+      model?: string;
+      total_tokens?: number;
+      cache_read_tokens?: number;
+      cache_write_tokens?: number;
+      reasoning_tokens?: number;
+      last_turn_input_tokens?: number;
+      context_window_tokens?: number;
+    }
   | { type: 'error'; agentId: string; message: string };
 
 export type StreamFn = (

@@ -5,7 +5,7 @@ import { io, type Socket } from 'socket.io-client'
 
 import { API_URL } from '@/lib/api'
 import { debug, setRoomId, telemetry, warn } from '@/lib/logger'
-import type { Agent, DiscussionState, Message, ToolCall } from '@/lib/agents'
+import type { Agent, DiscussionState, Message, SessionTelemetry, ToolCall } from '@/lib/agents'
 
 import type { AgentRunErrorEvent } from '../ErrorBubble'
 
@@ -31,6 +31,7 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
   const [effectiveSkills, setEffectiveSkills] = useState<Array<{ name: string; mode: 'auto' | 'required'; sourceLabel: string }>>([])
   const [globalSkillCount, setGlobalSkillCount] = useState(0)
   const [workspaceDiscoveredCount, setWorkspaceDiscoveredCount] = useState(0)
+  const [sessionTelemetryByAgent, setSessionTelemetryByAgent] = useState<Record<string, SessionTelemetry>>({})
 
   const pollStateRef = useRef<{ state: DiscussionState; agents: Agent[] }>({
     state: 'RUNNING',
@@ -61,6 +62,7 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
     setEffectiveSkills([])
     setGlobalSkillCount(0)
     setWorkspaceDiscoveredCount(0)
+    setSessionTelemetryByAgent({})
     streamingMessagesRef.current.clear()
     streamingThinkingRef.current.clear()
     streamingToolCallsRef.current.clear()
@@ -74,12 +76,13 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
     fetch(`${API}/api/rooms/${roomId}/skills`)
       .then(async response => {
         if (!response.ok) {
-          return { effectiveUnion: [], workspaceSkills: [], globalSkills: [] }
+          return { effectiveUnion: [], workspaceSkills: [], globalSkills: [], workspacePath: undefined }
         }
         return await response.json() as {
           effectiveUnion?: Array<{ name: string; mode: 'auto' | 'required'; sourceLabel: string }>
           workspaceSkills?: Array<unknown>
           globalSkills?: Array<unknown>
+          workspacePath?: string
         }
       })
       .then(data => {
@@ -87,11 +90,15 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
         setEffectiveSkills(data.effectiveUnion ?? [])
         setGlobalSkillCount(data.globalSkills?.length ?? 0)
         setWorkspaceDiscoveredCount(data.workspaceSkills?.length ?? 0)
+        if (data.workspacePath) {
+          setWorkspace(data.workspacePath)
+        }
         debug('ui:room:skills_loaded', {
           roomId,
           effectiveCount: data.effectiveUnion?.length ?? 0,
           globalCount: data.globalSkills?.length ?? 0,
           workspaceCount: data.workspaceSkills?.length ?? 0,
+          workspacePath: data.workspacePath ?? null,
         })
       })
       .catch(error => {
@@ -106,7 +113,7 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
     return () => {
       cancelled = true
     }
-  }, [roomId, workspace])
+  }, [roomId])
 
   useEffect(() => {
     const socket = io(`${API}`, { transports: ['websocket', 'polling'] })
@@ -126,6 +133,7 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
     socket.on('stream_start', (data: {
       roomId: string
       agentId: string
+      agentConfigId: string
       id: string
       timestamp: number
       agentName: string
@@ -233,6 +241,10 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
       total_cost_usd: number
       input_tokens: number
       output_tokens: number
+      agentConfigId?: string
+      sessionId?: string
+      invocationUsage?: Message['invocationUsage']
+      contextHealth?: Message['contextHealth']
     }) => {
       if (data.roomId !== roomId) return
       queuedDispatchPendingRef.current = false
@@ -252,6 +264,9 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
         message.total_cost_usd = data.total_cost_usd
         message.input_tokens = data.input_tokens
         message.output_tokens = data.output_tokens
+        message.sessionId = data.sessionId
+        message.invocationUsage = data.invocationUsage
+        message.contextHealth = data.contextHealth
         const accumulatedThinking = streamingThinkingRef.current.get(data.agentId)
         const accumulatedToolCalls = streamingToolCallsRef.current.get(data.agentId)
         setMessages(previous => previous.map(item =>
@@ -264,6 +279,18 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
               }
             : item,
         ))
+        const telemetryKey = data.agentConfigId
+        if (telemetryKey && data.sessionId) {
+          setSessionTelemetryByAgent(previous => ({
+            ...previous,
+            [telemetryKey]: {
+              sessionId: data.sessionId!,
+              invocationUsage: data.invocationUsage,
+              contextHealth: data.contextHealth,
+              measuredAt: Date.now(),
+            },
+          }))
+        }
       }
       streamingMessagesRef.current.delete(data.agentId)
       streamingThinkingRef.current.delete(data.agentId)
@@ -328,6 +355,9 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
         }
         if (data.workspace !== undefined) {
           setWorkspace(data.workspace)
+        }
+        if (data.sessionTelemetryByAgent !== undefined) {
+          setSessionTelemetryByAgent(data.sessionTelemetryByAgent as Record<string, SessionTelemetry>)
         }
 
         const fetchedMessages = (data.messages || []) as Message[]
@@ -420,5 +450,6 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
     effectiveSkills,
     globalSkillCount,
     workspaceDiscoveredCount,
+    sessionTelemetryByAgent,
   }
 }

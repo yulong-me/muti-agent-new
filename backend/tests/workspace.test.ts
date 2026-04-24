@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 
 import {
+  captureWorkspaceSnapshot,
   ensureWorkspace,
   getWorkspacePath,
+  summarizeWorkspaceChanges,
   validateWorkspacePath,
 } from '../src/services/workspace.js';
 
@@ -62,5 +64,24 @@ describe('workspace security', () => {
     const result = await ensureWorkspace(roomId);
 
     expect(result).toBe(expectedPath);
+  });
+
+  it('captures and summarizes workspace file changes', async () => {
+    const dir = await makeOutsideTemp('workspace-snapshot');
+    const indexPath = path.join(dir, 'index.html');
+
+    await writeFile(indexPath, '<h1>v1</h1>');
+    const before = await captureWorkspaceSnapshot(dir);
+
+    await writeFile(indexPath, '<h1>v2</h1>');
+    await writeFile(path.join(dir, 'style.css'), 'body{}');
+    const after = await captureWorkspaceSnapshot(dir);
+
+    expect(summarizeWorkspaceChanges(before, after)).toEqual({
+      hasChanges: true,
+      created: ['style.css'],
+      modified: ['index.html'],
+      deleted: [],
+    });
   });
 });

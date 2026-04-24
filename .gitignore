@@ -44,3 +44,4 @@ Thumbs.db
 .worktrees/
 backend/workspaces/
 workspaces
+backend/data/provider-runtime

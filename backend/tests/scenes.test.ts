@@ -47,6 +47,14 @@ vi.mock('../src/services/stateMachine.js', async (importOriginal) => {
 
 vi.mock('../src/services/workspace.js', () => ({
   validateWorkspacePath: vi.fn().mockResolvedValue(undefined),
+  ensureWorkspace: vi.fn().mockResolvedValue('/tmp/test-workspace'),
+  captureWorkspaceSnapshot: vi.fn().mockResolvedValue({ files: {} }),
+  summarizeWorkspaceChanges: vi.fn().mockReturnValue({
+    hasChanges: false,
+    created: [],
+    modified: [],
+    deleted: [],
+  }),
 }));
 
 // ── App setup (same pattern as rooms.http.test.ts) ──────────────────────────

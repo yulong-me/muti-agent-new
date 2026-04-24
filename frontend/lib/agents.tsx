@@ -45,6 +45,38 @@ export interface ToolCall {
   timestamp?: number
 }
 
+export interface InvocationUsage {
+  provider?: string
+  model?: string
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  reasoningTokens?: number
+  lastTurnInputTokens?: number
+  contextWindowSize?: number
+  costUsd?: number
+  latencyMs?: number
+}
+
+export interface ContextHealth {
+  usedTokens: number
+  windowSize: number
+  leftTokens: number
+  leftPct: number
+  fillRatio: number
+  source: 'exact' | 'approx'
+  state: 'healthy' | 'warn' | 'danger'
+}
+
+export interface SessionTelemetry {
+  sessionId: string
+  invocationUsage?: InvocationUsage
+  contextHealth?: ContextHealth
+  measuredAt: number
+}
+
 export interface Message {
   id: string
   agentRole: AgentRole | 'USER'
@@ -58,6 +90,9 @@ export interface Message {
   total_cost_usd?: number
   input_tokens?: number
   output_tokens?: number
+  sessionId?: string
+  invocationUsage?: InvocationUsage
+  contextHealth?: ContextHealth
   toAgentId?: string
   effectiveMentions?: string[]
   runError?: AgentRunErrorEvent

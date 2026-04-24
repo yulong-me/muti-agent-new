@@ -269,15 +269,26 @@ export async function* streamClaudeCodeProvider(
       const result = parsed as Record<string, unknown>;
       const usage = (result.usage as Record<string, number>) || {};
       const modelUsage = ((result.modelUsage as Record<string, Record<string, unknown>>) || {});
+      const modelName = Object.keys(modelUsage)[0];
       const modelEntry = Object.values(modelUsage)[0] as Record<string, unknown> | undefined;
+      const cacheReadTokens = (usage.cache_read_input_tokens as number) || (modelEntry?.cacheReadInputTokens as number) || 0;
+      const cacheWriteTokens = (usage.cache_creation_input_tokens as number) || (modelEntry?.cacheCreationInputTokens as number) || 0;
+      const inputTokens = (usage.input_tokens as number) || (modelEntry?.inputTokens as number) || 0;
+      const outputTokens = (usage.output_tokens as number) || (modelEntry?.outputTokens as number) || 0;
       yield {
         type: 'end',
         agentId,
         duration_ms: (result.duration_ms as number) || (Date.now() - start),
         total_cost_usd: (result.total_cost_usd as number) || (modelEntry?.costUSD as number) || 0,
-        input_tokens: (usage.input_tokens as number) || (modelEntry?.inputTokens as number) || 0,
-        output_tokens: (usage.output_tokens as number) || (modelEntry?.outputTokens as number) || 0,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
         sessionId: capturedSessionId,
+        model: modelName || undefined,
+        total_tokens: inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens,
+        cache_read_tokens: cacheReadTokens,
+        cache_write_tokens: cacheWriteTokens,
+        last_turn_input_tokens: inputTokens + cacheReadTokens + cacheWriteTokens,
+        context_window_tokens: (modelEntry?.contextWindow as number) || 0,
       };
     }
   }

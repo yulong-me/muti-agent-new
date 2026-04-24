@@ -52,7 +52,7 @@ router.get('/:name', (req, res) => {
 
 // POST /api/providers — create or update
 router.post('/', (req, res) => {
-  const { name, label, cliPath, defaultModel, apiKey, baseUrl, timeout, thinking } = req.body
+  const { name, label, cliPath, defaultModel, contextWindow, apiKey, baseUrl, timeout, thinking } = req.body
   if (!name) {
     warn('provider:upsert:invalid', { reason: 'missing_name' })
     return res.status(400).json({ error: 'name is required' })
@@ -61,6 +61,7 @@ router.post('/', (req, res) => {
     label: label || name,
     cliPath: cliPath || 'claude',
     defaultModel: defaultModel || '',
+    contextWindow: Math.max(Number(contextWindow) || 200000, 1),
     apiKey: apiKey || '',
     baseUrl: baseUrl || '',
     timeout: Number(timeout) || 90,
@@ -71,6 +72,7 @@ router.post('/', (req, res) => {
     cliPath: config[name]?.cliPath,
     timeout: config[name]?.timeout,
     hasDefaultModel: Boolean(config[name]?.defaultModel),
+    contextWindow: config[name]?.contextWindow,
     hasBaseUrl: Boolean(config[name]?.baseUrl),
     thinking: config[name]?.thinking,
   })

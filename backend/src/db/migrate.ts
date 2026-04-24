@@ -83,6 +83,27 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN session_id TEXT");
+    log('INFO', 'db:schema:migrate:messages:session_id');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN invocation_usage_json TEXT");
+    log('INFO', 'db:schema:migrate:messages:invocation_usage_json');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN context_health_json TEXT");
+    log('INFO', 'db:schema:migrate:messages:context_health_json');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   // Soft delete: add deleted_at column to rooms table
   try {
     db.exec("ALTER TABLE rooms ADD COLUMN deleted_at INTEGER");
@@ -137,6 +158,34 @@ export function initSchema(): void {
     log('INFO', 'db:schema:migrate:app_meta');
   } catch {
     // Table already exists — safe to ignore
+  }
+
+  try {
+    db.exec("ALTER TABLE providers ADD COLUMN context_window INTEGER NOT NULL DEFAULT 200000");
+    log('INFO', 'db:schema:migrate:providers:context_window');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    db.exec("UPDATE providers SET context_window = 200000 WHERE context_window IS NULL OR context_window <= 0");
+    log('INFO', 'db:schema:migrate:providers:context_window_backfill');
+  } catch {
+    // Table may not exist yet — safe to ignore
+  }
+
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN telemetry_json TEXT");
+    log('INFO', 'db:schema:migrate:sessions:telemetry_json');
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0");
+    log('INFO', 'db:schema:migrate:sessions:updated_at');
+  } catch {
+    // Column already exists — safe to ignore
   }
 
   // F004 Migration: INIT/RESEARCH/DEBATE/CONVERGING → RUNNING, HOST → MANAGER, AGENT → WORKER
@@ -286,8 +335,8 @@ export function migrateFromJson(): void {
 
       const providers = JSON.parse(fs.readFileSync(providersPath, 'utf-8')) as Record<string, unknown>;
       const insert = db.prepare(`
-        INSERT OR REPLACE INTO providers (name, label, cli_path, default_model, api_key, base_url, timeout, thinking, last_tested, last_test_result)
-        VALUES (@name, @label, @cliPath, @defaultModel, @apiKey, @baseUrl, @timeout, @thinking, @lastTested, @lastTestResult)
+        INSERT OR REPLACE INTO providers (name, label, cli_path, default_model, context_window, api_key, base_url, timeout, thinking, last_tested, last_test_result)
+        VALUES (@name, @label, @cliPath, @defaultModel, @contextWindow, @apiKey, @baseUrl, @timeout, @thinking, @lastTested, @lastTestResult)
       `);
       for (const [name, p] of Object.entries(providers)) {
         const prov = p as Record<string, unknown>;
@@ -296,6 +345,7 @@ export function migrateFromJson(): void {
           label: prov.label as string ?? name,
           cliPath: prov.cliPath as string,
           defaultModel: prov.defaultModel as string,
+          contextWindow: typeof prov.contextWindow === 'number' && prov.contextWindow > 0 ? prov.contextWindow : 200000,
           apiKey: prov.apiKey as string ?? '',
           baseUrl: prov.baseUrl as string ?? '',
           timeout: prov.timeout as number ?? 90,

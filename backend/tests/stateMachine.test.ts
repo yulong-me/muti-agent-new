@@ -58,6 +58,13 @@ vi.mock('../src/services/socketEmitter.js', () => ({
 
 vi.mock('../src/services/workspace.js', () => ({
   ensureWorkspace: vi.fn().mockResolvedValue('/tmp/test-workspace'),
+  captureWorkspaceSnapshot: vi.fn().mockResolvedValue({ files: {} }),
+  summarizeWorkspaceChanges: vi.fn().mockReturnValue({
+    hasChanges: false,
+    created: [],
+    modified: [],
+    deleted: [],
+  }),
 }));
 
 vi.mock('../src/services/skills.js', () => ({
@@ -216,6 +223,68 @@ describe('F004: 直接路由', () => {
               callId: 'toolu_1',
             }),
           ],
+        }),
+      );
+    });
+
+    it('session telemetry 应该按稳定的 configId 持久化，而不是按展示名', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { sessionsRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-1',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '同名专家', domainLabel: '架构设计', configId: 'worker-config', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '同名专家', domainLabel: '实现工程', configId: 'worker-config-2', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: { 'worker-config-2': 'session-other' },
+        sessionTelemetryByAgent: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+      vi.mocked(getProvider).mockReturnValueOnce(async function* () {
+        yield { type: 'delta', agentId: 'worker-1', text: '完成' };
+        yield {
+          type: 'end',
+          agentId: 'worker-1',
+          duration_ms: 100,
+          total_cost_usd: 0.01,
+          input_tokens: 100,
+          output_tokens: 50,
+          sessionId: 'session-worker-1',
+        };
+      });
+
+      await routeToAgent('room-1', '@同名专家 帮我看看这个方案', 'worker-1');
+
+      expect(sessionsRepo.upsert).toHaveBeenCalledWith(
+        'worker-config',
+        'room-1',
+        'session-worker-1',
+        expect.objectContaining({
+          sessionId: 'session-worker-1',
+        }),
+      );
+      expect(store.update).toHaveBeenCalledWith(
+        'room-1',
+        expect.objectContaining({
+          sessionIds: expect.objectContaining({
+            'worker-config': 'session-worker-1',
+            'worker-config-2': 'session-other',
+          }),
+          sessionTelemetryByAgent: expect.objectContaining({
+            'worker-config': expect.objectContaining({
+              sessionId: 'session-worker-1',
+            }),
+          }),
         }),
       );
     });
@@ -722,6 +791,21 @@ describe('F004: 直接路由', () => {
 
       expect(mentions).toEqual(['Reviewer']);
     });
+
+    it('没有行首 handoff 时，唯一句内 @ 会被自动修正为单目标交接', async () => {
+      const { computeEffectiveMessageMentions } = await import('../src/services/routing/A2ARouter.js');
+
+      const mentions = computeEffectiveMessageMentions(
+        '方案转交 @挑战架构师 审议。',
+        'software-development',
+        [
+          { id: 'worker-1', role: 'WORKER' as const, name: '主架构师', domainLabel: '方案设计', configId: 'dev-architect', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '挑战架构师', domainLabel: '方案质疑', configId: 'dev-challenge-architect', status: 'idle' as const },
+        ],
+      );
+
+      expect(mentions).toEqual(['挑战架构师']);
+    });
   });
 
   describe('F017: A2A 协作深度', () => {
@@ -941,6 +1025,48 @@ describe('F004: 直接路由', () => {
       expect(getProvider).toHaveBeenCalledTimes(1);
     });
 
+    it('软件开发场景遇到唯一句内 @ 时，自动按单目标交接并追加纠偏提示', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-inline-fallback',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '主架构师', domainLabel: '方案设计', configId: 'dev-architect', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '挑战架构师', domainLabel: '方案质疑', configId: 'dev-challenge-architect', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '实现工程师', domainLabel: '代码实现', configId: 'dev-implementer', status: 'idle' as const },
+          { id: 'worker-4', role: 'WORKER' as const, name: 'Reviewer', domainLabel: '代码审查', configId: 'dev-reviewer', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+        sceneId: 'software-development',
+        maxA2ADepth: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate('room-inline-fallback', 'worker-1', '主架构师', '方案转交 @挑战架构师 审议。');
+
+      expect(messagesRepo.insert).toHaveBeenCalledWith(
+        'room-inline-fallback',
+        expect.objectContaining({
+          agentName: '系统',
+          type: 'system',
+          content: expect.stringContaining('已自动按单目标交接处理'),
+        }),
+      );
+      expect(getProvider).toHaveBeenCalledTimes(1);
+    });
+
     it('主架构师在第一次被退回后，仍然可以合法回给挑战架构师继续第二轮收敛', async () => {
       const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');
@@ -1056,6 +1182,115 @@ describe('F004: 直接路由', () => {
         }),
       );
       expect(getProvider).not.toHaveBeenCalled();
+    });
+
+    it('实现工程师没有写文件也没有交给 Reviewer 时，追加系统提示并停止继续路由', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { messagesRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-implementer-gate',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '主架构师', domainLabel: '方案设计', configId: 'dev-architect', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '挑战架构师', domainLabel: '方案质疑', configId: 'dev-challenge-architect', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '实现工程师', domainLabel: '代码实现', configId: 'dev-implementer', status: 'idle' as const },
+          { id: 'worker-4', role: 'WORKER' as const, name: 'Reviewer', domainLabel: '代码审查', configId: 'dev-reviewer', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+        sceneId: 'software-development',
+        maxA2ADepth: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate(
+        'room-implementer-gate',
+        'worker-3',
+        '实现工程师',
+        '我先整理一下实现计划，稍后再补。',
+        {
+          workspaceChanges: {
+            hasChanges: false,
+            created: [],
+            modified: [],
+            deleted: [],
+          },
+        },
+      );
+
+      expect(messagesRepo.insert).toHaveBeenCalledWith(
+        'room-implementer-gate',
+        expect.objectContaining({
+          agentName: '系统',
+          type: 'system',
+          content: expect.stringContaining('未检测到工作目录中的文件改动'),
+        }),
+      );
+      expect(messagesRepo.insert).toHaveBeenCalledWith(
+        'room-implementer-gate',
+        expect.objectContaining({
+          agentName: '系统',
+          type: 'system',
+          content: expect.stringContaining('没有把结果交给 @Reviewer'),
+        }),
+      );
+      expect(getProvider).not.toHaveBeenCalled();
+    });
+
+    it('实现工程师写了文件并把结果交给 Reviewer 时，可以继续进入审查', async () => {
+      const { a2aOrchestrate } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      const mockRoom = {
+        id: 'room-implementer-review-pass',
+        topic: '测试话题',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'worker-1', role: 'WORKER' as const, name: '主架构师', domainLabel: '方案设计', configId: 'dev-architect', status: 'idle' as const },
+          { id: 'worker-2', role: 'WORKER' as const, name: '挑战架构师', domainLabel: '方案质疑', configId: 'dev-challenge-architect', status: 'idle' as const },
+          { id: 'worker-3', role: 'WORKER' as const, name: '实现工程师', domainLabel: '代码实现', configId: 'dev-implementer', status: 'idle' as const },
+          { id: 'worker-4', role: 'WORKER' as const, name: 'Reviewer', domainLabel: '代码审查', configId: 'dev-reviewer', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+        sceneId: 'software-development',
+        maxA2ADepth: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      vi.mocked(store.get).mockReturnValue(mockRoom);
+      vi.mocked(store.update).mockImplementation(() => {});
+
+      await a2aOrchestrate(
+        'room-implementer-review-pass',
+        'worker-3',
+        '实现工程师',
+        '@Reviewer 请审查实现结果。',
+        {
+          workspaceChanges: {
+            hasChanges: true,
+            created: ['index.html'],
+            modified: [],
+            deleted: [],
+          },
+        },
+      );
+
+      expect(getProvider).toHaveBeenCalledTimes(1);
     });
 
     it('圆桌论坛支持用专家简称交棒，并路由到对应参与者', async () => {

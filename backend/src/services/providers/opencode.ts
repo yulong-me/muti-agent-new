@@ -330,8 +330,15 @@ export async function* streamOpenCodeProvider(
       // Read metadata from the 'part' sub-object (which contains reason/cost/tokens)
       const finishPart = (part ?? parsed) as Record<string, unknown>;
       const tokens = finishPart.tokens as Record<string, number> | undefined;
+      const tokenCache = asRecord(tokens?.cache);
       const cost = finishPart.cost as number | undefined;
       const reason = finishPart.reason as string | undefined;
+      const inputTokens = tokens?.input ?? 0;
+      const outputTokens = tokens?.output ?? 0;
+      const totalTokens = tokens?.total ?? 0;
+      const reasoningTokens = tokens?.reasoning ?? 0;
+      const cacheReadTokens = (tokenCache?.read as number) ?? 0;
+      const cacheWriteTokens = (tokenCache?.write as number) ?? 0;
       // Only emit 'end' when the agent has finished responding (not after tool calls)
       if (reason === 'stop' || reason === 'nostop') {
         clearTimers();
@@ -340,9 +347,14 @@ export async function* streamOpenCodeProvider(
           agentId,
           duration_ms: Date.now() - start,
           total_cost_usd: cost ?? 0,
-          input_tokens: tokens?.input ?? 0,
-          output_tokens: tokens?.output ?? 0,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
           sessionId: capturedSessionId,
+          total_tokens: totalTokens,
+          reasoning_tokens: reasoningTokens,
+          cache_read_tokens: cacheReadTokens,
+          cache_write_tokens: cacheWriteTokens,
+          last_turn_input_tokens: inputTokens + cacheReadTokens + cacheWriteTokens,
         };
       }
     } else if (eventType === 'error' || (part?.type === 'error')) {

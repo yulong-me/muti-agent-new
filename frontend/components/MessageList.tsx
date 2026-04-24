@@ -16,10 +16,12 @@ import {
   type Message,
   type ToolCall,
 } from '../lib/agents'
+import { getMessageInvocationUsage } from '../lib/telemetry'
 import { BubbleSection } from './BubbleSection'
 import { AgentAvatar } from './AgentAvatar'
 import { ErrorBubble, type AgentRunErrorEvent } from './ErrorBubble'
 import { BubbleErrorBoundary } from './BubbleErrorBoundary'
+import { MetadataBadge } from './MetadataBadge'
 
 const userMarkdownComponents = {
   ...mdComponents,
@@ -204,9 +206,10 @@ const MessageBubble = memo(function MessageBubble({
   const hasCostStat = typeof msg.total_cost_usd === 'number' && msg.total_cost_usd > 0
   const hasInputTokensStat = typeof msg.input_tokens === 'number' && msg.input_tokens > 0
   const hasOutputTokensStat = typeof msg.output_tokens === 'number' && msg.output_tokens > 0
-  const hasUsageStats = !isStreaming && state === 'DONE' && (
+  const hasLegacyUsageStats = !isStreaming && (
     hasDurationStat || hasCostStat || hasInputTokensStat || hasOutputTokensStat
   )
+  const invocationUsage = getMessageInvocationUsage(msg)
 
   const validMentions = useMemo(() => {
     if (isUser) return []
@@ -360,7 +363,10 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           )}
         </div>
-        {hasUsageStats && (
+        {!isStreaming && invocationUsage && (
+          <MetadataBadge usage={invocationUsage} />
+        )}
+        {!isStreaming && !invocationUsage && hasLegacyUsageStats && (
           <div className="mt-1.5 px-3 py-1.5 bg-surface border border-line rounded-lg text-[11px] text-ink-soft flex flex-wrap gap-x-4 gap-y-1 max-w-fit">
             {hasDurationStat && <span>⏱ {(msg.duration_ms! / 1000).toFixed(1)}s</span>}
             {hasCostStat && <span>💰 ${msg.total_cost_usd!.toFixed(4)}</span>}

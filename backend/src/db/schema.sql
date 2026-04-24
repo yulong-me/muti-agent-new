@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS messages (
   total_cost_usd  REAL,
   input_tokens    INTEGER,
   output_tokens   INTEGER,
+  session_id      TEXT,
+  invocation_usage_json TEXT,
+  context_health_json   TEXT,
   temp_msg_id     TEXT,
   -- F0042: 直接路由的接收人 agentId（USER 消息用于显示；可空，兼容旧数据）
   to_agent_id     TEXT,
@@ -105,6 +108,7 @@ CREATE TABLE IF NOT EXISTS providers (
   label             TEXT NOT NULL,
   cli_path          TEXT NOT NULL,
   default_model     TEXT NOT NULL,
+  context_window    INTEGER NOT NULL DEFAULT 200000,
   api_key           TEXT NOT NULL DEFAULT '',
   base_url          TEXT NOT NULL DEFAULT '',
   timeout           INTEGER NOT NULL DEFAULT 1800,
@@ -126,7 +130,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   agent_id    TEXT NOT NULL,
   room_id     TEXT NOT NULL,
   session_id  TEXT NOT NULL,
+  telemetry_json TEXT,
   created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (agent_id, room_id),
   FOREIGN KEY (room_id) REFERENCES rooms(id)
 );
