@@ -38,38 +38,16 @@ https://github.com/user-attachments/assets/8ad8797a-482b-48b6-a13d-a17b2d858481
 
 生产模式使用统一入口 `7000`，开发模式默认仍保持前后端分离：
 
-```text
-┌─────────────────────────────────────┐
-│       Gateway (production only)     │  :7000
-│  /api/*, /socket.io/* -> backend    │
-│  everything else       -> frontend  │
-└────────────┬────────────────────────┘
-             │
-┌─────────────────────────────────────┐
-│           Frontend (Next.js)        │  :7002
-│  /                房间列表 + 对话     │
-│  /room/[id]       专家协作房间        │
-│  /settings/*      Agent/Provider/Scene 设置
-└────────────┬────────────────────────┘
-             │ HTTP REST + Socket.IO
-┌────────────▼────────────────────────┐
-│           Backend (Express)         │  :7001
-│  /api/rooms      房间、消息、报告      │
-│  /api/agents     Agent 配置          │
-│  /api/providers  Provider 配置       │
-│  /api/scenes     Scene 配置          │
-│  /api/browse     Workspace 浏览      │
-└────────────┬────────────────────────┘
-             │ child_process spawn
-┌────────────▼────────────────────────┐
-│        Local AI CLI Providers       │
-│        claude / opencode            │
-└────────────┬────────────────────────┘
-             │
-┌────────────▼────────────────────────┐
-│   SQLite (backend/data/muti-agent.db)
-└─────────────────────────────────────┘
-```
+<p align="center">
+  <img src="assets/opencouncil-architecture.svg" alt="OpenCouncil system architecture">
+</p>
+
+- `Gateway :7000`：生产模式统一入口，按路径把 `/api/*` 和 `/socket.io/*` 转发给后端，其余请求交给前端
+- `Frontend :7002`：Next.js 房间列表、专家协作房间和 Agent / Provider / Scene 设置页
+- `Backend :7001`：Express API + Socket.IO，负责消息、房间、报告、配置、Workspace 浏览和流式事件
+- `Council Engine`：构建 Scene Prompt，执行 A2A `@mention` 路由和 Agent run 状态机
+- `Local AI CLI Providers`：通过 `child_process` 调用 Claude Code / OpenCode 等本地 CLI
+- `Local Data`：SQLite 保存房间、消息、Provider、Scene、Agent 配置；Workspace 文件留在本地
 
 ## 前置依赖
 
