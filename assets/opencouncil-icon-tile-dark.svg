@@ -1,0 +1,9 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OpenCouncil dark tile icon</title>
+  <desc id="desc">A dark tile version of the OpenCouncil open ring and focus mark.</desc>
+
+  <rect x="96" y="96" width="832" height="832" rx="192" fill="#060608"/>
+  <rect x="116" y="116" width="792" height="792" rx="172" stroke="#171719" stroke-width="40"/>
+  <path d="M666 292A286 286 0 1 0 666 732" stroke="#EAEAEA" stroke-width="126" stroke-linecap="round"/>
+  <circle cx="746" cy="512" r="78" fill="#D4453A"/>
+</svg>

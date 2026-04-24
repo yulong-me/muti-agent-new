@@ -1,19 +1,30 @@
 # OpenCouncil
 
-> Open agents. Structured debate. Shared context.
+<p align="center">
+  <img src="assets/opencouncil-icon-tile-light.svg" alt="OpenCouncil logo" width="112">
+</p>
 
-一个让多个 AI 专家协作讨论、交叉质疑并逐步收敛观点的工作台。用户创建讨论室、选择专家、把消息明确发给目标专家，专家之间可以继续 `@mention` 其他专家协作。
+> Custom agent councils for real work.
+
+OpenCouncil 把“一个 AI 单独回答”升级成“一场可编排的专家会”。你可以为不同任务创建 Scene，例如功能评审、架构决策、市场调研或代码实现，再把不同角色的 Agent 放进同一个房间。
+
+每条消息都可以明确路由给某位 Agent；Agent 之间也能通过 `@mention` 互相追问、质疑和补充。讨论过程会保留在本地上下文里，并可结合 Workspace 与报告能力，把想法推进到方案、任务甚至代码。
+
+它适合那些“一个 Agent 总是差一点”的工作：需要第二意见、交叉验证、多角色视角和可复用流程。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Node](https://img.shields.io/badge/node-22.x-green)
 ![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8-orange)
 
+https://github.com/user-attachments/assets/8ad8797a-482b-48b6-a13d-a17b2d858481
+
 ## 核心能力
 
+- **自定义场景与 Agent**：按项目配置不同 Scene、专家角色、Provider、模型和工作目录
 - **多专家协作**：一个讨论室可包含 1 位或多位专家（`WORKER`）
 - **显式路由**：每条用户消息都明确发给某一位目标专家
 - **A2A 协作链**：专家回复过程中可以继续 `@mention` 其他专家参与讨论
-- **场景化工作流**：支持 Scenes、Provider、Agent 模型配置、工作目录（Workspace）和报告生成
+- **场景化工作流**：支持从问题讨论、方案质疑到任务拆解、报告生成的完整流程
 - **本地持久化**：房间、消息、Provider、Scene、Agent 配置都落在本地 SQLite
 
 ## 适用场景
