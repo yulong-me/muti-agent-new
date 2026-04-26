@@ -52,7 +52,7 @@ function AgentItem({
     : agent.status === 'waiting'
       ? { label: '等待中', className: 'tone-warning-pill border', dotClassName: 'bg-[color:var(--warning)] opacity-80' }
       : agent.status === 'done'
-        ? { label: '已完成', className: 'bg-surface text-ink-soft border border-line', dotClassName: 'bg-ink-soft/35' }
+        ? { label: '已结束', className: 'bg-surface text-ink-soft border border-line', dotClassName: 'bg-ink-soft/35' }
         : { label: '待命', className: 'bg-surface text-ink-soft border border-line', dotClassName: 'bg-ink-soft/40' }
   const isManager = agent.role === 'MANAGER'
   const avatarColors = AGENT_COLORS[agent.name] ?? DEFAULT_AGENT_COLOR
@@ -438,10 +438,8 @@ function TelemetryPopover({
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-            background: [
-              'radial-gradient(circle at 16% 18%, color-mix(in srgb, var(--ambient-glow-1) 28%, transparent), transparent 32%)',
-              'radial-gradient(circle at 84% 12%, color-mix(in srgb, var(--ambient-glow-2) 22%, transparent), transparent 26%)',
-              'linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 42%)',
+          background: [
+              'linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 48%)',
             ].join(', '),
           }}
         />
@@ -580,7 +578,7 @@ export function AgentPanel({
   onStopAgent,
   isMobileOpen,
   onMobileClose,
-  desktopWidth = 320,
+  desktopWidth = 240,
   desktopCollapsed = false,
   onDesktopWidthChange,
 }: AgentPanelProps) {
@@ -721,7 +719,7 @@ function PanelContent({
             <span className="text-[10px] opacity-40 ml-auto">📋</span>
           </button>
         )}
-        <h2 className="pt-0.5 text-[15px] font-bold text-ink">讨论成员</h2>
+        <h2 className="pt-0.5 text-title text-ink">本房成员</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2.5 py-2.5 space-y-2.5 custom-scrollbar">

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 
 import { API_URL } from '@/lib/api'
@@ -14,6 +13,7 @@ import { AgentPanel } from './AgentPanel'
 import { AgentInviteDrawer } from './AgentInviteDrawer'
 import { MessageList } from './MessageList'
 import type { RoomComposerHandle } from './RoomComposer'
+import { EmptyRoomQuickStart, type QuickStartTemplate } from './room-view/EmptyRoomQuickStart'
 import { RoomActionArea } from './room-view/RoomActionArea'
 import { RoomHeader } from './room-view/RoomHeader'
 import { useRoomList } from './room-view/useRoomList'
@@ -27,9 +27,9 @@ interface RoomViewProps {
   defaultCreateOpen?: boolean
 }
 
-const AGENT_PANEL_DEFAULT_WIDTH = 320
-const AGENT_PANEL_MIN_WIDTH = 280
-const AGENT_PANEL_MAX_WIDTH = 560
+const AGENT_PANEL_DEFAULT_WIDTH = 240
+const AGENT_PANEL_MIN_WIDTH = 220
+const AGENT_PANEL_MAX_WIDTH = 360
 const AGENT_PANEL_WIDTH_KEY = 'opencouncil.agent-panel-width'
 const AGENT_PANEL_COLLAPSED_KEY = 'opencouncil.agent-panel-collapsed'
 
@@ -37,14 +37,26 @@ function clampAgentPanelWidth(width: number) {
   return Math.min(AGENT_PANEL_MAX_WIDTH, Math.max(AGENT_PANEL_MIN_WIDTH, Math.round(width)))
 }
 
+function parseRoomIdFromPath(pathname: string): string | undefined {
+  const match = pathname.match(/^\/room\/([^/?#]+)/)
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined
+}
+
+function buildRoomPath(nextRoomId?: string): string {
+  return nextRoomId ? `/room/${encodeURIComponent(nextRoomId)}` : '/'
+}
+
 export default function RoomView({ roomId, defaultCreateOpen = false }: RoomViewProps) {
-  const router = useRouter()
   const composerRef = useRef<RoomComposerHandle>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const queuedDispatchPendingRef = useRef(false)
   const userScrolledRef = useRef(false)
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(defaultCreateOpen)
+  const [createInitialTopic, setCreateInitialTopic] = useState<string | undefined>(undefined)
+  const [createInitialSceneId, setCreateInitialSceneId] = useState<string | undefined>(undefined)
+  const [createInitialWorkerIds, setCreateInitialWorkerIds] = useState<string[] | undefined>(undefined)
+  const [activeRoomId, setActiveRoomId] = useState<string | undefined>(roomId)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<'agent' | 'provider'>('agent')
@@ -78,7 +90,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     globalSkillCount,
     workspaceDiscoveredCount,
     sessionTelemetryByAgent,
-  } = useRoomRealtime({ roomId, queuedDispatchPendingRef })
+  } = useRoomRealtime({ roomId: activeRoomId, queuedDispatchPendingRef })
   const {
     sending,
     sendError,
@@ -100,7 +112,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     handleCopyFailedPrompt,
     handleStopAgent,
   } = useRoomMessaging({
-    roomId,
+    roomId: activeRoomId,
     agents,
     streamingAgentIds,
     composerRef,
@@ -114,8 +126,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     [agents],
   )
   const currentRoomTopic = useMemo(
-    () => rooms.find(room => room.id === roomId)?.topic,
-    [roomId, rooms],
+    () => rooms.find(room => room.id === activeRoomId)?.topic,
+    [activeRoomId, rooms],
   )
   const lastActiveWorkerId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -160,6 +172,19 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   }, [])
 
   useEffect(() => {
+    setActiveRoomId(roomId)
+  }, [roomId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handlePopState = () => {
+      setActiveRoomId(parseRoomIdFromPath(window.location.pathname))
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
     const storedWidth = Number.parseInt(localStorage.getItem(AGENT_PANEL_WIDTH_KEY) ?? '', 10)
     if (Number.isFinite(storedWidth)) {
@@ -181,7 +206,19 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   useEffect(() => {
     userScrolledRef.current = false
     setShowScrollBtn(false)
-  }, [roomId])
+  }, [activeRoomId])
+
+  useEffect(() => {
+    if (!activeRoomId) return
+    const roomBusy = streamingAgentIds.size > 0 ||
+      agents.some(agent => agent.status === 'thinking' || agent.status === 'waiting')
+    const activityState = state === 'DONE' ? 'done' : roomBusy ? 'busy' : 'open'
+    setRooms(previous => previous.map(room =>
+      room.id === activeRoomId
+        ? { ...room, state, activityState }
+        : room,
+    ))
+  }, [activeRoomId, agents, setRooms, state, streamingAgentIds])
 
   const toggleTheme = useCallback(() => {
     info('ui:theme:toggle', { nextTheme: currentTheme === 'dark' ? 'light' : 'dark' })
@@ -194,11 +231,20 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     setSettingsOpen(true)
   }, [])
 
+  const navigateToRoom = useCallback((nextRoomId?: string) => {
+    setActiveRoomId(nextRoomId)
+    if (typeof window === 'undefined') return
+    const nextPath = buildRoomPath(nextRoomId)
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, '', nextPath)
+    }
+  }, [])
+
   const openRoom = useCallback((id: string) => {
     setMobileMenuOpen(false)
     info('ui:room:open', { roomId: id })
-    router.push(`/room/${id}`, { scroll: false })
-  }, [router])
+    navigateToRoom(id)
+  }, [navigateToRoom])
 
   const handleArchiveRoom = useCallback(async (id: string, source: 'desktop_sidebar' | 'mobile_sidebar') => {
     info('ui:room:archive', { roomId: id, source })
@@ -207,30 +253,29 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       warn('ui:room:archive_failed', { roomId: id, source, status: response.status })
       return
     }
-    if (id === roomId) {
-      router.push('/')
-      return
-    }
     setRooms(previous => previous.filter(room => room.id !== id))
-  }, [roomId, router, setRooms])
+    if (id === activeRoomId) {
+      navigateToRoom(undefined)
+    }
+  }, [activeRoomId, navigateToRoom, setRooms])
 
   const handleChangeDepth = useCallback(async (newDepth: number | null) => {
-    if (!roomId) return
+    if (!activeRoomId) return
     const previousMaxDepth = maxA2ADepth
     const previousEffectiveMaxDepth = effectiveMaxDepth
-    info('ui:room:a2a_depth_change', { roomId, nextDepth: newDepth })
+    info('ui:room:a2a_depth_change', { roomId: activeRoomId, nextDepth: newDepth })
     setMaxA2ADepth(newDepth)
     if (newDepth !== null) {
       setEffectiveMaxDepth(newDepth)
     }
     try {
-      const response = await fetch(`${API}/api/rooms/${roomId}`, {
+      const response = await fetch(`${API}/api/rooms/${activeRoomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ maxA2ADepth: newDepth }),
       })
       if (!response.ok) {
-        throw new Error(`PATCH /api/rooms/${roomId} failed: ${response.status}`)
+        throw new Error(`PATCH /api/rooms/${activeRoomId} failed: ${response.status}`)
       }
       const data = await response.json()
       if (Object.prototype.hasOwnProperty.call(data, 'maxA2ADepth')) {
@@ -240,11 +285,11 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         setEffectiveMaxDepth(data.effectiveMaxDepth)
       }
     } catch (error) {
-      warn('ui:room:a2a_depth_change_failed', { roomId, nextDepth: newDepth, error })
+      warn('ui:room:a2a_depth_change_failed', { roomId: activeRoomId, nextDepth: newDepth, error })
       setMaxA2ADepth(previousMaxDepth)
       setEffectiveMaxDepth(previousEffectiveMaxDepth)
     }
-  }, [effectiveMaxDepth, maxA2ADepth, roomId, setEffectiveMaxDepth, setMaxA2ADepth])
+  }, [activeRoomId, effectiveMaxDepth, maxA2ADepth, setEffectiveMaxDepth, setMaxA2ADepth])
 
   const handleAgentPanelWidthChange = useCallback((nextWidth: number) => {
     setAgentPanelWidth(clampAgentPanelWidth(nextWidth))
@@ -258,27 +303,45 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     setMobileMenuOpen(open => !open)
   }, [])
 
+  const openCreateRoom = useCallback((preset?: Pick<QuickStartTemplate, 'topic' | 'sceneId' | 'agentIds'>) => {
+    setCreateInitialTopic(preset?.topic)
+    setCreateInitialSceneId(preset?.sceneId)
+    setCreateInitialWorkerIds(preset?.agentIds)
+    setIsCreateModalOpen(true)
+  }, [])
+
+  const closeCreateRoom = useCallback(() => {
+    setIsCreateModalOpen(false)
+    setCreateInitialTopic(undefined)
+    setCreateInitialSceneId(undefined)
+    setCreateInitialWorkerIds(undefined)
+  }, [])
+
+  const handleStartTemplate = useCallback((template: QuickStartTemplate) => {
+    openCreateRoom(template)
+  }, [openCreateRoom])
+
   const openAgentDrawer = useCallback(() => {
-    debug('ui:agent_panel:open_mobile', { roomId })
+    debug('ui:agent_panel:open_mobile', { roomId: activeRoomId })
     setAgentDrawerOpen(true)
-  }, [roomId])
+  }, [activeRoomId])
 
   const openInviteDrawer = useCallback(() => {
-    debug('ui:agent_invite:open', { roomId })
+    debug('ui:agent_invite:open', { roomId: activeRoomId })
     setShowInviteDrawer(true)
-  }, [roomId])
+  }, [activeRoomId])
 
   const handleGenerateTitleSuggestions = useCallback(async () => {
-    if (!roomId) return []
+    if (!activeRoomId) return []
 
-    info('ui:room:title_suggestions:start', { roomId })
-    const response = await fetch(`${API}/api/rooms/${roomId}/title-suggestions`, {
+    info('ui:room:title_suggestions:start', { roomId: activeRoomId })
+    const response = await fetch(`${API}/api/rooms/${activeRoomId}/title-suggestions`, {
       method: 'POST',
     })
     const data = await response.json().catch(() => ({})) as { titles?: string[]; error?: string }
     if (!response.ok) {
       warn('ui:room:title_suggestions:failed', {
-        roomId,
+        roomId: activeRoomId,
         status: response.status,
         error: data.error ?? 'unknown_error',
       })
@@ -286,12 +349,12 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
     }
 
     const titles = Array.isArray(data.titles) ? data.titles.filter(title => typeof title === 'string') : []
-    info('ui:room:title_suggestions:success', { roomId, titleCount: titles.length })
+    info('ui:room:title_suggestions:success', { roomId: activeRoomId, titleCount: titles.length })
     return titles
-  }, [roomId])
+  }, [activeRoomId])
 
   const handleRenameRoom = useCallback(async (nextTopic: string) => {
-    if (!roomId) return
+    if (!activeRoomId) return
 
     const trimmedTopic = nextTopic.trim()
     if (!trimmedTopic) {
@@ -300,41 +363,41 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
     const previousTopic = currentRoomTopic
     setRooms(previous => previous.map(room =>
-      room.id === roomId
+      room.id === activeRoomId
         ? { ...room, topic: trimmedTopic }
         : room,
     ))
 
     try {
-      const response = await fetch(`${API}/api/rooms/${roomId}`, {
+      const response = await fetch(`${API}/api/rooms/${activeRoomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: trimmedTopic }),
       })
       const data = await response.json().catch(() => ({})) as { topic?: string; error?: string }
       if (!response.ok) {
-        throw new Error(data.error ?? `PATCH /api/rooms/${roomId} failed: ${response.status}`)
+        throw new Error(data.error ?? `PATCH /api/rooms/${activeRoomId} failed: ${response.status}`)
       }
 
       const savedTopic = typeof data.topic === 'string' && data.topic.trim() ? data.topic.trim() : trimmedTopic
       setRooms(previous => previous.map(room =>
-        room.id === roomId
+        room.id === activeRoomId
           ? { ...room, topic: savedTopic }
           : room,
       ))
-      info('ui:room:title_update:success', { roomId, topicLength: savedTopic.length })
+      info('ui:room:title_update:success', { roomId: activeRoomId, topicLength: savedTopic.length })
     } catch (error) {
-      warn('ui:room:title_update:failed', { roomId, nextTopic: trimmedTopic, error })
+      warn('ui:room:title_update:failed', { roomId: activeRoomId, nextTopic: trimmedTopic, error })
       if (previousTopic) {
         setRooms(previous => previous.map(room =>
-          room.id === roomId
+          room.id === activeRoomId
             ? { ...room, topic: previousTopic }
             : room,
         ))
       }
       throw error instanceof Error ? error : new Error('标题更新失败，请重试')
     }
-  }, [currentRoomTopic, roomId, setRooms])
+  }, [activeRoomId, currentRoomTopic, setRooms])
 
   const handleDownload = useCallback(() => {
     if (!report) return
@@ -346,14 +409,20 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
   return (
     <>
-      <CreateRoomModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
+      <CreateRoomModal
+        isOpen={isCreateModalOpen}
+        onClose={closeCreateRoom}
+        initialTopic={createInitialTopic}
+        initialSceneId={createInitialSceneId}
+        initialWorkerIds={createInitialWorkerIds}
+      />
       <div className="app-islands-shell h-[100dvh] flex overflow-hidden text-ink font-sans">
         <RoomListSidebarDesktop
           rooms={rooms}
-          currentRoomId={roomId}
+          currentRoomId={activeRoomId}
           onNewRoom={() => {
             debug('ui:room_create:open', { source: 'desktop_sidebar' })
-            setIsCreateModalOpen(true)
+            openCreateRoom()
           }}
           onSelectRoom={openRoom}
           onDeleteRoom={async id => {
@@ -367,10 +436,10 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
         <RoomListSidebarMobile
           rooms={rooms}
-          currentRoomId={roomId}
+          currentRoomId={activeRoomId}
           onNewRoom={() => {
             debug('ui:room_create:open', { source: 'mobile_sidebar' })
-            setIsCreateModalOpen(true)
+            openCreateRoom()
           }}
           onSelectRoom={openRoom}
           onDeleteRoom={async id => {
@@ -387,7 +456,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
         <div className="app-islands-panel flex-1 flex flex-col relative min-w-0">
           <RoomHeader
-            roomId={roomId}
+            roomId={activeRoomId}
             currentRoomTopic={currentRoomTopic}
             maxA2ADepth={maxA2ADepth}
             currentA2ADepth={currentA2ADepth}
@@ -402,50 +471,59 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
             onRenameRoom={handleRenameRoom}
           />
 
-          <MessageList
-            roomId={roomId}
-            messages={messages}
-            agents={agents}
-            state={state}
-            sending={sending}
-            messageErrorMap={messageErrorMap}
-            orphanErrors={orphanErrors}
-            showScrollBtn={showScrollBtn}
-            containerRef={messagesContainerRef}
-            onScroll={handleScroll}
-            onScrollToBottom={handleScrollToBottom}
-            onPrefillMention={prefillMention}
-            onRetryFailedMessage={handleRetryFailedMessage}
-            onRestoreFailedInput={restoreFailedInput}
-            onCopyFailedPrompt={handleCopyFailedPrompt}
-            onTryAnotherAgent={handleTryAnotherAgent}
-          />
+          {activeRoomId ? (
+            <>
+              <MessageList
+                roomId={activeRoomId}
+                messages={messages}
+                agents={agents}
+                state={state}
+                sending={sending}
+                messageErrorMap={messageErrorMap}
+                orphanErrors={orphanErrors}
+                showScrollBtn={showScrollBtn}
+                containerRef={messagesContainerRef}
+                onScroll={handleScroll}
+                onScrollToBottom={handleScrollToBottom}
+                onPrefillMention={prefillMention}
+                onRetryFailedMessage={handleRetryFailedMessage}
+                onRestoreFailedInput={restoreFailedInput}
+                onCopyFailedPrompt={handleCopyFailedPrompt}
+                onTryAnotherAgent={handleTryAnotherAgent}
+              />
 
-          <RoomActionArea
-            roomId={roomId}
-            state={state}
-            report={report}
-            onDownload={handleDownload}
-            busyAgents={busyAgents}
-            outgoingQueue={outgoingQueue}
-            recallableQueueItemId={recallableQueueItemId}
-            composerDraft={composerDraft}
-            sending={sending}
-            sendError={sendError}
-            agents={agents}
-            lastActiveWorkerId={lastActiveWorkerId}
-            composerRef={composerRef}
-            onCancelQueuedItem={cancelQueuedItem}
-            onRecallQueuedItem={recallQueuedItem}
-            onSend={sendPreparedContent}
-            onSendError={showSendError}
-            onDraftChange={setComposerDraft}
-            onRecipientSelected={handleRecipientSelected}
-          />
+              <RoomActionArea
+                roomId={activeRoomId}
+                state={state}
+                report={report}
+                onDownload={handleDownload}
+                busyAgents={busyAgents}
+                outgoingQueue={outgoingQueue}
+                recallableQueueItemId={recallableQueueItemId}
+                composerDraft={composerDraft}
+                sending={sending}
+                sendError={sendError}
+                agents={agents}
+                lastActiveWorkerId={lastActiveWorkerId}
+                composerRef={composerRef}
+                onCancelQueuedItem={cancelQueuedItem}
+                onRecallQueuedItem={recallQueuedItem}
+                onSend={sendPreparedContent}
+                onSendError={showSendError}
+                onDraftChange={setComposerDraft}
+                onRecipientSelected={handleRecipientSelected}
+              />
+            </>
+          ) : (
+            <EmptyRoomQuickStart
+              onStartBlank={() => openCreateRoom()}
+              onStartTemplate={handleStartTemplate}
+            />
+          )}
         </div>
 
         <AgentPanel
-          roomId={roomId}
+          roomId={activeRoomId}
           agents={agents}
           workspace={workspace}
           skillSummary={{
@@ -470,9 +548,9 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
         initialTab={settingsInitialTab}
       />
 
-      {showInviteDrawer && roomId && (
+      {showInviteDrawer && activeRoomId && (
         <AgentInviteDrawer
-          roomId={roomId}
+          roomId={activeRoomId}
           currentAgentIds={currentAgentConfigIds}
           onClose={() => setShowInviteDrawer(false)}
           onInvited={() => {}}

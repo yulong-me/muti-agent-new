@@ -11,6 +11,13 @@ import {
   useState,
 } from 'react'
 import {
+  Loader2,
+  Send,
+  X,
+} from 'lucide-react'
+import {
+  AGENT_COLORS,
+  DEFAULT_AGENT_COLOR,
   extractUserMentionsFromAgents,
   findActiveMentionTrigger,
   insertMention,
@@ -64,6 +71,14 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
   const compositionRef = useRef(false)
 
   const agentNames = useMemo(() => agents.map(a => a.name), [agents])
+  const selectedRecipient = useMemo(() => {
+    const mentionNames = extractUserMentionsFromAgents(userInput, agentNames)
+    const targetName = mentionNames[0]
+    return targetName ? agents.find(agent => agent.name === targetName) ?? null : null
+  }, [agentNames, agents, userInput])
+  const selectedRecipientColors = selectedRecipient
+    ? AGENT_COLORS[selectedRecipient.name] ?? DEFAULT_AGENT_COLOR
+    : null
 
   const filteredAgents = useMemo(() => {
     const base = mentionQuery
@@ -129,6 +144,10 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
   useEffect(() => {
     onDraftChange?.(userInput)
   }, [onDraftChange, userInput])
+
+  useEffect(() => {
+    onRecipientSelected(selectedRecipient?.id ?? null)
+  }, [onRecipientSelected, selectedRecipient?.id])
 
   useEffect(() => {
     if (!mentionPickerOpen) return
@@ -208,9 +227,19 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
 
   const selectMentionAgent = useCallback((agentName: string) => {
     const ta = textareaRef.current
-    if (!ta || mentionStartIdx < 0) return
+    if (!ta) return
     const cursor = ta.selectionStart ?? userInput.length
-    const { nextValue, nextCursor } = insertMention(userInput, mentionStartIdx, cursor, agentName)
+    const selectionCursor = mentionStartIdx >= 0 ? cursor : 0
+    const insertionStart = mentionStartIdx >= 0 ? mentionStartIdx : 0
+    const existingRecipientPattern = selectedRecipient
+      ? new RegExp(`^@${selectedRecipient.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`)
+      : null
+    const baseInput = mentionStartIdx >= 0
+      ? userInput
+      : existingRecipientPattern
+        ? userInput.replace(existingRecipientPattern, '')
+        : userInput
+    const { nextValue, nextCursor } = insertMention(baseInput, insertionStart, selectionCursor, agentName)
     setDraft(nextValue)
     closeMentionPicker()
     const target = agents.find(a => a.name === agentName)
@@ -222,19 +251,31 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
       ta.focus()
       ta.setSelectionRange(nextCursor, nextCursor)
     }, 0)
-  }, [agents, closeMentionPicker, mentionStartIdx, onRecipientSelected, roomId, setDraft, userInput])
+  }, [agents, closeMentionPicker, mentionStartIdx, onRecipientSelected, roomId, selectedRecipient, setDraft, userInput])
+
+  const openRecipientPicker = useCallback(() => {
+    setMentionStartIdx(-1)
+    setMentionQuery('')
+    setMentionHighlightIdx(0)
+    setMentionPickerOpen(true)
+    focus()
+  }, [focus])
+
+  const clearRecipient = useCallback(() => {
+    if (!selectedRecipient) return
+    const pattern = new RegExp(`@${selectedRecipient.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`)
+    setDraft(userInput.replace(pattern, ''))
+    onRecipientSelected(null)
+    focus()
+  }, [focus, onRecipientSelected, selectedRecipient, setDraft, userInput])
 
   const submitDraft = useCallback(async () => {
     if (sending) return
     const content = userInput.trim()
     if (!content) return
     if (extractUserMentionsFromAgents(content, agentNames).length === 0) {
-      const cursor = textareaRef.current?.selectionStart ?? content.length
-      setMentionStartIdx(cursor)
-      setMentionQuery('')
-      setMentionHighlightIdx(0)
-      setMentionPickerOpen(true)
-      onSendError('先选择要发给哪位专家：输入 @ 或点一个专家名称')
+      openRecipientPicker()
+      onSendError('消息要发给谁？按 @ 选一位专家')
       focus()
       return
     }
@@ -243,9 +284,14 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
     if (sent) {
       setDraft('')
     }
-  }, [agentNames, focus, onSend, onSendError, sending, setDraft, userInput])
+  }, [agentNames, focus, onSend, onSendError, openRecipientPicker, sending, setDraft, userInput])
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      void submitDraft()
+      return
+    }
     if (!mentionPickerOpen) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
@@ -271,8 +317,11 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
     } else if (e.key === 'Escape') { e.preventDefault(); closeMentionPicker() }
   }, [closeMentionPicker, filteredAgents, mentionHighlightIdx, mentionPickerOpen, selectMentionAgent, submitDraft])
 
+  const canSend = Boolean(userInput.trim()) && !sending
+  const shortcutHint = mentionPickerOpen ? '↵ 选择 · esc 取消' : '↵ 发送 · ⇧↵ 换行 · Cmd+Enter 发送'
+
   return (
-    <div className="flex flex-col gap-2 relative">
+    <div className="relative flex flex-col gap-2">
       {sendError && <div className="tone-danger-text px-1 text-xs">{sendError}</div>}
       {mentionPickerOpen && (
         <MentionPicker
@@ -282,11 +331,44 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
           onHighlight={setMentionHighlightIdx}
         />
       )}
-      <div className="flex gap-3">
+      <div className="app-islands-input border border-line bg-surface p-2 shadow-sm transition-colors focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/[0.15]">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={openRecipientPicker}
+            className={`inline-flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-caption transition-colors ${
+              selectedRecipient && selectedRecipientColors
+                ? 'border-line bg-surface text-ink'
+                : 'border-dashed border-line bg-surface-muted text-ink-soft hover:border-accent/40 hover:text-accent'
+            }`}
+            style={selectedRecipientColors ? {
+              borderColor: `${selectedRecipientColors.bg}42`,
+              backgroundColor: `${selectedRecipientColors.bg}12`,
+              color: selectedRecipientColors.bg,
+            } : undefined}
+          >
+            <span className="shrink-0 font-medium text-ink-soft">To:</span>
+            <span className="min-w-0 truncate font-medium">
+              {selectedRecipient ? `@${selectedRecipient.name}` : '选择一位专家'}
+            </span>
+          </button>
+          {selectedRecipient ? (
+            <button
+              type="button"
+              onClick={clearRecipient}
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+              aria-label="清除收件人"
+              title="清除收件人"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+        <div className="relative">
         <textarea
           ref={textareaRef}
-          className="app-islands-input flex-1 bg-surface border border-line rounded-xl px-4 py-3 text-[14px] text-ink placeholder:text-ink-soft/60 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent resize-none min-h-12 max-h-48 leading-relaxed"
-          placeholder="输入消息，或 @mention 专家…"
+          className="min-h-20 max-h-48 w-full resize-none border-0 bg-transparent px-1 pb-10 pr-12 pt-1 text-body text-ink placeholder:text-ink-faint focus:outline-none"
+          placeholder={selectedRecipient ? `写消息给 ${selectedRecipient.name}` : '写消息给一位专家'}
           value={userInput}
           onChange={handleInputChange}
           onCompositionStart={handleCompositionStart}
@@ -297,12 +379,22 @@ export const RoomComposer = memo(forwardRef<RoomComposerHandle, RoomComposerProp
         />
         <button
           type="button"
-          className="app-islands-item bg-accent text-white font-semibold px-5 py-3 rounded-xl hover:bg-accent-deep transition-all disabled:opacity-50 text-[14px] shadow-sm self-end"
+          className={`absolute bottom-1.5 right-1.5 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+            canSend
+              ? 'bg-accent text-white hover:bg-accent-deep'
+              : 'cursor-not-allowed bg-surface-muted text-ink-faint'
+          }`}
           onClick={() => void submitDraft()}
-          disabled={sending || !userInput.trim()}
+          disabled={!canSend}
+          aria-label={queueMode ? '加入队列' : '发送'}
+          title={queueMode ? '加入队列' : '发送'}
         >
-          {sending ? '发送中…' : queueMode ? '加入队列' : '发送'}
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
+        </div>
+        <div className="mt-1 flex justify-end px-1 font-mono text-[10px] text-ink-faint">
+          {shortcutHint}
+        </div>
       </div>
     </div>
   )

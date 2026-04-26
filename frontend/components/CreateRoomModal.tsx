@@ -23,9 +23,44 @@ interface AgentConfig {
   tags: string[]
 }
 
+type ProviderReadinessStatus = 'ready' | 'cli_missing' | 'untested' | 'test_failed'
+
+interface ProviderReadiness {
+  provider: string
+  label: string
+  cliPath: string
+  cliAvailable: boolean
+  status: ProviderReadinessStatus
+  message: string
+  resolvedPath?: string
+}
+
+interface RoomPreflightIssue {
+  type: string
+  provider?: string
+  label?: string
+  cliPath?: string
+  agentIds: string[]
+  agentNames: string[]
+  message: string
+}
+
+interface RoomPreflightResult {
+  ok: boolean
+  blockers: RoomPreflightIssue[]
+  warnings: RoomPreflightIssue[]
+}
+
 const PROVIDER_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
   'opencode': 'OpenCode',
+}
+
+const PROVIDER_READINESS_META: Record<ProviderReadinessStatus, { label: string; className: string }> = {
+  ready: { label: 'Ready', className: 'tone-success-pill border' },
+  cli_missing: { label: 'CLI 未配置', className: 'tone-danger-panel border' },
+  untested: { label: '待测试', className: 'tone-warning-pill border' },
+  test_failed: { label: '测试失败', className: 'tone-warning-pill border' },
 }
 
 const DOMAIN_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -49,8 +84,8 @@ function getTagStyle(tag: string) {
 }
 
 const AGENT_COLORS = [
-  '#c43a2f', '#d17a24', '#3d8a61', '#9b5c44', '#8c6a58',
-  '#b55d3d', '#6e7f48', '#a04938', '#b87933', '#8f5e46',
+  '#C43A2F', '#7C3AED', '#0E8345', '#1F3A8A', '#475569',
+  '#2563EB', '#B5832A', '#0F766E', '#4338CA', '#64748B',
 ]
 function agentColor(name: string): string {
   let hash = 0
@@ -61,14 +96,20 @@ function agentColor(name: string): string {
 export default function CreateRoomModal({
   isOpen,
   onClose,
+  initialTopic,
+  initialSceneId,
+  initialWorkerIds,
 }: {
   isOpen: boolean
   onClose: () => void
+  initialTopic?: string
+  initialSceneId?: string
+  initialWorkerIds?: string[]
 }) {
   const [allAgents, setAllAgents] = useState<AgentConfig[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
-  const [topic, setTopic] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [topic, setTopic] = useState(initialTopic ?? '')
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialWorkerIds ?? []))
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [workspacePath, setWorkspacePath] = useState('')
@@ -76,8 +117,11 @@ export default function CreateRoomModal({
   const [errors, setErrors] = useState<{ topic?: string; agents?: string }>({})
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [scenes, setScenes] = useState<Array<{ id: string; name: string; description?: string }>>([])
-  const [sceneId, setSceneId] = useState('roundtable-forum')
+  const [sceneId, setSceneId] = useState(initialSceneId ?? 'roundtable-forum')
   const [loadingScenes, setLoadingScenes] = useState(false)
+  const [providerReadiness, setProviderReadiness] = useState<Record<string, ProviderReadiness>>({})
+  const [loadingProviderReadiness, setLoadingProviderReadiness] = useState(false)
+  const [preflightWarnings, setPreflightWarnings] = useState<RoomPreflightIssue[]>([])
   const router = useRouter()
   const pathname = usePathname()
   const topicRef = useRef<HTMLInputElement>(null)
@@ -85,10 +129,17 @@ export default function CreateRoomModal({
 
   const workers = allAgents.filter(a => a.role === 'WORKER' && a.enabled)
   const sceneAgentTag = scenes.find(s => s.id === sceneId)?.name ?? null
+  const sceneFilterTag = sceneAgentTag && workers.some(worker => worker.tags.includes(sceneAgentTag))
+    ? sceneAgentTag
+    : null
+  const hasInitialWorkerPreset = (initialWorkerIds?.length ?? 0) > 0
+  const shouldKeepInitialWorkerPreset = hasInitialWorkerPreset && sceneId === initialSceneId
   const sceneFilterHint = sceneId === 'software-development'
     ? '已默认筛选双架构、实现、审查核心角色。创建时必须包含主架构师、挑战架构师、实现工程师、Reviewer。'
-    : sceneAgentTag
-      ? `已默认筛选 ${sceneAgentTag} 相关专家，可切换为全部。`
+    : sceneFilterTag
+      ? `已默认筛选 ${sceneFilterTag} 相关专家，可切换为全部。`
+      : shouldKeepInitialWorkerPreset
+        ? '已带入该场景的默认专家组，可继续调整。'
       : ''
   const minimumWorkerCount = sceneId === 'roundtable-forum' ? 3 : sceneId === 'software-development' ? 4 : 1
   const minimumWorkerError = sceneId === 'roundtable-forum'
@@ -96,6 +147,15 @@ export default function CreateRoomModal({
     : sceneId === 'software-development'
       ? '软件开发至少选择 4 位核心专家（主架构师、挑战架构师、实现工程师、Reviewer）'
     : '请至少选择 1 位专家'
+  const selectedWorkers = workers.filter(a => selected.has(a.id))
+  const selectedProviderNames = [...new Set(selectedWorkers.map(worker => worker.provider))]
+  const selectedProviderReadiness = selectedProviderNames
+    .map(provider => providerReadiness[provider])
+    .filter((readiness): readiness is ProviderReadiness => Boolean(readiness))
+  const selectedCliBlockers = selectedWorkers.filter(worker => providerReadiness[worker.provider]?.status === 'cli_missing')
+  const providerBlockerMessage = selectedCliBlockers.length > 0
+    ? `Provider CLI 未准备好：${[...new Set(selectedCliBlockers.map(worker => providerReadiness[worker.provider]?.label ?? worker.provider))].join('、')}`
+    : ''
 
   useEffect(() => {
     if (!isOpen) return
@@ -124,6 +184,18 @@ export default function CreateRoomModal({
         warn('ui:room_create:scenes_load_failed', { error: err })
         setLoadingScenes(false)
       })
+    setLoadingProviderReadiness(true)
+    fetch(`${API}/api/providers/readiness`)
+      .then(r => r.json())
+      .then((data: Record<string, ProviderReadiness>) => {
+        setProviderReadiness(data)
+        setLoadingProviderReadiness(false)
+        debug('ui:room_create:provider_readiness_loaded', { count: Object.keys(data).length })
+      })
+      .catch((err) => {
+        warn('ui:room_create:provider_readiness_failed', { error: err })
+        setLoadingProviderReadiness(false)
+      })
   }, [isOpen])
 
   useEffect(() => {
@@ -134,17 +206,30 @@ export default function CreateRoomModal({
       setTopic('')
       setSearchText('')
       setErrors({})
+      setPreflightWarnings([])
       setWorkspaceOpen(false)
       setSceneId('roundtable-forum')
     }
   }, [isOpen])
 
   useEffect(() => {
-    if (!isOpen || !sceneAgentTag) return
-    setActiveTag(sceneAgentTag)
-    setSelected(new Set())
+    if (!isOpen) return
+    setActiveTag(sceneFilterTag)
+    if (!shouldKeepInitialWorkerPreset) {
+      setSelected(new Set())
+    }
     setErrors(prev => ({ ...prev, agents: undefined }))
-  }, [isOpen, sceneAgentTag])
+  }, [isOpen, sceneFilterTag, shouldKeepInitialWorkerPreset])
+
+  useEffect(() => {
+    if (!isOpen) return
+    setTopic(initialTopic ?? '')
+    setSceneId(initialSceneId ?? 'roundtable-forum')
+    setSelected(new Set(initialWorkerIds ?? []))
+    setErrors({})
+    setPreflightWarnings([])
+    setSearchText('')
+  }, [initialTopic, initialSceneId, initialWorkerIds, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -170,10 +255,19 @@ export default function CreateRoomModal({
     router.push(buildSettingsHref('scene', pathname))
   }
 
+  function handleManageProviders() {
+    debug('ui:room_create:manage_providers')
+    onClose()
+    router.push(buildSettingsHref('provider', pathname))
+  }
+
   async function handleSubmit() {
     const newErrors: { topic?: string; agents?: string } = {}
-    if (selected.size < minimumWorkerCount) {
+    if (selectedWorkers.length < minimumWorkerCount) {
       newErrors.agents = minimumWorkerError
+    }
+    if (selectedCliBlockers.length > 0) {
+      newErrors.agents = providerBlockerMessage || 'Provider CLI 未准备好'
     }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -184,11 +278,34 @@ export default function CreateRoomModal({
     setErrors({})
     info('ui:room_create:submit', {
       topicLength: topic.trim().length,
-      workerCount: selected.size,
+      workerCount: selectedWorkers.length,
       hasWorkspace: Boolean(workspacePath.trim()),
       sceneId,
     })
     try {
+      const preflightResponse = await fetch(`${API}/api/rooms/preflight`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workerIds: workers.filter(a => selected.has(a.id)).map(a => a.id),
+          sceneId,
+        }),
+      })
+      const preflight = await preflightResponse.json().catch(() => null) as RoomPreflightResult | null
+      if (preflight && Array.isArray(preflight.blockers) && Array.isArray(preflight.warnings)) {
+        setPreflightWarnings(preflight.warnings ?? [])
+        if (!preflight.ok) {
+          const msg = preflight.blockers.map(blocker => blocker.message).join('；') || 'Provider CLI 未准备好'
+          setErrors({ agents: msg })
+          warn('ui:room_create:preflight_blocked', {
+            blockerCount: preflight.blockers.length,
+            warningCount: preflight.warnings.length,
+            sceneId,
+          })
+          return
+        }
+      }
+
       const res = await fetch(`${API}/api/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +328,7 @@ export default function CreateRoomModal({
         warn('ui:room_create:submit_failed', {
           status: res.status,
           error: msg,
-          workerCount: selected.size,
+          workerCount: selectedWorkers.length,
           sceneId,
         })
         return
@@ -219,7 +336,7 @@ export default function CreateRoomModal({
       const room = await res.json()
       info('ui:room_create:success', {
         roomId: room.id,
-        workerCount: selected.size,
+        workerCount: selectedWorkers.length,
         sceneId,
         hasWorkspace: Boolean(workspacePath.trim()),
       })
@@ -241,7 +358,6 @@ export default function CreateRoomModal({
       a.tags.some(tag => tag.toLowerCase().includes(searchText.toLowerCase()))
     return matchTag && matchSearch
   })
-  const selectedWorkers = workers.filter(a => selected.has(a.id))
 
   return (
     <>
@@ -259,7 +375,7 @@ export default function CreateRoomModal({
         aria-label="发起新讨论"
         className="fixed inset-0 z-50 flex items-stretch justify-center p-4 pointer-events-none"
       >
-        <div className="app-window-shell rounded-3xl w-full max-w-2xl flex flex-col custom-scrollbar pointer-events-auto overflow-hidden">
+        <div className="app-window-shell rounded-3xl w-full max-w-4xl flex flex-col custom-scrollbar pointer-events-auto overflow-hidden">
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto">
@@ -319,7 +435,7 @@ export default function CreateRoomModal({
                 ))}
               </select>
               {loadingScenes && <p className="text-[11px] text-ink-soft mt-1">加载场景中…</p>}
-              {!loadingScenes && sceneAgentTag && (
+              {!loadingScenes && sceneFilterHint && (
                 <p className="text-[11px] text-ink-soft mt-1">
                   {sceneFilterHint}
                   {sceneId === 'roundtable-forum' ? ' 圆桌论坛强制 3 人及以上。' : ''}
@@ -401,24 +517,26 @@ export default function CreateRoomModal({
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-5 gap-2">
                   {filteredWorkers.map(ag => {
                     const isSelected = selected.has(ag.id)
                     const color = agentColor(ag.name)
                     const domainTag = ag.tags[0]
                     const effectiveModel = resolveEffectiveAgentModel(ag.provider, ag.providerOpts, {})
+                    const readiness = providerReadiness[ag.provider]
+                    const readinessMeta = readiness ? PROVIDER_READINESS_META[readiness.status] : null
                     return (
                       <button
                         key={ag.id}
                         type="button"
                         onClick={() => { toggleAgent(ag.id); setErrors(prev => ({ ...prev, agents: undefined })) }}
-                        className={`flex flex-col items-center p-4 rounded-2xl border-2 transition-all text-left ${
+                        className={`flex min-h-[118px] flex-col items-center p-3 rounded-xl border transition-all text-left ${
                           isSelected ? 'border-accent bg-accent/5 shadow-sm' : 'border-line bg-surface hover:border-accent/40 hover:bg-surface-muted'
                         }`}
                         aria-pressed={isSelected}
                       >
                         <div className="relative">
-                          <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold mb-2 shadow-sm" style={{ backgroundColor: color }}>
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold mb-1.5 shadow-sm" style={{ backgroundColor: color }}>
                             {ag.name.slice(0, 1)}
                           </div>
                           {isSelected && (
@@ -427,19 +545,45 @@ export default function CreateRoomModal({
                             </div>
                           )}
                         </div>
-                        <p className="text-[14px] font-bold text-ink">{ag.name}</p>
-                        <p className="text-[11px] text-ink-soft mt-0.5">{ag.roleLabel}</p>
-                        <p className="text-[10px] text-ink-soft/80 mt-0.5 font-mono">
+                        <p className="w-full truncate text-center text-[13px] font-bold text-ink">{ag.name}</p>
+                        <p className="mt-0.5 w-full truncate text-center text-[10px] text-ink-soft">{ag.roleLabel}</p>
+                        <p className="mt-0.5 w-full truncate text-center text-[9px] text-ink-soft/80 font-mono">
                           {PROVIDER_LABELS[ag.provider]}{effectiveModel ? ` · ${effectiveModel}` : ''}
                         </p>
+                        {readinessMeta && readiness.status !== 'ready' && (
+                          <span className={`mt-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${readinessMeta.className}`}>
+                            {readinessMeta.label}
+                          </span>
+                        )}
                         {domainTag && (
-                          <span className="mt-2 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider" style={{ backgroundColor: getTagStyle(domainTag).bg, color: getTagStyle(domainTag).text }}>
+                          <span className="mt-1.5 max-w-full truncate text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider" style={{ backgroundColor: getTagStyle(domainTag).bg, color: getTagStyle(domainTag).text }}>
                             {domainTag}
                           </span>
                         )}
                       </button>
                     )
                   })}
+                </div>
+              )}
+              {providerBlockerMessage && (
+                <div className="tone-danger-panel mt-3 rounded-xl border px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[12px] font-semibold">
+                      {providerBlockerMessage}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleManageProviders}
+                      className="rounded-lg bg-ink px-3 py-1.5 text-[12px] font-bold text-bg transition-opacity hover:opacity-90"
+                    >
+                      去设置 Provider
+                    </button>
+                  </div>
+                </div>
+              )}
+              {preflightWarnings.length > 0 && !providerBlockerMessage && (
+                <div className="tone-warning-pill mt-3 rounded-xl border px-3 py-2 text-[12px] font-semibold">
+                  {preflightWarnings.map(warning => warning.message).join('；')}
                 </div>
               )}
               {errors.agents && <p className="tone-danger-text mt-2 text-xs">{errors.agents}</p>}
@@ -486,10 +630,23 @@ export default function CreateRoomModal({
                   </span>
                 )) : (
                   <span className="text-[12px] text-ink-soft italic">
-                    {selected.size < minimumWorkerCount ? minimumWorkerError : '尚未选择专家'}
+                    {selectedWorkers.length < minimumWorkerCount ? minimumWorkerError : '尚未选择专家'}
                   </span>
                 )}
               </div>
+              {selectedProviderReadiness.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedProviderReadiness.map(readiness => {
+                    const meta = PROVIDER_READINESS_META[readiness.status]
+                    return (
+                      <span key={readiness.provider} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${meta.className}`}>
+                        {readiness.label} · {meta.label}
+                      </span>
+                    )
+                  })}
+                  {loadingProviderReadiness && <span className="text-[11px] text-ink-soft">检查 Provider 中…</span>}
+                </div>
+              )}
             </div>
 
             {/* CTA */}
@@ -497,7 +654,7 @@ export default function CreateRoomModal({
               type="button"
               className="w-full bg-ink text-bg font-bold py-4 rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:active:scale-100"
               onClick={handleSubmit}
-              disabled={submitting || selected.size < minimumWorkerCount}
+              disabled={submitting || selectedWorkers.length < minimumWorkerCount || selectedCliBlockers.length > 0}
             >
               <Play className="w-4 h-4 fill-current" aria-hidden/>
               {submitting ? '创建中…' : '创建讨论'}

@@ -58,7 +58,7 @@ export function RoomActionArea({
           className="w-full bg-ink text-bg font-semibold py-3.5 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-sm"
           onClick={onDownload}
         >
-          <Download className="w-4 h-4" /> 下载讨论报告
+          <Download className="w-4 h-4" /> 导出报告 (.md)
         </button>
       ) : roomId ? (
         <>
