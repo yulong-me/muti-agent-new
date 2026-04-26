@@ -298,7 +298,7 @@ export function useRoomMessaging({
     const content = rawContent.trim()
     if (!content) return false
     if (extractUserMentionsFromAgents(content, agentNames).length === 0) {
-      showSendError('先选择要发给哪位专家：输入 @ 或点一个专家名称')
+      showSendError('消息要发给谁？按 @ 选一位专家')
       composerRef.current?.focus()
       return false
     }

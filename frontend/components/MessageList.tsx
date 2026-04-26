@@ -55,6 +55,7 @@ interface MessageBubbleProps {
   agentNames: string[]
   agentNameSet: Set<string>
   agentById: Map<string, Agent>
+  handoffInfo?: A2AHandoffInfo
   state: DiscussionState
   sending: boolean
   runError?: AgentRunErrorEvent
@@ -67,6 +68,35 @@ interface MessageBubbleProps {
   onRestoreFailedInput: (content?: string) => void
   onCopyFailedPrompt: (content?: string) => void
   onTryAnotherAgent: (error: AgentRunErrorEvent, nextAgentId: string) => void
+}
+
+interface A2AHandoffInfo {
+  fromAgentName: string
+  depth: number
+}
+
+function getMentionTargets(msg: Message, agentNames: string[], agentNameSet: Set<string>) {
+  const mentions = msg.effectiveMentions ?? extractMentions(msg.content, agentNames)
+  return mentions.filter(name => agentNameSet.has(name))
+}
+
+function getHandoffOffsetClass(handoffInfo?: A2AHandoffInfo) {
+  if (!handoffInfo) return ''
+  const depth = Math.min(Math.max(handoffInfo.depth, 1), 3)
+  if (depth === 1) return 'ml-6'
+  if (depth === 2) return 'ml-10'
+  return 'ml-14'
+}
+
+function getStreamingStatusLabel(msg: Message, hasToolCalls: boolean, state: DiscussionState) {
+  if (state === 'DONE') return '已结束'
+  if (hasToolCalls) {
+    const latestTool = msg.toolCalls?.[msg.toolCalls.length - 1]
+    return latestTool?.toolName ? `调用 ${latestTool.toolName}` : '调用工具'
+  }
+  if (msg.thinking?.trim() && !msg.content.trim()) return '思考中'
+  if (msg.content.trim()) return '输出中'
+  return '等待响应'
 }
 
 export const MessageList = memo(function MessageList({
@@ -98,6 +128,36 @@ export const MessageList = memo(function MessageList({
   const agentNames = useMemo(() => agents.map(a => a.name), [agents])
   const agentNameSet = useMemo(() => new Set(agentNames), [agentNames])
   const agentById = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents])
+  const handoffByMessageId = useMemo(() => {
+    const handoffMap = new Map<string, A2AHandoffInfo>()
+    let previousAgentMessage: Message | null = null
+
+    for (const msg of sortedMessages) {
+      const isUser = msg.agentRole === 'USER'
+      const isSystem = msg.type === 'system'
+
+      if (isUser) {
+        previousAgentMessage = null
+        continue
+      }
+      if (isSystem) continue
+
+      if (previousAgentMessage) {
+        const targets = getMentionTargets(previousAgentMessage, agentNames, agentNameSet)
+        if (targets.includes(msg.agentName)) {
+          const previousHandoff = handoffMap.get(previousAgentMessage.id)
+          handoffMap.set(msg.id, {
+            fromAgentName: previousAgentMessage.agentName,
+            depth: Math.min((previousHandoff?.depth ?? 0) + 1, 3),
+          })
+        }
+      }
+
+      previousAgentMessage = msg
+    }
+
+    return handoffMap
+  }, [agentNameSet, agentNames, sortedMessages])
 
   return (
     <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6 custom-scrollbar" ref={containerRef} onScroll={onScroll}>
@@ -108,6 +168,7 @@ export const MessageList = memo(function MessageList({
           agentNames={agentNames}
           agentNameSet={agentNameSet}
           agentById={agentById}
+          handoffInfo={handoffByMessageId.get(msg.id)}
           state={state}
           sending={sending}
           runError={messageErrorMap[msg.id] ?? msg.runError}
@@ -182,6 +243,7 @@ const MessageBubble = memo(function MessageBubble({
   agentNames,
   agentNameSet,
   agentById,
+  handoffInfo,
   state,
   sending,
   runError,
@@ -199,8 +261,10 @@ const MessageBubble = memo(function MessageBubble({
   const isSystem = msg.type === 'system'
   const isStreaming = !isUser && !isSystem && (msg.type === 'streaming' || msg.duration_ms === undefined)
   const hasToolCalls = Boolean(msg.toolCalls?.length)
+  const streamingStatusLabel = getStreamingStatusLabel(msg, hasToolCalls, state)
   const hasOutput = Boolean(msg.content.trim() || msg.thinking?.trim() || hasToolCalls)
   const agentColor = AGENT_COLORS[msg.agentName]?.bg || DEFAULT_AGENT_COLOR.bg
+  const handoffOffsetClass = getHandoffOffsetClass(handoffInfo)
   const formattedTime = TIME_FORMATTER.format(new Date(msg.timestamp))
   const hasDurationStat = typeof msg.duration_ms === 'number' && msg.duration_ms > 0
   const hasCostStat = typeof msg.total_cost_usd === 'number' && msg.total_cost_usd > 0
@@ -231,14 +295,14 @@ const MessageBubble = memo(function MessageBubble({
     const toRecipient = msg.toAgentId ? agentById.get(msg.toAgentId) : null
     const toColors = toRecipient ? AGENT_COLORS[toRecipient.name] || DEFAULT_AGENT_COLOR : null
     return (
-      <div className="flex justify-end gap-3 mb-6 items-start">
+      <div className="message-enter flex justify-end gap-3 mb-6 items-start">
         <div className="w-full max-w-[85%] lg:max-w-[90%]">
           <div className="flex justify-end items-center gap-2 mb-1.5">
             <span className="text-[11px] text-ink-soft">
               {formattedTime}
             </span>
             {isStreaming && <span className="text-[11px] text-accent animate-pulse font-medium">● 回答中</span>}
-            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-accent/20 text-accent">你</span>
+            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-accent/[0.12] text-accent">你</span>
             {toRecipient && toColors && (
               <span className="text-[11px] px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: `${toColors.bg}15`, color: toColors.bg }}>
                 <span>→</span>
@@ -247,7 +311,7 @@ const MessageBubble = memo(function MessageBubble({
               </span>
             )}
           </div>
-          <div className="rounded-2xl rounded-tr-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
+          <div className="rounded-xl border border-line bg-surface px-4 py-3.5 shadow-sm">
             <BubbleErrorBoundary agentName={msg.agentName}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -274,13 +338,23 @@ const MessageBubble = memo(function MessageBubble({
 
   if (runError && !hasOutput) {
     return (
-      <div className="group flex gap-3 mb-6 items-start">
+      <div className={`message-enter group relative flex gap-3 mb-6 items-start ${handoffOffsetClass}`}>
+        {handoffInfo && (
+          <span className="pointer-events-none absolute -left-3 top-5 h-[calc(100%-1rem)] w-px bg-line" aria-hidden />
+        )}
         <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
           <AgentAvatar name={msg.agentName} color={agentColor} size={32} className="w-full h-full" />
         </div>
         <div className="w-full max-w-[85%] lg:max-w-[90%]">
+          {handoffInfo && (
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
+              <span className="h-px w-4 bg-line" aria-hidden />
+              <span>由 @{handoffInfo.fromAgentName} 召唤</span>
+            </div>
+          )}
           <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-[13px] font-bold px-2 py-0.5 rounded-md" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
+            <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[13px] font-semibold" style={{ backgroundColor: `${agentColor}14`, color: agentColor }}>
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: agentColor }} />
               {msg.agentName}
             </span>
             <span className="text-[11px] text-ink-soft">
@@ -303,25 +377,38 @@ const MessageBubble = memo(function MessageBubble({
   }
 
   return (
-    <div className="group flex gap-3 mb-6 items-start">
+    <div className={`message-enter group relative flex gap-3 mb-6 items-start ${handoffOffsetClass}`}>
+      {handoffInfo && (
+        <span className="pointer-events-none absolute -left-3 top-5 h-[calc(100%-1rem)] w-px bg-line" aria-hidden />
+      )}
       <div className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm mt-1 overflow-hidden">
         <AgentAvatar name={msg.agentName} color={agentColor} size={32} className="w-full h-full" />
       </div>
       <div className="w-full max-w-[85%] lg:max-w-[90%]">
+        {handoffInfo && (
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
+            <span className="h-px w-4 bg-line" aria-hidden />
+            <span>由 @{handoffInfo.fromAgentName} 召唤</span>
+          </div>
+        )}
         <div className="mb-1.5 flex items-center gap-2">
-          <span className="text-[13px] font-bold px-2 py-0.5 rounded-md" style={{ backgroundColor: `${agentColor}20`, color: agentColor }}>
+          <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[13px] font-semibold" style={{ backgroundColor: `${agentColor}14`, color: agentColor }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: agentColor }} />
             {msg.agentName}
           </span>
           <span className="text-[11px] text-ink-soft">
             {formattedTime}
           </span>
           {isStreaming && (
-            <span className="tone-success-text flex items-center gap-1 text-[11px] font-medium">
-              <span className="animate-pulse">● 回答中</span>
+            <span className="flex items-center gap-1 text-[11px] font-medium" style={{ color: agentColor }}>
+              <span className="animate-focus-pulse">● {streamingStatusLabel}</span>
             </span>
           )}
         </div>
-        <div className="rounded-2xl rounded-tl-sm px-4 py-3.5 bg-surface border border-line shadow-sm">
+        <div
+          className="rounded-xl border border-l-2 border-line bg-surface px-4 py-3.5 shadow-sm"
+          style={{ borderLeftColor: agentColor, backgroundColor: `${agentColor}08` }}
+        >
           <BubbleErrorBoundary agentName={msg.agentName}>
             <BubbleSection label="思考过程" icon="brain" content={msg.thinking ?? ''} isStreaming={isStreaming} agentColor={agentColor} />
             {msg.toolCalls && msg.toolCalls.length > 0 && (
@@ -360,6 +447,12 @@ const MessageBubble = memo(function MessageBubble({
                 alternateAgents={alternateAgents}
                 onTryAnotherAgent={(nextAgentId) => onTryAnotherAgent(runError, nextAgentId)}
               />
+            </div>
+          )}
+          {isStreaming && (
+            <div className="mt-3 flex items-center gap-2 border-t border-line/70 pt-2 text-[11px] font-medium" style={{ color: agentColor }}>
+              <span className="h-1.5 w-1.5 rounded-full animate-focus-pulse" style={{ backgroundColor: agentColor }} />
+              <span>{streamingStatusLabel}</span>
             </div>
           )}
         </div>
