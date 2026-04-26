@@ -37,6 +37,20 @@ export interface ProviderConfig {
   lastTestResult: { success: boolean; cli?: string; output?: string; error?: string } | null
 }
 
+export type ProviderReadinessStatus = 'ready' | 'cli_missing' | 'untested' | 'test_failed'
+
+export interface ProviderReadiness {
+  provider: string
+  label: string
+  cliPath: string
+  cliAvailable: boolean
+  status: ProviderReadinessStatus
+  message: string
+  resolvedPath?: string
+  lastTested: number | null
+  lastTestResult: ProviderConfig['lastTestResult']
+}
+
 export interface SkillConfig {
   id: string
   name: string

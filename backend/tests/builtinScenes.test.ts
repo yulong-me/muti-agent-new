@@ -8,8 +8,34 @@ import {
   SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
   buildBuiltinProviderOptsForMigration,
 } from '../src/prompts/builtinAgents.js';
+import { shouldRunBuiltinAgentCatalogV5Migrations } from '../src/db/builtinAgentCatalog.js';
+
+function extractQuickStartAgentIds(): string[] {
+  const source = fs.readFileSync(
+    new URL('../../frontend/components/room-view/EmptyRoomQuickStart.tsx', import.meta.url),
+    'utf-8',
+  );
+
+  return Array.from(source.matchAll(/agentIds:\s*\[([\s\S]*?)\]/g))
+    .flatMap(match => Array.from(match[1].matchAll(/'([^']+)'/g)).map(idMatch => idMatch[1]));
+}
 
 describe('builtin scene prompts', () => {
+  it('ships the quick-start scene catalog used by the empty home screen', () => {
+    expect(BUILTIN_SCENES.map(scene => scene.id)).toEqual([
+      'roundtable-forum',
+      'software-development',
+      'litigation-strategy',
+      'competitor-analysis',
+      'paper-revision',
+    ]);
+
+    const sceneNames = BUILTIN_SCENES.map(scene => scene.name);
+    expect(sceneNames).toContain('诉讼策略');
+    expect(sceneNames).toContain('竞品分析');
+    expect(sceneNames).toContain('论文返修');
+  });
+
   it('roundtable-forum scene enforces crossfire instead of disconnected monologues', () => {
     const scene = BUILTIN_SCENES.find(s => s.id === 'roundtable-forum');
 
@@ -52,6 +78,24 @@ describe('builtin scene prompts', () => {
     expect(scene?.prompt).toContain('测试');
   });
 
+  it('quick-start scenes carry domain-specific operating rules', () => {
+    const litigation = BUILTIN_SCENES.find(s => s.id === 'litigation-strategy');
+    const competitor = BUILTIN_SCENES.find(s => s.id === 'competitor-analysis');
+    const paperRevision = BUILTIN_SCENES.find(s => s.id === 'paper-revision');
+
+    expect(litigation?.prompt).toContain('不构成法律意见');
+    expect(litigation?.prompt).toContain('事实、证据、法律问题');
+    expect(litigation?.prompt).toContain('对方律师会怎么打');
+
+    expect(competitor?.prompt).toContain('不要编造');
+    expect(competitor?.prompt).toContain('未知项');
+    expect(competitor?.prompt).toContain('定位');
+
+    expect(paperRevision?.prompt).toContain('逐条回复审稿人');
+    expect(paperRevision?.prompt).toContain('同意 / 部分同意 / 不同意');
+    expect(paperRevision?.prompt).toContain('rebuttal');
+  });
+
   it('fresh schema includes F017 A2A depth columns before builtin scene seed', () => {
     const schema = fs.readFileSync(new URL('../src/db/schema.sql', import.meta.url), 'utf-8');
     const db = new Database(':memory:');
@@ -77,6 +121,32 @@ describe('builtin scene prompts', () => {
     const softwareAgentNames = SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS.map(agent => agent.name);
     expect(softwareAgentNames).toEqual(['主架构师', '挑战架构师', '实现工程师', 'Reviewer']);
     expect(SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS.every(agent => agent.tags.includes('软件开发'))).toBe(true);
+  });
+
+  it('gives every builtin quick-start scene a dedicated agent team', () => {
+    for (const scene of BUILTIN_SCENES) {
+      const sceneAgents = BUILTIN_AGENT_DEFINITIONS.filter(agent => agent.tags.includes(scene.name));
+
+      expect(
+        sceneAgents.length,
+        `${scene.name} should have at least four dedicated builtin agents`,
+      ).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('quick-start templates only reference seeded builtin agents', () => {
+    const builtinAgentIds = new Set(BUILTIN_AGENT_DEFINITIONS.map(agent => agent.id));
+    const quickStartAgentIds = extractQuickStartAgentIds();
+
+    expect(quickStartAgentIds.length).toBeGreaterThan(0);
+    expect(quickStartAgentIds.filter(agentId => !builtinAgentIds.has(agentId))).toEqual([]);
+  });
+
+  it('does not rerun provider migration when applying the v6 builtin agent catalog', () => {
+    expect(shouldRunBuiltinAgentCatalogV5Migrations(0)).toBe(true);
+    expect(shouldRunBuiltinAgentCatalogV5Migrations(4)).toBe(true);
+    expect(shouldRunBuiltinAgentCatalogV5Migrations(5)).toBe(false);
+    expect(shouldRunBuiltinAgentCatalogV5Migrations(6)).toBe(false);
   });
 
   it('migrates builtin provider opts to opencode-safe defaults while preserving thinking', () => {

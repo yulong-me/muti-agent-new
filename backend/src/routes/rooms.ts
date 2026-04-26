@@ -17,8 +17,10 @@ import { roomsRepo, sessionsRepo, messagesRepo, scenesRepo } from '../db/index.j
 import { auditRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
 import { getAgent } from '../config/agentConfig.js';
+import { getProvider as getProviderConfig } from '../config/providerConfig.js';
 import { computeEffectiveMessageMentions, resolveEffectiveMaxDepth } from '../services/routing/A2ARouter.js';
 import { SOFTWARE_DEVELOPMENT_CORE_AGENT_IDS } from '../prompts/builtinAgents.js';
+import { buildProviderReadiness } from '../services/providerReadiness.js';
 import {
   discoverWorkspaceSkills,
   getRoomWorkspace,
@@ -36,6 +38,97 @@ const SOFTWARE_DEVELOPMENT_CORE_REQUIREMENTS = [
   { id: SOFTWARE_DEVELOPMENT_CORE_AGENT_IDS.reviewer, label: 'Reviewer' },
 ] as const;
 
+interface ProviderPreflightIssue {
+  type: 'agent_not_found' | 'provider_not_found' | 'provider_cli_missing' | 'provider_untested' | 'provider_test_failed';
+  provider?: string;
+  label?: string;
+  cliPath?: string;
+  agentIds: string[];
+  agentNames: string[];
+  message: string;
+}
+
+function upsertProviderIssue(
+  issues: Map<string, ProviderPreflightIssue>,
+  key: string,
+  issue: ProviderPreflightIssue,
+) {
+  const existing = issues.get(key);
+  if (!existing) {
+    issues.set(key, issue);
+    return;
+  }
+  existing.agentIds.push(...issue.agentIds);
+  existing.agentNames.push(...issue.agentNames);
+}
+
+function buildRoomPreflight(workerIds: string[]) {
+  const blockers = new Map<string, ProviderPreflightIssue>();
+  const warnings = new Map<string, ProviderPreflightIssue>();
+
+  for (const workerId of workerIds) {
+    const agent = getAgent(workerId);
+    if (!agent) {
+      upsertProviderIssue(blockers, `agent:${workerId}`, {
+        type: 'agent_not_found',
+        agentIds: [workerId],
+        agentNames: [workerId],
+        message: `Agent 不存在：${workerId}`,
+      });
+      continue;
+    }
+
+    const provider = getProviderConfig(agent.provider);
+    if (!provider) {
+      upsertProviderIssue(blockers, `provider:${agent.provider}`, {
+        type: 'provider_not_found',
+        provider: agent.provider,
+        label: agent.provider,
+        agentIds: [agent.id],
+        agentNames: [agent.name],
+        message: `Provider 不存在：${agent.provider}`,
+      });
+      continue;
+    }
+
+    const readiness = buildProviderReadiness(provider);
+    const common = {
+      provider: provider.name,
+      label: provider.label,
+      cliPath: provider.cliPath,
+      agentIds: [agent.id],
+      agentNames: [agent.name],
+    };
+
+    if (readiness.status === 'cli_missing') {
+      upsertProviderIssue(blockers, `cli:${provider.name}`, {
+        ...common,
+        type: 'provider_cli_missing',
+        message: readiness.message,
+      });
+    } else if (readiness.status === 'test_failed') {
+      upsertProviderIssue(warnings, `test:${provider.name}`, {
+        ...common,
+        type: 'provider_test_failed',
+        message: readiness.message,
+      });
+    } else if (readiness.status === 'untested') {
+      upsertProviderIssue(warnings, `untested:${provider.name}`, {
+        ...common,
+        type: 'provider_untested',
+        message: readiness.message,
+      });
+    }
+  }
+
+  const blockerList = Array.from(blockers.values());
+  return {
+    ok: blockerList.length === 0,
+    blockers: blockerList,
+    warnings: Array.from(warnings.values()),
+  };
+}
+
 // GET /api/rooms — 列出所有讨论室（按最近活跃排序）
 roomsRouter.get('/', (_req, res) => {
   res.json(roomsRepo.list());
@@ -43,7 +136,26 @@ roomsRouter.get('/', (_req, res) => {
 
 // GET /api/rooms/sidebar — 轻量列表，用于侧边栏导航（不含全量 messages）
 roomsRouter.get('/sidebar', (_req, res) => {
-  res.json(roomsRepo.listSidebar());
+  res.json(roomsRepo.listSidebar().map(room => ({
+    ...room,
+    activityState: room.state === 'DONE'
+      ? 'done'
+      : isRoomBusy(room.id)
+        ? 'busy'
+        : 'open',
+  })));
+});
+
+// POST /api/rooms/preflight — check selected agents before room creation
+roomsRouter.post('/preflight', (req, res) => {
+  const workerIds = Array.isArray(req.body?.workerIds) ? req.body.workerIds as string[] : [];
+  const result = buildRoomPreflight(workerIds);
+  debug('room:preflight', {
+    workerCount: workerIds.length,
+    blockerCount: result.blockers.length,
+    warningCount: result.warnings.length,
+  });
+  res.json(result);
 });
 
 // POST /api/rooms — 创建讨论室（运行期仅创建 WORKER）

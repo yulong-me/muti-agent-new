@@ -10,16 +10,28 @@ import {
   PROVIDER_DOTS,
   PROVIDER_SWATCHES,
   type ProviderConfig,
+  type ProviderReadiness,
 } from './types'
 
 const API = API_URL
 
+const READINESS_META = {
+  ready: { label: 'Ready', className: 'tone-success-pill border' },
+  cli_missing: { label: 'CLI 未安装', className: 'tone-danger-panel border' },
+  untested: { label: '待测试', className: 'tone-warning-pill border' },
+  test_failed: { label: '测试失败', className: 'tone-danger-panel border' },
+} as const
+
 function ProviderDetail({
   provider,
+  readiness,
   onUpdate,
+  onRefreshReadiness,
 }: {
   provider: ProviderConfig
+  readiness?: ProviderReadiness
   onUpdate?: (provider: ProviderConfig) => void
+  onRefreshReadiness?: () => void
 }) {
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState(provider.lastTestResult)
@@ -28,6 +40,7 @@ function ProviderDetail({
   const [editContextWindow, setEditContextWindow] = useState(String(provider.contextWindow || 200000))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const readinessMeta = readiness ? READINESS_META[readiness.status] : null
 
   useEffect(() => {
     setResult(provider.lastTestResult)
@@ -50,6 +63,7 @@ function ProviderDetail({
         })
         setResult(nextResult)
         setTesting(false)
+        onRefreshReadiness?.()
       })
       .catch(error => {
         warn('ui:settings:provider_test_failed', { provider: provider.name, error })
@@ -80,6 +94,7 @@ function ProviderDetail({
       const updated = await response.json() as ProviderConfig
       if (!response.ok) throw new Error(updated.lastTestResult?.error || '保存失败')
       onUpdate?.(updated)
+      onRefreshReadiness?.()
       setResult(null)
       setEditing(false)
       info('ui:settings:provider_saved', { provider: provider.name })
@@ -111,6 +126,22 @@ function ProviderDetail({
           <p className="text-[11px] text-ink-soft font-mono">{provider.name}</p>
         </div>
       </div>
+      {readiness && readinessMeta && (
+        <div className="rounded-xl border border-line bg-surface-muted px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-bold uppercase text-ink-soft">运行状态</p>
+              <p className="mt-1 text-[13px] text-ink">{readiness.message}</p>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${readinessMeta.className}`}>
+              {readinessMeta.label}
+            </span>
+          </div>
+          {readiness.resolvedPath && (
+            <p className="mt-2 break-all font-mono text-[11px] text-ink-soft">{readiness.resolvedPath}</p>
+          )}
+        </div>
+      )}
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <p className="text-[11px] font-bold text-ink-soft uppercase">CLI 路径</p>
@@ -237,19 +268,23 @@ function ProviderDetail({
 
 export function ProviderSettingsTab({
   providers,
+  readiness,
   selectedProvider,
   onSelectProvider,
   onUpdateProvider,
+  onRefreshReadiness,
 }: {
   providers: Record<string, ProviderConfig>
+  readiness: Record<string, ProviderReadiness>
   selectedProvider: string | null
   onSelectProvider: (providerName: string) => void
   onUpdateProvider: (provider: ProviderConfig) => void
+  onRefreshReadiness: () => void
 }) {
   const currentProvider = selectedProvider ? providers[selectedProvider] : null
 
   return (
-    <>
+    <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <div className="flex flex-col gap-2">
         {Object.values(providers).map(provider => (
           <button
@@ -263,9 +298,14 @@ export function ProviderSettingsTab({
             />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-bold text-ink truncate">{provider.label}</p>
-              <p className="text-[11px] text-ink-soft font-mono truncate">{provider.name}</p>
+              <p className="text-[11px] text-ink-soft font-mono truncate">
+                {provider.name}
+                {readiness[provider.name] ? ` · ${READINESS_META[readiness[provider.name].status].label}` : ''}
+              </p>
             </div>
-            {provider.lastTestResult && (provider.lastTestResult.success ? (
+            {readiness[provider.name]?.status === 'cli_missing' ? (
+              <X className="tone-danger-text w-4 h-4 flex-shrink-0" aria-hidden />
+            ) : provider.lastTestResult && (provider.lastTestResult.success ? (
               <CheckCircle2 className="tone-success-text w-4 h-4 flex-shrink-0" aria-hidden />
             ) : (
               <X className="tone-danger-text w-4 h-4 flex-shrink-0" aria-hidden />
@@ -275,9 +315,14 @@ export function ProviderSettingsTab({
       </div>
       {currentProvider && (
         <div className="settings-surface rounded-xl p-5">
-          <ProviderDetail provider={currentProvider} onUpdate={onUpdateProvider} />
+          <ProviderDetail
+            provider={currentProvider}
+            readiness={readiness[currentProvider.name]}
+            onUpdate={onUpdateProvider}
+            onRefreshReadiness={onRefreshReadiness}
+          />
         </div>
       )}
-    </>
+    </div>
   )
 }

@@ -18,6 +18,7 @@ import type {
   AgentSkillBindingInput,
   ProviderConfig,
   ProviderName,
+  ProviderReadiness,
   ReadOnlySkill,
   SceneConfig,
   SkillBinding,
@@ -48,6 +49,7 @@ export default function SettingsModal({
   const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({})
+  const [providerReadiness, setProviderReadiness] = useState<Record<string, ProviderReadiness>>({})
   const [scenes, setScenes] = useState<SceneConfig[]>([])
   const [skills, setSkills] = useState<SkillConfig[]>([])
   const [globalSkills, setGlobalSkills] = useState<ReadOnlySkill[]>([])
@@ -81,13 +83,15 @@ export default function SettingsModal({
     Promise.all([
       fetch(`${API}/api/agents`).then(response => response.json()),
       fetch(`${API}/api/providers`).then(response => response.json()),
+      fetch(`${API}/api/providers/readiness`).then(response => response.json()).catch(() => ({})),
       fetch(`${API}/api/scenes`).then(response => response.json()),
       fetch(`${API}/api/skills`).then(response => response.json()),
       fetch(`${API}/api/skills/global`).then(response => response.json()).catch(() => []),
-    ]).then(async ([ag, pr, sc, sk, gl]) => {
+    ]).then(async ([ag, pr, readiness, sc, sk, gl]) => {
       if (cancelled) return
       setAgents(ag)
       setProviders(pr)
+      setProviderReadiness(readiness)
       setScenes(sc)
       setSkills(sk)
       setGlobalSkills(gl)
@@ -124,6 +128,17 @@ export default function SettingsModal({
       cancelled = true
     }
   }, [initialTab, isOpen, selectedProvider])
+
+  async function refreshProviderReadiness() {
+    try {
+      const response = await fetch(`${API}/api/providers/readiness`)
+      if (!response.ok) return
+      const readiness = await response.json() as Record<string, ProviderReadiness>
+      setProviderReadiness(readiness)
+    } catch (error) {
+      warn('ui:settings:provider_readiness_failed', { error })
+    }
+  }
 
   function handleAgentSave(updated: AgentConfig, bindings: AgentSkillBindingInput[]): Promise<void> {
     setSaving(true)
@@ -217,8 +232,13 @@ export default function SettingsModal({
   return (
     <>
       <button type="button" aria-label="关闭" className="fixed inset-0 bg-[color:var(--overlay-scrim)] z-40 transition-opacity cursor-default" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex justify-end">
-        <div className="w-full md:w-[640px] h-full settings-panel relative flex flex-col animate-in slide-in-from-right duration-300">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 pointer-events-none">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="系统设置"
+          className="pointer-events-auto flex h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl settings-panel shadow-2xl md:h-[calc(100vh-48px)] animate-in zoom-in-95 duration-200"
+        >
           <div className="flex items-center justify-between px-5 py-4 border-b border-line settings-nav shrink-0">
             <SettingsTabSwitcher tab={tab} onChange={setTab} />
             <button type="button" onClick={onClose} aria-label="关闭设置" className="p-2 text-ink-soft hover:text-ink hover:bg-surface-muted rounded-full transition-colors">
@@ -248,9 +268,11 @@ export default function SettingsModal({
             ) : tab === 'provider' ? (
               <ProviderSettingsTab
                 providers={providers}
+                readiness={providerReadiness}
                 selectedProvider={selectedProvider}
                 onSelectProvider={setSelectedProvider}
                 onUpdateProvider={provider => setProviders(previous => ({ ...previous, [provider.name]: provider }))}
+                onRefreshReadiness={refreshProviderReadiness}
               />
             ) : tab === 'scene' ? (
               <SceneSettingsTab

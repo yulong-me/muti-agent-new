@@ -444,7 +444,7 @@ function TelemetryPopover({
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-          background: [
+            background: [
               'linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 48%)',
             ].join(', '),
           }}

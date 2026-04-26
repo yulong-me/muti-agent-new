@@ -23,13 +23,17 @@ vi.mock('../src/store.js', () => ({
 }));
 
 vi.mock('../src/db/index.js', () => ({
-  roomsRepo: { create: vi.fn(), update: vi.fn() },
+  roomsRepo: { create: vi.fn(), update: vi.fn(), listSidebar: vi.fn() },
   auditRepo: { log: vi.fn() },
   scenesRepo: { get: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../src/config/agentConfig.js', () => ({
   getAgent: vi.fn(),
+}));
+
+vi.mock('../src/config/providerConfig.js', () => ({
+  getProvider: vi.fn(),
 }));
 
 // isRoomBusy is exported from stateMachine; partial mock to keep it real
@@ -57,6 +61,7 @@ import { roomsRouter } from '../src/routes/rooms.js';
 import { store } from '../src/store.js';
 import { roomsRepo, scenesRepo } from '../src/db/index.js';
 import { getAgent } from '../src/config/agentConfig.js';
+import { getProvider as getProviderConfig } from '../src/config/providerConfig.js';
 import { generateTitleSuggestionsInline, stopAgentRun } from '../src/services/stateMachine.js';
 
 // Build a minimal Express app with the rooms router under test
@@ -112,6 +117,19 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getProviderConfig).mockImplementation((name: string) => ({
+      name,
+      label: name,
+      cliPath: process.execPath,
+      defaultModel: '',
+      contextWindow: 200000,
+      apiKey: '',
+      baseUrl: '',
+      timeout: 1800,
+      thinking: true,
+      lastTested: null,
+      lastTestResult: null,
+    }));
   });
 
   function requestJson(
@@ -146,6 +164,53 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
       req.end();
     });
   }
+
+  _skipIfNoPort('preflights selected worker provider CLI availability without creating a room', async () => {
+    vi.mocked(getAgent).mockImplementation((id: string) => {
+      if (id !== 'litigation-case-mapper') return undefined;
+      return {
+        id,
+        name: '案情梳理官',
+        role: 'WORKER',
+        roleLabel: '事实链',
+        provider: 'opencode',
+        providerOpts: { thinking: true },
+        systemPrompt: '案情',
+        enabled: true,
+        tags: ['诉讼策略'],
+      };
+    });
+    vi.mocked(getProviderConfig).mockImplementation((name: string) => ({
+      name,
+      label: 'OpenCode',
+      cliPath: '/definitely/not/an/opencode',
+      defaultModel: '',
+      contextWindow: 200000,
+      apiKey: '',
+      baseUrl: '',
+      timeout: 1800,
+      thinking: true,
+      lastTested: null,
+      lastTestResult: null,
+    }));
+
+    const result = await requestJson('POST', '/api/rooms/preflight', {
+      workerIds: ['litigation-case-mapper'],
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.data).toHaveProperty('ok', false);
+    expect(result.data.blockers).toEqual([
+      expect.objectContaining({
+        type: 'provider_cli_missing',
+        provider: 'opencode',
+        label: 'OpenCode',
+        agentNames: ['案情梳理官'],
+      }),
+    ]);
+    expect(store.create).not.toHaveBeenCalled();
+    expect(roomsRepo.create).not.toHaveBeenCalled();
+  });
 
   _skipIfNoPort('returns 409 ROOM_BUSY when agent status is thinking', async () => {
     const mockRoom = {
@@ -213,6 +278,65 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
     });
 
     expect(result.status).toBe(404);
+  });
+
+  _skipIfNoPort('GET /api/rooms/sidebar exposes activityState instead of treating every open room as busy', async () => {
+    vi.mocked(roomsRepo.listSidebar).mockReturnValue([
+      {
+        id: 'room-busy',
+        topic: '忙碌讨论',
+        createdAt: 1,
+        updatedAt: 3,
+        state: 'RUNNING',
+        agentCount: 1,
+      },
+      {
+        id: 'room-open',
+        topic: '可继续讨论',
+        createdAt: 1,
+        updatedAt: 2,
+        state: 'RUNNING',
+        agentCount: 1,
+      },
+      {
+        id: 'room-done',
+        topic: '已完成讨论',
+        createdAt: 1,
+        updatedAt: 1,
+        state: 'DONE',
+        agentCount: 1,
+      },
+    ]);
+    vi.mocked(store.get).mockImplementation((id: string) => ({
+      id,
+      topic: id,
+      state: id === 'room-done' ? 'DONE' as const : 'RUNNING' as const,
+      agents: [{
+        id: 'worker-1',
+        role: 'WORKER' as const,
+        name: '测试员',
+        domainLabel: '测试',
+        configId: 'worker-1',
+        status: id === 'room-busy' ? 'thinking' as const : 'idle' as const,
+      }],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 0,
+      a2aCallChain: [],
+      sceneId: 'roundtable-forum',
+      maxA2ADepth: null,
+      createdAt: 1,
+      updatedAt: 1,
+    }));
+
+    const result = await requestJson('GET', '/api/rooms/sidebar');
+
+    expect(result.status).toBe(200);
+    expect(result.data).toMatchObject([
+      { id: 'room-busy', activityState: 'busy' },
+      { id: 'room-open', activityState: 'open' },
+      { id: 'room-done', activityState: 'done' },
+    ]);
   });
 
   _skipIfNoPort('stops the currently running agent', async () => {

@@ -6,6 +6,7 @@ export interface RoomListItem {
   createdAt: number
   updatedAt: number
   state: DiscussionState
+  activityState?: 'busy' | 'open' | 'done'
   workspace?: string
   preview?: string
   agentCount: number

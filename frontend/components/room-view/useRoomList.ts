@@ -16,6 +16,7 @@ function normalizeRoomListItem(room: any): RoomListItem {
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
     state: room.state,
+    activityState: room.activityState ?? (room.state === 'DONE' ? 'done' : 'open'),
     workspace: room.workspace,
     preview: room.preview,
     agentCount: room.agentCount,

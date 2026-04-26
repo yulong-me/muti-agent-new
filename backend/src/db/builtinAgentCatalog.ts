@@ -15,6 +15,10 @@ function hasTags(agent: { tags: string[] }, expected: string[]): boolean {
   return agent.tags.length === expected.length && expected.every(tag => agent.tags.includes(tag));
 }
 
+export function shouldRunBuiltinAgentCatalogV5Migrations(currentVersion: number): boolean {
+  return currentVersion < 5;
+}
+
 export function matchesResolvedBuiltinAgent(
   agent: StoredBuiltinAgentSnapshot,
   definition: BuiltinAgentDefinition,

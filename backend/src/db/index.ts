@@ -21,7 +21,7 @@ import {
 } from '../prompts/builtinAgents.js';
 import { BUILTIN_PROVIDER_DEFINITIONS } from '../config/builtinProviders.js';
 import { runtimePaths } from '../config/runtimePaths.js';
-import { matchesResolvedBuiltinAgent } from './builtinAgentCatalog.js';
+import { matchesResolvedBuiltinAgent, shouldRunBuiltinAgentCatalogV5Migrations } from './builtinAgentCatalog.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -103,73 +103,97 @@ function matchesExactBuiltinAgent(
   return matchesResolvedBuiltinAgent(agent, definition, systemPrompt, options);
 }
 
-function ensureBuiltinAgentCatalogV5(): void {
+function ensureBuiltinAgentCatalogV6(): void {
   const row = db.prepare("SELECT value FROM app_meta WHERE key = 'builtin_agent_catalog_version'").get() as { value: string } | undefined;
-  if (row?.value === '5') return;
+  const currentVersion = Number.parseInt(row?.value ?? '0', 10);
+  if (currentVersion >= 6) return;
 
   let inserted = 0;
   let retagged = 0;
   let providerMigrated = 0;
   let upgraded = 0;
   let retired = 0;
+  const shouldRunV5Migrations = shouldRunBuiltinAgentCatalogV5Migrations(currentVersion);
 
-  const migratableSoftwareDefsById = new Map<string, BuiltinAgentDefinition[]>();
-  for (const definition of [
-    ...LEGACY_SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
-    ...PREVIOUS_SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
-  ]) {
-    const existing = migratableSoftwareDefsById.get(definition.id) ?? [];
-    existing.push(definition);
-    migratableSoftwareDefsById.set(definition.id, existing);
-  }
-  const activeSoftwareAgentIds = new Set(SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS.map(def => def.id));
+  if (shouldRunV5Migrations) {
+    const migratableSoftwareDefsById = new Map<string, BuiltinAgentDefinition[]>();
+    for (const definition of [
+      ...LEGACY_SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
+      ...PREVIOUS_SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS,
+    ]) {
+      const existing = migratableSoftwareDefsById.get(definition.id) ?? [];
+      existing.push(definition);
+      migratableSoftwareDefsById.set(definition.id, existing);
+    }
+    const activeSoftwareAgentIds = new Set(SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS.map(def => def.id));
 
-  for (const agent of SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS) {
-    const existing = agentsRepo.get(agent.id);
-    if (!existing) {
-      if (seedBuiltinAgent(agent)) inserted++;
-      continue;
+    for (const agent of SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS) {
+      const existing = agentsRepo.get(agent.id);
+      if (!existing) {
+        if (seedBuiltinAgent(agent)) inserted++;
+        continue;
+      }
+
+      const previousDefinitions = migratableSoftwareDefsById.get(agent.id) ?? [];
+      if (!previousDefinitions.some(definition => matchesExactBuiltinAgent(existing, definition, { ignoreProviderFields: true }))) continue;
+      if (seedBuiltinAgent(agent)) upgraded++;
     }
 
-    const previousDefinitions = migratableSoftwareDefsById.get(agent.id) ?? [];
-    if (!previousDefinitions.some(definition => matchesExactBuiltinAgent(existing, definition, { ignoreProviderFields: true }))) continue;
-    if (seedBuiltinAgent(agent)) upgraded++;
-  }
+    for (const legacyDefinition of LEGACY_SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS) {
+      if (activeSoftwareAgentIds.has(legacyDefinition.id)) continue;
 
-  for (const legacyDefinition of LEGACY_SOFTWARE_DEVELOPMENT_AGENT_DEFINITIONS) {
-    if (activeSoftwareAgentIds.has(legacyDefinition.id)) continue;
+      const existing = agentsRepo.get(legacyDefinition.id);
+      if (!existing) continue;
+      if (!matchesExactBuiltinAgent(existing, legacyDefinition, { ignoreProviderFields: true })) continue;
 
-    const existing = agentsRepo.get(legacyDefinition.id);
-    if (!existing) continue;
-    if (!matchesExactBuiltinAgent(existing, legacyDefinition, { ignoreProviderFields: true })) continue;
+      agentsRepo.upsert({
+        ...existing,
+        tags: existing.tags.filter(tag => tag !== SOFTWARE_DEVELOPMENT_SCENE_TAG),
+      });
+      retired++;
+    }
 
-    agentsRepo.upsert({
-      ...existing,
-      tags: existing.tags.filter(tag => tag !== SOFTWARE_DEVELOPMENT_SCENE_TAG),
-    });
-    retired++;
-  }
+    for (const def of ROUNDTABLE_AGENT_DEFINITIONS) {
+      const existing = agentsRepo.get(def.id);
+      if (!existing || !hasTags(existing, ['persona', 'expert'])) continue;
+      agentsRepo.upsert({ ...existing, tags: def.tags });
+      retagged++;
+    }
 
-  for (const def of ROUNDTABLE_AGENT_DEFINITIONS) {
-    const existing = agentsRepo.get(def.id);
-    if (!existing || !hasTags(existing, ['persona', 'expert'])) continue;
-    agentsRepo.upsert({ ...existing, tags: def.tags });
-    retagged++;
+    for (const def of BUILTIN_AGENT_DEFINITIONS) {
+      const existing = agentsRepo.get(def.id);
+      if (!existing || existing.provider === def.provider) continue;
+      agentsRepo.upsert({
+        ...existing,
+        provider: def.provider,
+        providerOpts: buildBuiltinProviderOptsForMigration(def.providerOpts, existing.providerOpts),
+      });
+      providerMigrated++;
+    }
   }
 
   for (const def of BUILTIN_AGENT_DEFINITIONS) {
     const existing = agentsRepo.get(def.id);
-    if (!existing || existing.provider === def.provider) continue;
-    agentsRepo.upsert({
-      ...existing,
-      provider: def.provider,
-      providerOpts: buildBuiltinProviderOptsForMigration(def.providerOpts, existing.providerOpts),
-    });
-    providerMigrated++;
+    if (existing) continue;
+    if (seedBuiltinAgent(def)) inserted++;
   }
 
-  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('builtin_agent_catalog_version', '5')").run();
-  log('INFO', 'db:seed:agents:catalog_v5', { inserted, retagged, providerMigrated, upgraded, retired });
+  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('builtin_agent_catalog_version', '6')").run();
+  log('INFO', 'db:seed:agents:catalog_v6', { inserted, retagged, providerMigrated, upgraded, retired });
+}
+
+function ensureBuiltinSceneCatalogV2(): void {
+  const row = db.prepare("SELECT value FROM app_meta WHERE key = 'builtin_scene_catalog_version'").get() as { value: string } | undefined;
+  const currentVersion = Number.parseInt(row?.value ?? '0', 10);
+  if (currentVersion >= 2) return;
+
+  const beforeCount = countRows('scenes');
+  ensureBuiltinScenes();
+  const afterCount = countRows('scenes');
+  const inserted = Math.max(0, afterCount - beforeCount);
+
+  db.prepare("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('builtin_scene_catalog_version', '2')").run();
+  log('INFO', 'db:seed:scenes:catalog_v2', { inserted });
 }
 
 const seedFreshBuiltinData = db.transaction(() => {
@@ -229,7 +253,8 @@ export function initDB(): void {
     log('INFO', 'db:seed:bootstrap:skipped', { reason: 'bootstrap_seed_version already set' });
   }
 
-  ensureBuiltinAgentCatalogV5();
+  ensureBuiltinAgentCatalogV6();
+  ensureBuiltinSceneCatalogV2();
 
   log('INFO', 'db:init:done', { dbPath: DB_PATH });
 }
