@@ -2,7 +2,7 @@ import type { ProviderName } from '../config/agentConfig.js';
 import { getProvider as getProviderConfig } from '../config/providerConfig.js';
 import type { ContextHealth, InvocationUsage, SessionTelemetry } from '../types.js';
 
-export interface ProviderEndTelemetry {
+interface ProviderEndTelemetry {
   duration_ms: number;
   total_cost_usd: number;
   input_tokens: number;

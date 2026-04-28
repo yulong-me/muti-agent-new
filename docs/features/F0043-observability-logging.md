@@ -72,7 +72,7 @@ interface LogEntry {
 
 ### 实现要点
 - 结构化输出到 Console + 批量 POST 后端持久化
-- 可通过 `localStorage.setItem('log_level', 'DEBUG')` 临时开启 DEBUG 级别（调用 `setLogLevel('DEBUG')`）
+- 可通过 `localStorage.setItem('log_level', 'DEBUG')` 临时开启 DEBUG 级别
 - 前端日志每 2s 批量 POST 到 `POST /api/logs`，写入 `logs/{roomId}.log`
 - `RoomView` 挂载时自动调用 `setRoomId(roomId)` 设置日志上下文
 

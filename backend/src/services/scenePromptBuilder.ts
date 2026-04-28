@@ -13,7 +13,7 @@ import { scenesRepo } from '../db/index.js';
 import { getEffectiveMaxDepthForRoom } from './routing/A2ARouter.js';
 import { debug, warn } from '../lib/logger.js';
 
-export interface RuntimeContext {
+interface RuntimeContext {
   /** Current user input / task text */
   userMessage: string;
   /** A2A task text (separate from userMessage for A2A orchestration) */

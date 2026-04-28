@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import type { ProviderName } from './agents.js';
 
-export type SkillSourceType = 'managed' | 'workspace';
+type SkillSourceType = 'managed' | 'workspace';
 export type SkillMode = 'auto' | 'required';
 export type SkillProviderCompat = ProviderName;
 

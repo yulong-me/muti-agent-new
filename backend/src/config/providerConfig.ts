@@ -13,7 +13,7 @@ export interface ProviderConfig {
   lastTestResult: { success: boolean; version?: string; error?: string } | null
 }
 
-export type ProvidersConfig = Record<string, ProviderConfig>
+type ProvidersConfig = Record<string, ProviderConfig>
 
 import { providersRepo } from '../db/repositories/providers.js';
 

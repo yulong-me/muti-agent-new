@@ -1,6 +1,6 @@
 import type { BuiltinAgentDefinition } from '../prompts/builtinAgents.js';
 
-export interface StoredBuiltinAgentSnapshot {
+interface StoredBuiltinAgentSnapshot {
   name: string;
   role: string;
   roleLabel: string;

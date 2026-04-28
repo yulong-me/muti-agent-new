@@ -11,10 +11,6 @@ export function getAgent(id: string): AgentConfig | undefined {
   return agentsRepo.get(id);
 }
 
-export function getAgentByName(name: string): AgentConfig | undefined {
-  return agentsRepo.list().find(a => a.name === name);
-}
-
 export function saveAgents(agents: AgentConfig[]): void {
   // Full replace: clear and re-insert all
   const all = agentsRepo.list();

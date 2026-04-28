@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ProviderConfig } from '../config/providerConfig.js';
 
-export type ProviderReadinessStatus = 'ready' | 'cli_missing' | 'untested' | 'test_failed';
+type ProviderReadinessStatus = 'ready' | 'cli_missing' | 'untested' | 'test_failed';
 
-export interface ProviderReadiness {
+interface ProviderReadiness {
   provider: string;
   label: string;
   cliPath: string;
@@ -44,7 +44,7 @@ function canExecute(filePath: string): boolean {
   }
 }
 
-export function resolveProviderCliPath(cliPath: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+function resolveProviderCliPath(cliPath: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
   const trimmed = cliPath.trim();
   if (!trimmed) return undefined;
   return executableCandidates(trimmed, env).find(canExecute);

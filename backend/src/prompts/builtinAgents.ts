@@ -327,7 +327,7 @@ export const ROUNDTABLE_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   { id: 'zhangxuefeng',    name: '张雪峰',           roleLabel: '张雪峰',          skillId: 'zhangxuefeng',    provider: 'opencode', providerOpts: { thinking: true }, tags: ROUNDTABLE_TAGS },
 ];
 
-export const LITIGATION_STRATEGY_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
+const LITIGATION_STRATEGY_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   {
     id: 'litigation-case-mapper',
     name: '案情梳理官',
@@ -366,7 +366,7 @@ export const LITIGATION_STRATEGY_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   },
 ];
 
-export const COMPETITOR_ANALYSIS_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
+const COMPETITOR_ANALYSIS_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   {
     id: 'competitor-market-mapper',
     name: '市场地图分析师',
@@ -405,7 +405,7 @@ export const COMPETITOR_ANALYSIS_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   },
 ];
 
-export const PAPER_REVISION_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
+const PAPER_REVISION_AGENT_DEFINITIONS: BuiltinAgentDefinition[] = [
   {
     id: 'paper-review-diagnoser',
     name: '审稿意见诊断师',

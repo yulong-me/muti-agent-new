@@ -1,11 +1,11 @@
-export type BootstrapAction =
+type BootstrapAction =
   | 'fresh_seed_all'
   | 'legacy_mark_only'
   | 'legacy_backfill_agents'
   | 'repair_partial'
   | 'skip';
 
-export interface BootstrapState {
+interface BootstrapState {
   metaPresent: boolean;
   agentsCount: number;
   providersCount: number;

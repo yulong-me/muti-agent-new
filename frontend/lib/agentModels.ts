@@ -1,4 +1,4 @@
-export interface ProviderModelConfigLike {
+interface ProviderModelConfigLike {
   defaultModel?: string | null
 }
 

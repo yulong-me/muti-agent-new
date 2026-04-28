@@ -3,7 +3,7 @@
 import { API_URL } from './api'
 import { debug, warn } from './logger'
 
-export interface BrowseEntry {
+interface BrowseEntry {
   name: string
   path: string
   isDirectory: boolean
@@ -17,7 +17,7 @@ export interface BrowseResult {
   entries: BrowseEntry[]
 }
 
-export interface FilePreviewResult {
+interface FilePreviewResult {
   path: string
   name: string
   size: number

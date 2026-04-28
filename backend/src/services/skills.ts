@@ -23,14 +23,14 @@ import type { ProviderName } from '../db/repositories/agents.js';
 const SKILL_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DEFAULT_PROVIDER_COMPAT: SkillProviderCompat[] = ['claude-code', 'opencode', 'codex'];
 
-export interface SkillBindingInput {
+interface SkillBindingInput {
   skillId?: string;
   skillName?: string;
   mode?: SkillMode;
   enabled?: boolean;
 }
 
-export interface ManagedSkillInput {
+interface ManagedSkillInput {
   name: string;
   description?: string;
   content?: string;
@@ -38,7 +38,7 @@ export interface ManagedSkillInput {
   providerCompat?: SkillProviderCompat[];
 }
 
-export interface ManagedSkillDetail extends SkillRecord {
+interface ManagedSkillDetail extends SkillRecord {
   content: string;
   usage: {
     agentCount: number;
@@ -46,7 +46,7 @@ export interface ManagedSkillDetail extends SkillRecord {
   };
 }
 
-export interface DiscoveredSkill {
+interface DiscoveredSkill {
   name: string;
   description: string;
   sourceType: 'workspace' | 'global';
@@ -83,7 +83,7 @@ function normalizeSkillName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-export function validateSkillName(name: string): string {
+function validateSkillName(name: string): string {
   const normalized = normalizeSkillName(name);
   if (!SKILL_NAME_RE.test(normalized)) {
     throw new Error('Skill name must match ^[a-z0-9]+(-[a-z0-9]+)*$');
@@ -697,10 +697,4 @@ export function buildEffectiveSkillSummary(skills: EffectiveSkill[]): string | u
   return skills
     .map(skill => `- ${skill.name} [${skill.mode}] (${skill.sourceLabel})`)
     .join('\n');
-}
-
-export function ensureAgentExists(agentId: string): void {
-  if (!getAgent(agentId)) {
-    throw new Error(`Agent not found: ${agentId}`);
-  }
 }

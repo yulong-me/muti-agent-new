@@ -3,6 +3,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { ErrorBubble } from './ErrorBubble'
 import type { AgentRunErrorEvent } from '../lib/agents'
+import { error as logError } from '../lib/logger'
 
 interface BubbleErrorBoundaryProps {
   agentId?: string
@@ -37,7 +38,7 @@ export class BubbleErrorBoundary extends Component<BubbleErrorBoundaryProps, Bub
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Keep raw render errors in developer logs, not in user-facing UI.
-    console.error('bubble.render_error', {
+    logError('bubble.render_error', {
       traceId: this.state.traceId,
       agentName: this.props.agentName,
       error: error.message,

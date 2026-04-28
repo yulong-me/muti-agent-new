@@ -14,13 +14,13 @@ import { debug, info, warn } from '../lib/logger.js';
 
 const execFileAsync = promisify(execFile);
 
-export interface BrowseEntry {
+interface BrowseEntry {
   name: string;
   path: string;
   isDirectory: boolean;
 }
 
-export interface BrowseResult {
+interface BrowseResult {
   current: string;
   name: string;
   parent: string | null;
@@ -28,7 +28,7 @@ export interface BrowseResult {
   entries: BrowseEntry[];
 }
 
-export interface FilePreviewResult {
+interface FilePreviewResult {
   path: string;
   name: string;
   size: number;

@@ -104,7 +104,7 @@ export function buildCodexProviderLaunch(
   };
 }
 
-export interface CodexParseState {
+interface CodexParseState {
   startTime: number;
   now?: () => number;
   sessionId?: string;

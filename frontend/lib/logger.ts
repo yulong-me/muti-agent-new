@@ -96,14 +96,6 @@ const debugLogStore = {
   current: [] as { ts: string; level: LogLevel; event: string; meta?: Record<string, unknown> }[],
 };
 
-export function getDebugLog() {
-  return debugLogStore.current;
-}
-
-export function clearDebugLog() {
-  debugLogStore.current = [];
-}
-
 // ── Room context (set from RoomView) ─────────────────────────────────────────
 let currentRoomId: string | null = null;
 
@@ -197,12 +189,3 @@ export const error = (event: string, meta?: Record<string, unknown>) => logger('
 
 // ── Backward-compat: telemetry() alias ───────────────────────────────────────
 export const telemetry = debug;
-
-// ── localStorage helpers ──────────────────────────────────────────────────────
-export function setLogLevel(level: LogLevel) {
-  try {
-    localStorage.setItem('log_level', level);
-  } catch {
-    // ignore
-  }
-}

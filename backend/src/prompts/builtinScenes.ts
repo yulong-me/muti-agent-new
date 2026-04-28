@@ -1,4 +1,4 @@
-export interface BuiltinSceneDefinition {
+interface BuiltinSceneDefinition {
   id: string;
   name: string;
   description: string;

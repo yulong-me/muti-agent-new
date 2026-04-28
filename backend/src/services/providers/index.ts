@@ -32,7 +32,7 @@ export type ClaudeEvent =
     }
   | { type: 'error'; agentId: string; message: string };
 
-export type StreamFn = (
+type StreamFn = (
   prompt: string,
   agentId: string,
   opts?: Record<string, unknown>,
