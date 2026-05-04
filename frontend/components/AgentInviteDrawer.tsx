@@ -111,13 +111,13 @@ export function AgentInviteDrawer({ roomId, currentAgentIds, onClose, onInvited 
   }, [roomId, onInvited, onClose])
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 layer-drawer flex items-center justify-center p-4">
       {/* 遮罩 */}
-      <div className="absolute inset-0 bg-[color:var(--overlay-scrim)]" onClick={onClose} />
+      <div className="absolute inset-0 layer-modal-scrim bg-[color:var(--overlay-scrim)]" onClick={onClose} />
 
       {/* 弹窗 */}
       
-      <div className="relative z-10 app-window-shell rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
+      <div className="layer-overlay-content app-window-shell rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
            style={{ maxHeight: '70vh' }}
            role="dialog"
            aria-modal="true"

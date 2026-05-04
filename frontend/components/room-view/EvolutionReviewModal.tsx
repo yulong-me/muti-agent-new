@@ -199,7 +199,7 @@ export function EvolutionReviewModal({
     : `处理完所有建议后，才能确认升级到 ${targetVersionLabel}。`
 
   return (
-    <div className="fixed inset-0 z-[80] overflow-auto bg-nav-bg text-ink">
+    <div className="fixed inset-0 layer-modal overflow-auto bg-nav-bg text-ink">
       <div className="flex min-h-full flex-col">
         <div className="grid shrink-0 gap-4 border-b border-line bg-nav-bg/95 px-5 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
           <div className="min-w-0">

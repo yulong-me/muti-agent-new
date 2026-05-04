@@ -89,7 +89,7 @@ export function CustomSelect<T extends string = string>({
         <div
           id={menuId}
           role="listbox"
-          className={`absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-xl custom-scrollbar ${menuClassName}`}
+          className={`absolute left-0 right-0 top-full layer-dropdown mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-xl custom-scrollbar ${menuClassName}`}
         >
           {options.map(option => {
             const active = option.value === value

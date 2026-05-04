@@ -157,14 +157,14 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile, onOpenExternal 
             <Code2 className="h-3.5 w-3.5" />
           </button>
           {currentPath !== workspacePath && (
-          <button
-            type="button"
-            onClick={() => browseResult?.parent && void loadPath(browseResult.parent)}
-            className="rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
-            title="返回上级"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
+            <button
+              type="button"
+              onClick={() => browseResult?.parent && void loadPath(browseResult.parent)}
+              className="rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+              title="返回上级"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
           )}
         </div>
       </div>
@@ -246,22 +246,6 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile, onOpenExternal 
                 }
                 <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{entry.name}</span>
                 <ChevronRight className="h-3 w-3 shrink-0 text-ink-soft/30" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenExternal(entry.path, 'finder')}
-                className="shrink-0 rounded p-0.5 text-ink-soft/50 transition-colors hover:bg-surface hover:text-ink"
-                title="在 Finder 中打开"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenExternal(entry.path, 'vscode')}
-                className="shrink-0 rounded p-0.5 text-ink-soft/50 transition-colors hover:bg-surface hover:text-ink"
-                title="在 VS Code 中打开"
-              >
-                <Code2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}

@@ -27,7 +27,7 @@ export default function MentionPicker({ agents, highlightIndex, onSelect, onHigh
   return (
     <div
       data-mention-picker="1"
-      className="absolute z-50 bg-surface border border-line rounded-xl shadow-2xl overflow-hidden"
+      className="absolute layer-dropdown bg-surface border border-line rounded-xl shadow-2xl overflow-hidden"
       style={{ left: 0, bottom: 'calc(100% + 6px)', minWidth: 220, maxWidth: 280 }}
       role="listbox"
       aria-label="专家候选列表"

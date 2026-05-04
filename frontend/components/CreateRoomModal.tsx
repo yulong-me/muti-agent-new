@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { X, Play, BrainCircuit, ChevronDown, Plus, Trash2, Wand2 } from 'lucide-react'
+import { X, Play, BrainCircuit, ChevronDown, Plus, Trash2, Wand2, Loader2 } from 'lucide-react'
 import { DirectoryPicker } from './DirectoryPicker'
 import { CustomSelect } from './ui/CustomSelect'
 import { API_URL } from '@/lib/api'
@@ -671,22 +671,21 @@ export default function CreateRoomModal({
   }
 
   return (
-    <>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="发起任务"
+      className="fixed inset-0 layer-modal flex items-stretch justify-center p-4 pointer-events-none"
+    >
       <div
         role="button"
         tabIndex={0}
         aria-label="关闭"
-        className="fixed inset-0 z-50 bg-[color:var(--overlay-scrim)]"
+        className="pointer-events-auto absolute inset-0 layer-modal-scrim bg-[color:var(--overlay-scrim)]"
         onClick={onClose}
         onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') onClose() }}
       />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="发起任务"
-        className="fixed inset-0 z-50 flex items-stretch justify-center p-4 pointer-events-none"
-      >
-        <div className="app-window-shell rounded-3xl w-full max-w-4xl flex flex-col custom-scrollbar pointer-events-auto overflow-hidden">
+      <div className="layer-overlay-content app-window-shell rounded-3xl w-full max-w-4xl flex flex-col custom-scrollbar pointer-events-auto overflow-hidden">
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto">
@@ -750,7 +749,12 @@ export default function CreateRoomModal({
                         {teamLoadFailed ? 'Team 列表暂不可用，请稍后重试或生成新 Team。' : '还没有可用 Team，请先生成新 Team。'}
                       </div>
                     )}
-                    {loadingTeams && <p className="text-[11px] text-ink-soft mt-1">加载 Team 中…</p>}
+                    {loadingTeams && (
+                      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-soft">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" aria-hidden />
+                        加载 Team 中…
+                      </p>
+                    )}
                   </div>
                   {!loadingTeams && selectedTeam && (
                     <div className="mt-3 rounded-xl border border-line bg-surface p-3">
@@ -1013,6 +1017,5 @@ export default function CreateRoomModal({
           </div>
         </div>
       </div>
-    </>
   )
 }

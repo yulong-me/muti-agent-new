@@ -114,14 +114,13 @@ export default function SettingsModal({
   if (!isOpen) return null
 
   return (
-    <>
-      <button type="button" aria-label="关闭" className="fixed inset-0 bg-[color:var(--overlay-scrim)] z-40 transition-opacity cursor-default" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 pointer-events-none">
+    <div className="fixed inset-0 layer-modal flex items-center justify-center p-4 md:p-6 pointer-events-none">
+      <button type="button" aria-label="关闭" className="pointer-events-auto absolute inset-0 layer-modal-scrim bg-[color:var(--overlay-scrim)] transition-opacity cursor-default" onClick={onClose} />
         <div
           role="dialog"
           aria-modal="true"
           aria-label="系统设置"
-          className="pointer-events-auto flex h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl settings-panel shadow-2xl md:h-[calc(100vh-48px)] animate-in zoom-in-95 duration-200"
+          className="layer-overlay-content pointer-events-auto flex h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl settings-panel shadow-2xl md:h-[calc(100vh-48px)] animate-in zoom-in-95 duration-200"
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-line settings-nav shrink-0">
             <SettingsTabSwitcher tab={tab} onChange={setTab} />
@@ -165,7 +164,6 @@ export default function SettingsModal({
             )}
           </div>
         </div>
-      </div>
-    </>
+    </div>
   )
 }
