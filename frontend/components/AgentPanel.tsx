@@ -425,7 +425,7 @@ function TelemetryPopover({
   }
 
   return createPortal((
-    <div className="fixed inset-0 z-[60] pointer-events-none">
+    <div className="fixed inset-0 layer-popover pointer-events-none">
       <div
         ref={(node) => {
           popoverRef.current = node
@@ -450,7 +450,7 @@ function TelemetryPopover({
           }}
         />
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--line)_78%,transparent),transparent)]" />
-        <div className="relative z-10 p-3.5">
+        <div className="layer-overlay-content p-3.5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-soft/46">上下文详情</p>
@@ -620,7 +620,7 @@ export function AgentPanel({
     <>
       {/* Desktop: fixed right sidebar */}
       <div
-        className="relative z-20 hidden h-full shrink-0 overflow-visible transition-[width] duration-200 ease-out lg:block"
+        className="relative layer-app-panel hidden h-full shrink-0 overflow-visible transition-[width] duration-200 ease-out lg:block"
         style={{ width: desktopCollapsed ? 0 : desktopWidth }}
         aria-hidden={desktopCollapsed}
       >
@@ -629,7 +629,7 @@ export function AgentPanel({
             <button
               type="button"
               onMouseDown={handleResizeStart}
-              className="absolute inset-y-0 left-0 z-10 flex w-3 -translate-x-1/2 items-center justify-center text-ink-soft/40 transition-colors hover:text-accent"
+              className="absolute inset-y-0 left-0 layer-local-float flex w-3 -translate-x-1/2 items-center justify-center text-ink-soft/40 transition-colors hover:text-accent"
               aria-label="调整 Team 成员面板宽度"
               title="拖拽调整面板宽度"
             >
@@ -652,9 +652,9 @@ export function AgentPanel({
 
       {/* Mobile: fixed right drawer */}
       {isMobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-[200] flex">
-          <div className="absolute inset-0 bg-[color:var(--overlay-scrim)]" onClick={onMobileClose} />
-          <div className="relative z-10 ml-auto flex h-full w-[280px] flex-col border-l border-line bg-surface shadow-2xl">
+        <div className="lg:hidden fixed inset-0 layer-drawer flex">
+          <div className="absolute inset-0 layer-modal-scrim bg-[color:var(--overlay-scrim)]" onClick={onMobileClose} />
+          <div className="layer-overlay-content ml-auto flex h-full w-[280px] flex-col border-l border-line bg-surface shadow-2xl">
             <div className="flex items-center justify-end border-b border-line px-3 py-3">
               <button
                 type="button"

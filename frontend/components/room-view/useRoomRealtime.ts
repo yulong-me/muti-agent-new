@@ -24,6 +24,7 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set())
   const [messageErrorMap, setMessageErrorMap] = useState<Record<string, AgentRunErrorEvent>>({})
   const [orphanErrors, setOrphanErrors] = useState<AgentRunErrorEvent[]>([])
+  const [loading, setLoading] = useState(Boolean(roomId))
   const [maxA2ADepth, setMaxA2ADepth] = useState<number | null>(null)
   const [currentA2ADepth, setCurrentA2ADepth] = useState(0)
   const [effectiveMaxDepth, setEffectiveMaxDepth] = useState(5)
@@ -58,6 +59,7 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
     setStreamingAgentIds(new Set())
     setMessageErrorMap({})
     setOrphanErrors([])
+    setLoading(Boolean(roomId))
     setMaxA2ADepth(null)
     setCurrentA2ADepth(0)
     setEffectiveMaxDepth(5)
@@ -338,14 +340,19 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
   }, [roomId])
 
   useEffect(() => {
-    if (!roomId) return
+    if (!roomId) {
+      setLoading(false)
+      return
+    }
 
+    let cancelled = false
     const poll = async () => {
       try {
         const response = await fetch(`${API}/api/rooms/${roomId}/messages`)
         if (!response.ok) return
 
         const data = await response.json()
+        if (cancelled) return
         const nextState = data.state || 'RUNNING'
         const nextAgents = data.agents || []
         pollStateRef.current = { state: nextState, agents: nextAgents }
@@ -431,7 +438,12 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
           ]
           return merged.sort((left, right) => left.timestamp - right.timestamp)
         })
-      } catch {}
+      } catch {
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
     }
 
     void poll()
@@ -442,12 +454,16 @@ export function useRoomRealtime({ roomId, queuedDispatchPendingRef }: UseRoomRea
       void poll()
     }, 2000)
 
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [queuedDispatchPendingRef, roomId])
 
   return {
     state,
     messages,
+    loading,
     agents,
     streamingAgentIds,
     messageErrorMap,

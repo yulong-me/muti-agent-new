@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Command, Moon, Plus, Search, Settings, Sun, Trash2, UserCircle, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronLeft, ChevronRight, Command, GripVertical, Moon, Plus, Search, Settings, Sun, Trash2, UserCircle, X } from 'lucide-react'
 import {
   formatRelativeTime,
   type DiscussionState,
@@ -52,6 +53,11 @@ interface RoomListSidebarProps {
   mounted?: boolean
   onToggleTheme?: () => void
   onOpenSystemSettings?: () => void
+  loading?: boolean
+  desktopWidth?: number
+  desktopCollapsed?: boolean
+  onDesktopWidthChange?: (width: number) => void
+  onDesktopToggleCollapsed?: () => void
   mobileMenuOpen?: boolean
   onToggleMobileMenu?: () => void
   onCloseMobileMenu?: () => void
@@ -188,9 +194,9 @@ function CommandPalette({
 
   if (!open) return null
 
-  return (
+  return createPortal((
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center bg-[color:var(--overlay-scrim)] px-4 pt-[12vh]"
+      className="fixed inset-0 layer-modal flex items-start justify-center bg-[color:var(--overlay-scrim)] px-4 pt-[12vh]"
       data-command-palette="true"
       role="dialog"
       aria-modal="true"
@@ -286,7 +292,7 @@ function CommandPalette({
         </div>
       </div>
     </div>
-  )
+  ), document.body)
 }
 
 function SidebarRoomsHeader({
@@ -319,6 +325,22 @@ function SidebarRoomsHeader({
   )
 }
 
+function SidebarLoadingRows() {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label="加载任务记录">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="rounded-lg border border-line/70 bg-surface px-3 py-2.5">
+          <div className="h-3 w-4/5 animate-pulse rounded-full bg-surface-muted" />
+          <div className="mt-2 flex items-center gap-2">
+            <div className="h-2.5 w-24 animate-pulse rounded-full bg-surface-muted" />
+            <div className="h-2.5 w-12 animate-pulse rounded-full bg-surface-muted" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function RoomItem({
   room,
   isActive,
@@ -332,6 +354,7 @@ function RoomItem({
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const isBusy = room.activityState === 'busy' && room.state !== 'DONE'
+  const preview = room.preview?.trim()
 
   const handleDelete = (event: React.KeyboardEvent | React.MouseEvent) => {
     event.stopPropagation()
@@ -352,7 +375,7 @@ function RoomItem({
   return (
     <div className="relative">
       {showDeleteConfirm && (
-        <div className="tone-danger-panel absolute inset-0 z-10 flex items-center justify-center rounded-lg border bg-surface p-2 shadow-xl">
+        <div className="tone-danger-panel absolute inset-0 layer-local-float flex items-center justify-center rounded-lg border bg-surface p-2 shadow-xl">
           <div className="text-center">
             <p className="tone-danger-text mb-2 max-w-[13rem] truncate text-caption">删除「{getTaskTitle(room)}」？</p>
             <div className="flex justify-center gap-2">
@@ -421,10 +444,17 @@ function RoomItem({
           </button>
         </div>
 
-        <div className={`${isActive ? 'flex' : 'hidden'} mt-1.5 items-center gap-2`}>
-          <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-ink-faint">
-            {getTaskTeamLabel(room)} · {getTaskStatusLabel(room)}
-          </p>
+        <div data-task-meta="always-visible" className="mt-1.5 flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] leading-4 text-ink-faint">
+              {getTaskTeamLabel(room)} · {getTaskStatusLabel(room)}
+            </p>
+            {preview && (
+              <p className="mt-0.5 max-h-9 overflow-hidden break-words text-[11px] leading-[18px] text-ink-soft/70">
+                {preview}
+              </p>
+            )}
+          </div>
           <div className="flex -space-x-1">
             {Array.from({ length: Math.min(room.agentCount, 3) }).map((_, index) => (
               <span
@@ -480,6 +510,7 @@ function RoomListSection({
 function SidebarConversationSection({
   rooms,
   currentRoomId,
+  loading = false,
   onNewRoom,
   onSelectRoom,
   onDeleteRoom,
@@ -488,6 +519,7 @@ function SidebarConversationSection({
 }: {
   rooms: SidebarRoom[]
   currentRoomId?: string
+  loading?: boolean
   onNewRoom: () => void
   onSelectRoom: (roomId: string) => void
   onDeleteRoom: (roomId: string) => void
@@ -524,40 +556,46 @@ function SidebarConversationSection({
         onOpenSystemSettings={onOpenSystemSettings}
         onAfterSelect={onAfterSelect}
       />
-      <RoomListSection
-        rooms={activeRooms}
-        currentRoomId={currentRoomId}
-        emptyText="暂无任务记录"
-        onSelectRoom={onSelectRoom}
-        onDeleteRoom={onDeleteRoom}
-        onAfterSelect={onAfterSelect}
-      />
+      {loading ? (
+        <SidebarLoadingRows />
+      ) : (
+        <>
+          <RoomListSection
+            rooms={activeRooms}
+            currentRoomId={currentRoomId}
+            emptyText="暂无任务记录"
+            onSelectRoom={onSelectRoom}
+            onDeleteRoom={onDeleteRoom}
+            onAfterSelect={onAfterSelect}
+          />
 
-      <div className="border-t border-line pt-2">
-        <button
-          type="button"
-          onClick={() => setArchivedOpen(open => !open)}
-          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-label uppercase text-ink-soft transition-colors hover:bg-surface"
-          aria-expanded={archivedOpen}
-        >
-          <span>已归档</span>
-          <span className="rounded-full border border-line bg-surface px-2 py-0.5 font-mono text-[10px] text-ink-faint">
-            {archivedRooms.length}
-          </span>
-        </button>
-        {archivedOpen && (
-          <div className="mt-1">
-            <RoomListSection
-              rooms={archivedRooms}
-              currentRoomId={currentRoomId}
-              emptyText="暂无归档任务记录"
-              onSelectRoom={onSelectRoom}
-              onDeleteRoom={onDeleteRoom}
-              onAfterSelect={onAfterSelect}
-            />
+          <div className="border-t border-line pt-2">
+            <button
+              type="button"
+              onClick={() => setArchivedOpen(open => !open)}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-label uppercase text-ink-soft transition-colors hover:bg-surface"
+              aria-expanded={archivedOpen}
+            >
+              <span>已归档</span>
+              <span className="rounded-full border border-line bg-surface px-2 py-0.5 font-mono text-[10px] text-ink-faint">
+                {archivedRooms.length}
+              </span>
+            </button>
+            {archivedOpen && (
+              <div className="mt-1">
+                <RoomListSection
+                  rooms={archivedRooms}
+                  currentRoomId={currentRoomId}
+                  emptyText="暂无归档任务记录"
+                  onSelectRoom={onSelectRoom}
+                  onDeleteRoom={onDeleteRoom}
+                  onAfterSelect={onAfterSelect}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }
@@ -622,28 +660,112 @@ export function RoomListSidebarDesktop({
   mounted,
   onToggleTheme,
   onOpenSystemSettings,
+  loading = false,
+  desktopWidth = 280,
+  desktopCollapsed = false,
+  onDesktopWidthChange,
+  onDesktopToggleCollapsed,
 }: Omit<RoomListSidebarProps, 'mobileMenuOpen' | 'onToggleMobileMenu' | 'onCloseMobileMenu'>) {
+  const dragStartRef = useRef<{ x: number; width: number } | null>(null)
+
+  const handleResizeStart = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (!onDesktopWidthChange) return
+    const handleWidthChange = onDesktopWidthChange
+    event.preventDefault()
+    dragStartRef.current = { x: event.clientX, width: desktopWidth }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    function handleMouseMove(moveEvent: MouseEvent) {
+      const start = dragStartRef.current
+      if (!start) return
+      handleWidthChange(start.width + (moveEvent.clientX - start.x))
+    }
+
+    function handleMouseUp() {
+      dragStartRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }, [desktopWidth, onDesktopWidthChange])
+
   return (
-    <div className="app-islands-panel z-20 hidden w-[280px] flex-col border-r border-line bg-surface md:flex">
-      <div className="shrink-0 border-b border-line px-4 py-3">
-        <SidebarBrand />
-      </div>
-      <div className="custom-scrollbar flex-1 overflow-y-auto p-3">
-        <SidebarConversationSection
-          rooms={rooms}
-          currentRoomId={currentRoomId}
-          onNewRoom={onNewRoom}
-          onSelectRoom={onSelectRoom}
-          onDeleteRoom={onDeleteRoom}
-          onOpenSystemSettings={onOpenSystemSettings}
-        />
-      </div>
-      <SidebarSystemControls
-        theme={theme}
-        mounted={mounted}
-        onToggleTheme={onToggleTheme}
-        onOpenSystemSettings={onOpenSystemSettings}
-      />
+    <div
+      className="relative layer-app-panel hidden h-full shrink-0 overflow-visible transition-[width] duration-200 ease-out md:block"
+      style={{ width: desktopCollapsed ? 52 : desktopWidth }}
+    >
+      {desktopCollapsed ? (
+        <div className="app-islands-panel flex h-full flex-col items-center border-r border-line bg-surface px-2 py-3">
+          <button
+            type="button"
+            onClick={onDesktopToggleCollapsed}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-surface-muted hover:text-accent"
+            aria-label="展开任务记录面板"
+            title="展开任务记录面板"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onNewRoom}
+            className="mt-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-ink-soft transition-colors hover:border-accent/55 hover:bg-accent/[0.06] hover:text-accent"
+            aria-label="发起任务"
+            title="发起任务"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            onMouseDown={handleResizeStart}
+            className="absolute inset-y-0 right-0 layer-local-float flex w-3 translate-x-1/2 items-center justify-center text-ink-soft/40 transition-colors hover:text-accent"
+            aria-label="调整任务记录面板宽度"
+            title="拖拽调整面板宽度"
+          >
+            <GripVertical className="h-4 w-4 rounded-full bg-bg" />
+          </button>
+          <div className="app-islands-panel flex h-full flex-col border-r border-line bg-surface">
+            <div className="shrink-0 border-b border-line px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <SidebarBrand />
+                <button
+                  type="button"
+                  onClick={onDesktopToggleCollapsed}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-surface-muted hover:text-accent"
+                  aria-label="收起任务记录面板"
+                  title="收起任务记录面板"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="custom-scrollbar flex-1 overflow-y-auto p-3">
+              <SidebarConversationSection
+                rooms={rooms}
+                currentRoomId={currentRoomId}
+                loading={loading}
+                onNewRoom={onNewRoom}
+                onSelectRoom={onSelectRoom}
+                onDeleteRoom={onDeleteRoom}
+                onOpenSystemSettings={onOpenSystemSettings}
+              />
+            </div>
+            <SidebarSystemControls
+              theme={theme}
+              mounted={mounted}
+              onToggleTheme={onToggleTheme}
+              onOpenSystemSettings={onOpenSystemSettings}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -658,13 +780,14 @@ export function RoomListSidebarMobile({
   mounted,
   onToggleTheme,
   onOpenSystemSettings,
+  loading = false,
   mobileMenuOpen,
   onCloseMobileMenu,
 }: RoomListSidebarProps) {
   if (!mobileMenuOpen) return null
 
   return (
-    <div className="fixed inset-0 z-40 bg-[color:var(--overlay-scrim)] md:hidden" onClick={onCloseMobileMenu}>
+    <div className="fixed inset-0 layer-drawer bg-[color:var(--overlay-scrim)] md:hidden" onClick={onCloseMobileMenu}>
       <div
         className="absolute bottom-0 left-0 top-0 flex w-[82%] max-w-[300px] flex-col border-r border-line bg-surface shadow-2xl"
         onClick={event => event.stopPropagation()}
@@ -686,6 +809,7 @@ export function RoomListSidebarMobile({
           <SidebarConversationSection
             rooms={rooms}
             currentRoomId={currentRoomId}
+            loading={loading}
             onNewRoom={() => { onNewRoom(); onCloseMobileMenu?.() }}
             onSelectRoom={onSelectRoom}
             onDeleteRoom={onDeleteRoom}

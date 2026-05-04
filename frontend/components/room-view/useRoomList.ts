@@ -29,8 +29,12 @@ function normalizeRoomListItem(room: any): RoomListItem {
 
 export function useRoomList() {
   const [rooms, setRooms] = useState<RoomListItem[]>([])
+  const [loading, setLoading] = useState(true)
 
   const loadRooms = useCallback(async (source: 'initial' | 'poll') => {
+    if (source === 'initial') {
+      setLoading(true)
+    }
     try {
       const response = await fetch(`${API}/api/rooms/sidebar`)
       const data = response.ok ? await response.json() : []
@@ -40,6 +44,10 @@ export function useRoomList() {
       }
     } catch (error) {
       warn('ui:room_list:load_failed', { source, error })
+    } finally {
+      if (source === 'initial') {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -55,5 +63,5 @@ export function useRoomList() {
     return () => clearInterval(interval)
   }, [loadRooms])
 
-  return { rooms, setRooms }
+  return { rooms, setRooms, loading }
 }

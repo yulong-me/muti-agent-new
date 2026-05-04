@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { Code2, FolderOpen, FolderTree, GitBranch } from 'lucide-react'
+import { FolderTree, GitBranch } from 'lucide-react'
 
 import { fetchGitDiff, openWorkspacePath, previewWorkspaceFile, type WorkspaceOpenTarget } from '@/lib/workspace'
 import { debug, warn } from '@/lib/logger'
@@ -221,24 +221,6 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-soft/45">Workspace</p>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => void openExternal(workspacePath, 'finder')}
-                className="rounded p-1 text-ink-soft transition-colors hover:bg-surface hover:text-ink"
-                title="在 Finder 中打开 workspace"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void openExternal(workspacePath, 'vscode')}
-                className="rounded p-1 text-ink-soft transition-colors hover:bg-surface hover:text-ink"
-                title="在 VS Code 中打开 workspace"
-              >
-                <Code2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
           </div>
           <p className="truncate text-[12px] font-medium text-ink" title={workspacePath}>
             {workspaceLabel}

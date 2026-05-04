@@ -34,7 +34,7 @@ export function DepthSwitcher({ value, onChange, currentDepth, maxDepth }: {
         <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-surface rounded-lg shadow-lg border border-border overflow-hidden min-w-[120px]">
+        <div className="absolute top-full left-0 mt-1 layer-dropdown bg-surface rounded-lg shadow-lg border border-border overflow-hidden min-w-[120px]">
           {options.map(option => (
             <button
               key={String(option.value)}

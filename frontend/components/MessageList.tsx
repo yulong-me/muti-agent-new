@@ -4,7 +4,7 @@ import { memo, useMemo, useRef, useState, type MutableRefObject, type RefObject 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-import { ChevronDown, BrainCircuit, Wrench, Copy, Maximize2, FileVideo, Music2 } from 'lucide-react'
+import { ChevronDown, BrainCircuit, Wrench, Copy, Maximize2, FileVideo, Music2, Loader2 } from 'lucide-react'
 import {
   TIME_FORMATTER,
   extractMentions,
@@ -86,6 +86,7 @@ interface MessageListProps {
   state: DiscussionState
   teamId?: string
   teamName?: string
+  loading?: boolean
   sending: boolean
   messageErrorMap: Record<string, AgentRunErrorEvent>
   orphanErrors: AgentRunErrorEvent[]
@@ -189,6 +190,24 @@ function MediaAttachments({ attachments }: { attachments: MediaAttachment[] }) {
   )
 }
 
+function ChatLoadingSkeleton() {
+  return (
+    <div className="flex min-h-44 items-center justify-center px-4" aria-busy="true" aria-label="加载聊天记录">
+      <div className="w-full max-w-2xl rounded-2xl border border-line bg-surface px-4 py-4 shadow-sm">
+        <div className="mb-4 flex items-center gap-2 text-[12px] font-semibold text-ink-soft">
+          <Loader2 className="h-4 w-4 animate-spin text-accent" aria-hidden />
+          加载聊天记录…
+        </div>
+        <div className="space-y-3">
+          <div className="h-3 w-2/3 animate-pulse rounded-full bg-surface-muted" />
+          <div className="h-3 w-full animate-pulse rounded-full bg-surface-muted" />
+          <div className="h-3 w-5/6 animate-pulse rounded-full bg-surface-muted" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export const MessageList = memo(function MessageList({
   roomId,
   messages,
@@ -196,6 +215,7 @@ export const MessageList = memo(function MessageList({
   state,
   teamId,
   teamName,
+  loading = false,
   sending,
   messageErrorMap,
   orphanErrors,
@@ -293,7 +313,11 @@ export const MessageList = memo(function MessageList({
         </div>
       ))}
 
-      {messages.length === 0 && roomId && (
+      {loading && roomId && sortedMessages.length === 0 && (
+        <ChatLoadingSkeleton />
+      )}
+
+      {!loading && sortedMessages.length === 0 && roomId && (
         <div className="flex flex-col items-center justify-center min-h-44 text-center text-ink-soft gap-3 px-4">
           <BrainCircuit className="w-8 h-8 opacity-70" />
           <div className="space-y-1">
@@ -323,7 +347,7 @@ export const MessageList = memo(function MessageList({
       {showScrollBtn && (
         <button
           onClick={onScrollToBottom}
-          className="sticky bottom-4 left-1/2 -translate-x-1/2 bg-accent text-white px-4 py-2 rounded-full text-xs font-medium shadow-lg hover:bg-accent-deep transition-colors flex items-center gap-1.5 z-10"
+          className="sticky bottom-4 left-1/2 -translate-x-1/2 layer-local-float bg-accent text-white px-4 py-2 rounded-full text-xs font-medium shadow-lg hover:bg-accent-deep transition-colors flex items-center gap-1.5"
         >
           <ChevronDown className="w-3.5 h-3.5" /> 回到底部
         </button>
@@ -627,7 +651,7 @@ const ToolCalls = memo(function ToolCalls({
               </span>
               {isHovered && (
                 <div
-                  className="absolute z-[9999] left-0 top-full mt-1 w-80 bg-surface border border-line rounded-lg shadow-xl text-xs select-text"
+                  className="absolute layer-tooltip left-0 top-full mt-1 w-80 bg-surface border border-line rounded-lg shadow-xl text-xs select-text"
                   onMouseEnter={() => {
                     if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current)
                     onHoverToolCall(key)

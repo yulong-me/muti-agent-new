@@ -53,6 +53,17 @@
     --radius-lg: 16px;
     --radius-md: 10px;
     --radius-sm: 6px;
+    --z-app-panel: 20;
+    --z-sticky-header: 30;
+    --z-local-float: 40;
+    --z-dropdown: 60;
+    --z-tooltip: 70;
+    --z-popover: 80;
+    --z-modal-scrim: 100;
+    --z-modal: 110;
+    --z-nested-modal: 130;
+    --z-drawer: 150;
+    --z-fullscreen-preview: 180;
     color-scheme: light;
   }
 
@@ -215,9 +226,66 @@ textarea {
   border-radius: var(--islands-panel-radius);
 }
 
-.app-islands-panel > *,
-.settings-panel > *,
-.app-window-shell > * {
+.layer-app-panel {
+  z-index: var(--z-app-panel);
+}
+
+.layer-sticky-header {
+  z-index: var(--z-sticky-header);
+}
+
+.layer-local-float {
+  z-index: var(--z-local-float);
+}
+
+.layer-dropdown {
+  z-index: var(--z-dropdown);
+}
+
+.layer-tooltip {
+  z-index: var(--z-tooltip);
+}
+
+.layer-popover {
+  z-index: var(--z-popover);
+}
+
+.layer-modal-scrim {
+  z-index: var(--z-modal-scrim);
+}
+
+.layer-modal .layer-modal-scrim,
+.layer-drawer .layer-modal-scrim,
+.layer-fullscreen-preview .layer-modal-scrim {
+  z-index: 0;
+}
+
+.layer-modal {
+  z-index: var(--z-modal);
+}
+
+.layer-nested-modal {
+  z-index: var(--z-nested-modal);
+}
+
+.layer-drawer {
+  z-index: var(--z-drawer);
+}
+
+.layer-fullscreen-preview {
+  z-index: var(--z-fullscreen-preview);
+}
+
+.layer-overlay-content {
+  position: relative;
+  z-index: 1;
+}
+
+:where(
+  .app-islands-panel > *,
+  .settings-panel > *,
+  .app-window-shell > *
+) {
   position: relative;
   z-index: 1;
 }

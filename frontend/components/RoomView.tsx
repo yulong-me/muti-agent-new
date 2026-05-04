@@ -25,6 +25,12 @@ import type { EvolutionChangeDecision, EvolutionProposal, RoomListItem } from '.
 
 const API = API_URL
 
+const TASK_PANEL_DEFAULT_WIDTH = 280
+const TASK_PANEL_MIN_WIDTH = 240
+const TASK_PANEL_MAX_WIDTH = 400
+const TASK_PANEL_WIDTH_KEY = 'opencouncil.task-panel-width'
+const TASK_PANEL_COLLAPSED_KEY = 'opencouncil.task-panel-collapsed'
+
 interface RoomViewProps {
   roomId?: string
   defaultCreateOpen?: boolean
@@ -61,6 +67,10 @@ const AGENT_PANEL_MAX_WIDTH = 360
 const AGENT_PANEL_WIDTH_KEY = 'opencouncil.agent-panel-width'
 const AGENT_PANEL_COLLAPSED_KEY = 'opencouncil.agent-panel-collapsed'
 
+function clampTaskPanelWidth(width: number) {
+  return Math.min(TASK_PANEL_MAX_WIDTH, Math.max(TASK_PANEL_MIN_WIDTH, Math.round(width)))
+}
+
 function clampAgentPanelWidth(width: number) {
   return Math.min(AGENT_PANEL_MAX_WIDTH, Math.max(AGENT_PANEL_MIN_WIDTH, Math.round(width)))
 }
@@ -92,6 +102,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [showInviteDrawer, setShowInviteDrawer] = useState(false)
+  const [taskPanelWidth, setTaskPanelWidth] = useState(TASK_PANEL_DEFAULT_WIDTH)
+  const [taskPanelCollapsed, setTaskPanelCollapsed] = useState(false)
   const [agentPanelWidth, setAgentPanelWidth] = useState(AGENT_PANEL_DEFAULT_WIDTH)
   const [agentPanelCollapsed, setAgentPanelCollapsed] = useState(false)
   const [evolutionProposals, setEvolutionProposals] = useState<EvolutionProposal[]>([])
@@ -111,10 +123,11 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
   const { theme, resolvedTheme, setTheme } = useTheme()
   const currentTheme = resolvedTheme ?? theme
 
-  const { rooms, setRooms } = useRoomList()
+  const { rooms, setRooms, loading: roomListLoading } = useRoomList()
   const {
     state,
     messages,
+    loading: roomLoading,
     agents,
     streamingAgentIds,
     messageErrorMap,
@@ -238,12 +251,28 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    const storedTaskPanelWidth = Number.parseInt(localStorage.getItem(TASK_PANEL_WIDTH_KEY) ?? '', 10)
+    if (Number.isFinite(storedTaskPanelWidth)) {
+      setTaskPanelWidth(clampTaskPanelWidth(storedTaskPanelWidth))
+    }
+    setTaskPanelCollapsed(localStorage.getItem(TASK_PANEL_COLLAPSED_KEY) === '1')
+
     const storedWidth = Number.parseInt(localStorage.getItem(AGENT_PANEL_WIDTH_KEY) ?? '', 10)
     if (Number.isFinite(storedWidth)) {
       setAgentPanelWidth(clampAgentPanelWidth(storedWidth))
     }
     setAgentPanelCollapsed(localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY) === '1')
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(TASK_PANEL_WIDTH_KEY, String(taskPanelWidth))
+  }, [taskPanelWidth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(TASK_PANEL_COLLAPSED_KEY, taskPanelCollapsed ? '1' : '0')
+  }, [taskPanelCollapsed])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -381,6 +410,14 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
 
   const handleAgentPanelWidthChange = useCallback((nextWidth: number) => {
     setAgentPanelWidth(clampAgentPanelWidth(nextWidth))
+  }, [])
+
+  const handleTaskPanelWidthChange = useCallback((nextWidth: number) => {
+    setTaskPanelWidth(clampTaskPanelWidth(nextWidth))
+  }, [])
+
+  const toggleTaskPanel = useCallback(() => {
+    setTaskPanelCollapsed(previous => !previous)
   }, [])
 
   const toggleAgentPanel = useCallback(() => {
@@ -786,6 +823,11 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
           mounted={mounted}
           onToggleTheme={toggleTheme}
           onOpenSystemSettings={openSystemSettings}
+          loading={roomListLoading}
+          desktopWidth={taskPanelWidth}
+          desktopCollapsed={taskPanelCollapsed}
+          onDesktopWidthChange={handleTaskPanelWidthChange}
+          onDesktopToggleCollapsed={toggleTaskPanel}
         />
 
         <RoomListSidebarMobile
@@ -803,6 +845,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
           mounted={mounted}
           onToggleTheme={toggleTheme}
           onOpenSystemSettings={openSystemSettings}
+          loading={roomListLoading}
           mobileMenuOpen={mobileMenuOpen}
           onToggleMobileMenu={toggleMobileMenu}
           onCloseMobileMenu={() => setMobileMenuOpen(false)}
@@ -844,6 +887,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                 state={state}
                 teamId={teamId}
                 teamName={teamName}
+                loading={roomLoading}
                 sending={sending}
                 messageErrorMap={messageErrorMap}
                 orphanErrors={orphanErrors}
@@ -940,7 +984,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       )}
 
       {evolutionFeedbackOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
+        <div className="fixed inset-0 layer-modal flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-xl rounded-lg border border-line bg-nav-bg shadow-xl">
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
               <div>

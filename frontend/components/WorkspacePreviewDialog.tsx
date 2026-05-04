@@ -66,10 +66,10 @@ export function WorkspacePreviewDialog({
   if (!open || !portalRoot) return null
 
   return createPortal((
-    <div className="fixed inset-0 z-[220] flex">
-      <div className="absolute inset-0 bg-[color:var(--overlay-scrim)]" onClick={onClose} />
+    <div className="fixed inset-0 layer-fullscreen-preview flex">
+      <div className="absolute inset-0 layer-modal-scrim bg-[color:var(--overlay-scrim)]" onClick={onClose} />
       <div
-        className="relative z-10 flex h-[100dvh] w-screen flex-col overflow-hidden bg-bg shadow-2xl"
+        className="layer-overlay-content flex h-[100dvh] w-screen flex-col overflow-hidden bg-bg shadow-2xl"
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4 bg-surface">
           <div className="min-w-0 space-y-1">
