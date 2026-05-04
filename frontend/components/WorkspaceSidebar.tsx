@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { FolderTree, GitBranch } from 'lucide-react'
+import { Code2, FolderOpen, FolderTree, GitBranch } from 'lucide-react'
 
-import { fetchGitDiff, previewWorkspaceFile } from '@/lib/workspace'
+import { fetchGitDiff, openWorkspacePath, previewWorkspaceFile, type WorkspaceOpenTarget } from '@/lib/workspace'
 import { debug, warn } from '@/lib/logger'
 
 import { WorkspaceFilesPanel } from './WorkspaceFilesPanel'
@@ -44,10 +44,23 @@ const EMPTY_PREVIEW: PreviewState = {
 export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
   const [tab, setTab] = useState<WorkspaceTab>('files')
   const [preview, setPreview] = useState<PreviewState>(EMPTY_PREVIEW)
+  const [externalNotice, setExternalNotice] = useState<string | null>(null)
+  const [externalError, setExternalError] = useState<string | null>(null)
 
   const workspaceLabel = useMemo(() => {
     const parts = workspacePath.split(/[/\\]/).filter(Boolean)
     return parts.at(-1) || workspacePath
+  }, [workspacePath])
+
+  const openExternal = useCallback(async (absolutePath: string, target: WorkspaceOpenTarget) => {
+    setExternalError(null)
+    try {
+      await openWorkspacePath(workspacePath, absolutePath, target)
+      setExternalNotice(target === 'finder' ? '已在 Finder 中打开' : '已在 VS Code 中打开')
+      window.setTimeout(() => setExternalNotice(null), 2400)
+    } catch (err) {
+      setExternalError((err as Error).message || '无法打开路径')
+    }
   }, [workspacePath])
 
   const openFilePreview = useCallback(async (absolutePath: string) => {
@@ -206,13 +219,35 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
     <>
       <div className="space-y-2.5 rounded-2xl border border-line bg-surface-muted px-2.5 py-2.5 shadow-sm">
         <div className="space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-soft/45">Workspace</p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-soft/45">Workspace</p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void openExternal(workspacePath, 'finder')}
+                className="rounded p-1 text-ink-soft transition-colors hover:bg-surface hover:text-ink"
+                title="在 Finder 中打开 workspace"
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void openExternal(workspacePath, 'vscode')}
+                className="rounded p-1 text-ink-soft transition-colors hover:bg-surface hover:text-ink"
+                title="在 VS Code 中打开 workspace"
+              >
+                <Code2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
           <p className="truncate text-[12px] font-medium text-ink" title={workspacePath}>
             {workspaceLabel}
           </p>
           <p className="truncate text-[10px] text-ink-soft/60" title={workspacePath}>
             {workspacePath}
           </p>
+          {externalNotice && <p className="tone-success-text text-[10px]">{externalNotice}</p>}
+          {externalError && <p className="tone-danger-text text-[10px]">{externalError}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-1.5">
@@ -249,7 +284,7 @@ export function WorkspaceSidebar({ workspacePath }: WorkspaceSidebarProps) {
         </div>
 
         {tab === 'files'
-          ? <WorkspaceFilesPanel workspacePath={workspacePath} onOpenFile={openFilePreview} />
+          ? <WorkspaceFilesPanel workspacePath={workspacePath} onOpenFile={openFilePreview} onOpenExternal={openExternal} />
           : <WorkspaceGitPanel workspacePath={workspacePath} onOpenDiff={openDiffPreview} onReviewStaged={reviewStagedChanges} />
         }
       </div>

@@ -1,13 +1,14 @@
 'use client'
 
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, File, Folder, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Code2, File, Folder, FolderOpen, Upload } from 'lucide-react'
 
-import { type BrowseResult, browseWorkspace, isWorkspaceRequestError, uploadWorkspaceFile } from '@/lib/workspace'
+import { type BrowseResult, browseWorkspace, isWorkspaceRequestError, type WorkspaceOpenTarget, uploadWorkspaceFile } from '@/lib/workspace'
 
 interface WorkspaceFilesPanelProps {
   workspacePath: string
   onOpenFile: (absolutePath: string) => void
+  onOpenExternal: (absolutePath: string, target: WorkspaceOpenTarget) => void
 }
 
 interface PendingOverwriteUpload {
@@ -33,7 +34,7 @@ function toBreadcrumbs(currentPath: string, workspacePath: string) {
   ]
 }
 
-export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFilesPanelProps) {
+export function WorkspaceFilesPanel({ workspacePath, onOpenFile, onOpenExternal }: WorkspaceFilesPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [browseResult, setBrowseResult] = useState<BrowseResult | null>(null)
   const [currentPath, setCurrentPath] = useState(workspacePath)
@@ -121,24 +122,41 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFile
       <div className="flex items-center gap-1.5">
         <Folder className="h-3.5 w-3.5 text-ink-soft" />
         <span className="text-[11px] font-semibold text-ink-soft">工作区文件</span>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="sr-only"
-          disabled={loading || uploading}
-          onChange={handleUpload}
-          aria-label="上传文件到当前目录"
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={loading || uploading}
-          className="ml-auto rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-          title="上传文件到当前目录"
-        >
-          <Upload className="h-3.5 w-3.5" />
-        </button>
-        {currentPath !== workspacePath && (
+        <div className="ml-auto flex items-center gap-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="sr-only"
+            disabled={loading || uploading}
+            onChange={handleUpload}
+            aria-label="上传文件到当前目录"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || uploading}
+            className="rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            title="上传文件到当前目录"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenExternal(currentPath, 'finder')}
+            className="rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+            title="在 Finder 中打开当前目录"
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenExternal(currentPath, 'vscode')}
+            className="rounded p-0.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+            title="在 VS Code 中打开当前目录"
+          >
+            <Code2 className="h-3.5 w-3.5" />
+          </button>
+          {currentPath !== workspacePath && (
           <button
             type="button"
             onClick={() => browseResult?.parent && void loadPath(browseResult.parent)}
@@ -147,7 +165,8 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFile
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1 text-[10px] text-ink-soft/70">
@@ -205,26 +224,46 @@ export function WorkspaceFilesPanel({ workspacePath, onOpenFile }: WorkspaceFile
       {!loading && !error && browseResult && browseResult.entries.length > 0 && (
         <div className="max-h-56 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
           {browseResult.entries.map((entry) => (
-            <button
+            <div
               key={entry.path}
-              type="button"
-              onClick={() => {
-                if (entry.isDirectory) {
-                  void loadPath(entry.path)
-                  return
-                }
-                onOpenFile(entry.path)
-              }}
               title={entry.path}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-muted"
+              className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-muted"
             >
-              {entry.isDirectory
-                ? <Folder className="h-3.5 w-3.5 shrink-0 text-[#c4a882]" />
-                : <File className="h-3.5 w-3.5 shrink-0 text-ink-soft/40" />
-              }
-              <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{entry.name}</span>
-              <ChevronRight className="h-3 w-3 shrink-0 text-ink-soft/30" />
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (entry.isDirectory) {
+                    void loadPath(entry.path)
+                    return
+                  }
+                  onOpenFile(entry.path)
+                }}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                {entry.isDirectory
+                  ? <Folder className="h-3.5 w-3.5 shrink-0 text-[#c4a882]" />
+                  : <File className="h-3.5 w-3.5 shrink-0 text-ink-soft/40" />
+                }
+                <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{entry.name}</span>
+                <ChevronRight className="h-3 w-3 shrink-0 text-ink-soft/30" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenExternal(entry.path, 'finder')}
+                className="shrink-0 rounded p-0.5 text-ink-soft/50 transition-colors hover:bg-surface hover:text-ink"
+                title="在 Finder 中打开"
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenExternal(entry.path, 'vscode')}
+                className="shrink-0 rounded p-0.5 text-ink-soft/50 transition-colors hover:bg-surface hover:text-ink"
+                title="在 VS Code 中打开"
+              >
+                <Code2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
         </div>
       )}

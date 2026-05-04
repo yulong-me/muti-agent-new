@@ -39,6 +39,8 @@ interface FilePreviewResult {
   content: string | null;
 }
 
+type OpenTarget = 'finder' | 'vscode';
+
 export const browseRouter = Router();
 const MAX_FILE_PREVIEW_BYTES = 128 * 1024;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -100,6 +102,21 @@ function decodeUploadContent(contentBase64: string): Buffer | null {
   const buffer = Buffer.from(normalized, 'base64');
   if (buffer.length > MAX_UPLOAD_BYTES) return null;
   return buffer;
+}
+
+async function openPathInFinder(targetPath: string, isDirectory: boolean): Promise<void> {
+  const args = isDirectory ? [targetPath] : ['-R', targetPath];
+  await execFileAsync('open', args, { timeout: 10_000 });
+}
+
+async function openPathInVSCode(targetPath: string): Promise<void> {
+  try {
+    await execFileAsync('code', ['-r', targetPath], { timeout: 10_000 });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') throw err;
+    await execFileAsync('open', ['-a', 'Visual Studio Code', targetPath], { timeout: 10_000 });
+  }
 }
 
 /**
@@ -465,6 +482,48 @@ browseRouter.post('/upload', async (req, res) => {
   } catch (err) {
     warn('browse:upload:failed', { workspacePath: workspaceReal, parentPath: parentReal, filename: safeName, error: err });
     return res.status(400).json({ error: `无法上传文件: ${(err as Error).message}` });
+  }
+});
+
+/**
+ * POST /api/browse/open — 在本机 Finder 或 VS Code 中打开 workspace 内路径
+ */
+browseRouter.post('/open', async (req, res) => {
+  const {
+    workspacePath,
+    path: targetPath,
+    target,
+  } = req.body as { workspacePath?: string; path?: string; target?: OpenTarget };
+
+  if (!workspacePath || !targetPath || (target !== 'finder' && target !== 'vscode')) {
+    return res.status(400).json({ error: 'workspacePath、path 和 target 均为必填' });
+  }
+
+  const workspaceReal = await validatePath(workspacePath);
+  const targetReal = await validatePath(targetPath);
+  if (!workspaceReal || !targetReal) {
+    warn('browse:open:invalid_path', { workspacePath, targetPath, target });
+    return res.status(404).json({ error: 'workspace 或打开路径不存在' });
+  }
+
+  if (!isWithinPath(workspaceReal, targetReal)) {
+    warn('browse:open:outside_workspace', { workspacePath: workspaceReal, targetPath: targetReal, target });
+    return res.status(403).json({ error: '打开路径必须位于当前 workspace 内' });
+  }
+
+  try {
+    const targetStat = await stat(targetReal);
+    if (target === 'finder') {
+      await openPathInFinder(targetReal, targetStat.isDirectory());
+    } else {
+      await openPathInVSCode(targetReal);
+    }
+
+    info('browse:open', { workspacePath: workspaceReal, targetPath: targetReal, target });
+    return res.json({ ok: true, path: targetReal, target });
+  } catch (err) {
+    warn('browse:open:failed', { workspacePath: workspaceReal, targetPath: targetReal, target, error: err });
+    return res.status(400).json({ error: `无法打开路径: ${(err as Error).message}` });
   }
 });
 

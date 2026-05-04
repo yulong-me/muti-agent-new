@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, GitBranch, RefreshCw } from 'lucide-react'
+import { Check, FileDiff, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
 
 import {
   commitGitChanges,
@@ -27,13 +27,15 @@ function statusTone(file: GitChangedFile) {
 
 function GitFileRow({
   file,
-  actionLabel,
+  actionTitle,
+  actionIcon,
   actionDisabled,
   onAction,
   onPreview,
 }: {
   file: GitChangedFile
-  actionLabel: string
+  actionTitle: string
+  actionIcon: 'plus' | 'minus'
   actionDisabled: boolean
   onAction: () => void
   onPreview: () => void
@@ -64,9 +66,10 @@ function GitFileRow({
           type="button"
           onClick={onAction}
           disabled={actionDisabled}
-          className="shrink-0 rounded-md border border-line px-2 py-1 text-[10px] font-medium text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded-md border border-line p-1 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+          title={actionTitle}
         >
-          {actionLabel}
+          {actionIcon === 'plus' ? <Plus className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
         </button>
       </div>
     </div>
@@ -77,7 +80,8 @@ function GitSection({
   title,
   emptyLabel,
   files,
-  actionLabel,
+  actionTitle,
+  actionIcon,
   actionDisabled,
   onAction,
   onPreview,
@@ -85,7 +89,8 @@ function GitSection({
   title: string
   emptyLabel: string
   files: GitChangedFile[]
-  actionLabel: string
+  actionTitle: string
+  actionIcon: 'plus' | 'minus'
   actionDisabled: boolean
   onAction: (file: GitChangedFile) => void
   onPreview: (file: GitChangedFile) => void
@@ -102,7 +107,8 @@ function GitSection({
           <GitFileRow
             key={`${title}-${file.path}`}
             file={file}
-            actionLabel={actionLabel}
+            actionTitle={actionTitle}
+            actionIcon={actionIcon}
             actionDisabled={actionDisabled}
             onAction={() => onAction(file)}
             onPreview={() => onPreview(file)}
@@ -156,14 +162,14 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
 
   const changedFiles = status?.changedFiles ?? []
   const stagedFiles = changedFiles.filter((file) => file.staged)
-  const unstagedFiles = changedFiles.filter((file) => file.unstaged)
+  const changedWorkingFiles = changedFiles.filter((file) => file.unstaged || file.untracked)
   const untrackedFiles = changedFiles.filter((file) => file.untracked)
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1.5">
         <GitBranch className="h-3.5 w-3.5 text-ink-soft" />
-        <span className="text-[11px] font-semibold text-ink-soft">Git</span>
+        <span className="text-[11px] font-semibold text-ink-soft">Source Control</span>
         <button
           type="button"
           onClick={() => void loadStatus()}
@@ -209,8 +215,8 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
                 <div>staged</div>
               </div>
               <div className="rounded-md border border-line bg-surface-muted px-2 py-1.5 text-center text-ink-soft">
-                <div className="text-[11px] font-semibold text-ink">{unstagedFiles.length}</div>
-                <div>modified</div>
+                <div className="text-[11px] font-semibold text-ink">{changedWorkingFiles.length}</div>
+                <div>changes</div>
               </div>
               <div className="rounded-md border border-line bg-surface-muted px-2 py-1.5 text-center text-ink-soft">
                 <div className="text-[11px] font-semibold text-ink">{untrackedFiles.length}</div>
@@ -223,18 +229,20 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
             <button
               type="button"
               onClick={() => void runAction(() => stageGitPaths(workspacePath), '已暂存工作区')}
-              disabled={submitting || changedFiles.length === 0}
+              disabled={submitting || changedWorkingFiles.length === 0}
               className="rounded-md border border-line px-2.5 py-1.5 text-[10px] font-medium text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              title="Stage All Changes"
             >
-              Stage All
+              Stage All Changes
             </button>
             <button
               type="button"
               onClick={() => void runAction(() => unstageGitPaths(workspacePath), '已取消全部暂存')}
               disabled={submitting || stagedFiles.length === 0}
               className="rounded-md border border-line px-2.5 py-1.5 text-[10px] font-medium text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              title="Unstage All Changes"
             >
-              Unstage All
+              Unstage All Changes
             </button>
             <button
               type="button"
@@ -242,44 +250,15 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
               disabled={stagedFiles.length === 0}
               className="rounded-md border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
             >
+              <FileDiff className="mr-1 inline h-3.5 w-3.5 align-[-3px]" />
               Review Staged
             </button>
           </div>
 
-          <GitSection
-            title="Staged"
-            emptyLabel="暂存区为空"
-            files={stagedFiles}
-            actionLabel="Unstage"
-            actionDisabled={submitting}
-            onAction={(file) => void runAction(() => unstageGitPaths(workspacePath, [file.path]), '已取消暂存')}
-            onPreview={(file) => onOpenDiff(file.path, true)}
-          />
-
-          <GitSection
-            title="Modified"
-            emptyLabel="没有未暂存修改"
-            files={unstagedFiles}
-            actionLabel="Stage"
-            actionDisabled={submitting}
-            onAction={(file) => void runAction(() => stageGitPaths(workspacePath, [file.path]), '已加入暂存区')}
-            onPreview={(file) => onOpenDiff(file.path, false)}
-          />
-
-          <GitSection
-            title="Untracked"
-            emptyLabel="没有新增文件"
-            files={untrackedFiles}
-            actionLabel="Stage"
-            actionDisabled={submitting}
-            onAction={(file) => void runAction(() => stageGitPaths(workspacePath, [file.path]), '已加入暂存区')}
-            onPreview={(file) => onOpenDiff(file.path, false)}
-          />
-
           <div className="space-y-2 rounded-lg border border-line bg-surface px-3 py-3">
             <div className="flex items-center justify-between">
               <label htmlFor="git-commit-message" className="text-[11px] font-semibold text-ink-soft">
-                Commit Message
+                Message
               </label>
               <span className="text-[10px] text-ink-soft/50">{commitMessage.trim().length} chars</span>
             </div>
@@ -302,9 +281,31 @@ export function WorkspaceGitPanel({ workspacePath, onOpenDiff, onReviewStaged }:
               disabled={submitting || stagedFiles.length === 0 || !commitMessage.trim()}
               className="w-full rounded-lg bg-ink px-3 py-2 text-[12px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Commit Staged Changes
+              Commit
             </button>
           </div>
+
+          <GitSection
+            title="Staged Changes"
+            emptyLabel="暂存区为空"
+            files={stagedFiles}
+            actionTitle="取消暂存文件"
+            actionIcon="minus"
+            actionDisabled={submitting}
+            onAction={(file) => void runAction(() => unstageGitPaths(workspacePath, [file.path]), '已取消暂存')}
+            onPreview={(file) => onOpenDiff(file.path, true)}
+          />
+
+          <GitSection
+            title="Changes"
+            emptyLabel="没有工作区修改"
+            files={changedWorkingFiles}
+            actionTitle="暂存文件"
+            actionIcon="plus"
+            actionDisabled={submitting}
+            onAction={(file) => void runAction(() => stageGitPaths(workspacePath, [file.path]), '已加入暂存区')}
+            onPreview={(file) => onOpenDiff(file.path, false)}
+          />
         </>
       )}
     </div>

@@ -11,6 +11,7 @@
     "test:room-navigation": "node tests/client-room-navigation-regression.mjs",
     "test:settings-readiness": "node tests/settings-readiness-regression.mjs",
     "test:workspace-upload": "node tests/workspace-upload-regression.mjs",
+    "test:workspace-actions": "node tests/workspace-open-git-regression.mjs",
     "test:agent-color": "node tests/agent-color-regression.mjs",
     "test:layering": "node tests/layering-regression.mjs",
     "test:create-room-density": "node tests/create-room-agent-card-density-regression.mjs",

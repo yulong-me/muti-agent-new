@@ -33,6 +33,14 @@ export interface UploadWorkspaceFileResult {
   overwritten: boolean
 }
 
+export type WorkspaceOpenTarget = 'finder' | 'vscode'
+
+export interface OpenWorkspacePathResult {
+  ok: boolean
+  path: string
+  target: WorkspaceOpenTarget
+}
+
 export interface GitChangedFile {
   path: string
   absolutePath: string
@@ -151,6 +159,17 @@ export async function uploadWorkspaceFile(workspacePath: string, parentPath: str
   }, {
     event: 'workspace:file_upload',
     meta: { workspacePath, parentPath, filename: file.name, size: file.size },
+  })
+}
+
+export function openWorkspacePath(workspacePath: string, path: string, target: WorkspaceOpenTarget) {
+  return requestJson<OpenWorkspacePathResult>(`${API_URL}/api/browse/open`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workspacePath, path, target }),
+  }, {
+    event: 'workspace:path_open',
+    meta: { workspacePath, path, target },
   })
 }
 
