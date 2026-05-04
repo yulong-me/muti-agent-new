@@ -211,12 +211,14 @@ function buildCreatedTeamListItem(data: CreateTeamResponse): TeamListItem | null
 export default function CreateRoomModal({
   isOpen,
   onClose,
+  onRoomCreated,
   initialTopic,
   initialTeamId,
   initialWorkerIds,
 }: {
   isOpen: boolean
   onClose: () => void
+  onRoomCreated?: (roomId: string) => void
   initialTopic?: string
   initialTeamId?: string
   initialWorkerIds?: string[]
@@ -283,6 +285,15 @@ export default function CreateRoomModal({
     ? `执行工具未准备好：${[...new Set(selectedCliBlockers.map(worker => providerReadiness[worker.provider]?.label ?? worker.provider))].join('、')}`
     : ''
   const draftRoutingRules = teamDraft ? formatRoutingPolicy(teamDraft.routingPolicy) : []
+
+  function finishRoomCreation(roomId: string) {
+    onClose()
+    if (onRoomCreated) {
+      onRoomCreated(roomId)
+      return
+    }
+    router.push(`/room/${roomId}`, { scroll: false })
+  }
 
   async function loadTeams({ preserveOnFailure = false }: { preserveOnFailure?: boolean } = {}): Promise<TeamListItem[]> {
     setLoadingTeams(true)
@@ -583,8 +594,7 @@ export default function CreateRoomModal({
         teamVersionId: nextTeam.activeVersion.id,
         hasWorkspace: Boolean(workspacePath.trim()),
       })
-      onClose()
-      router.push(`/room/${room.id}`, { scroll: false })
+      finishRoomCreation(room.id)
     } catch (err) {
       warn('ui:team_draft:create_failed', { error: err })
       const message = getUserFacingError(err)
@@ -648,8 +658,7 @@ export default function CreateRoomModal({
         teamVersionId: teamVersionId || undefined,
         hasWorkspace: Boolean(workspacePath.trim()),
       })
-      onClose()
-      router.push(`/room/${room.id}`, { scroll: false })
+      finishRoomCreation(room.id)
     } catch (err) {
       warn('ui:room_create:network_failed', { error: err, teamId: teamId || undefined })
       setErrors({ agents: getUserFacingError(err) })

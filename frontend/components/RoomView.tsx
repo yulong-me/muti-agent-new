@@ -678,6 +678,7 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
       <CreateRoomModal
         isOpen={isCreateModalOpen}
         onClose={closeCreateRoom}
+        onRoomCreated={navigateToRoom}
         initialTopic={createInitialTopic}
         initialTeamId={createInitialTeamId}
         initialWorkerIds={createInitialWorkerIds}
@@ -759,6 +760,8 @@ export default function RoomView({ roomId, defaultCreateOpen = false }: RoomView
                 messages={messages}
                 agents={agents}
                 state={state}
+                teamId={teamId}
+                teamName={teamName}
                 sending={sending}
                 messageErrorMap={messageErrorMap}
                 orphanErrors={orphanErrors}

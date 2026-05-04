@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { roomsRepo, messagesRepo, auditRepo } from '../../db/index.js';
 import { debug } from '../../lib/logger.js';
 import { store } from '../../store.js';
-import type { Message } from '../../types.js';
+import type { DiscussionRoom, Message } from '../../types.js';
 import { emitAgentStatus, emitUserMessage } from '../socketEmitter.js';
 
 export function telemetry(event: string, meta: Record<string, unknown>) {
@@ -103,4 +103,116 @@ export function updateAgentStatus(
     agents: room.agents.map(a => (a.id === agentId ? { ...a, status } : a)),
   });
   emitAgentStatus(roomId, agentId, status);
+}
+
+const REPORT_SECTION_MAX_CHARS = 2400;
+
+function truncateSection(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= REPORT_SECTION_MAX_CHARS) return trimmed;
+  return `${trimmed.slice(0, REPORT_SECTION_MAX_CHARS).trim()}\n\n...`;
+}
+
+function latestRunMessages(room: DiscussionRoom): Message[] {
+  const lastUserIndex = room.messages
+    .map((message, index) => ({ message, index }))
+    .filter(item => item.message.agentRole === 'USER')
+    .at(-1)?.index;
+
+  const start = typeof lastUserIndex === 'number' ? lastUserIndex : 0;
+  return room.messages.slice(start).filter(message => message.content.trim());
+}
+
+function buildOpenRisks(workerMessages: Message[]): string {
+  const riskLines = workerMessages
+    .flatMap(message => message.content.split(/\r?\n+/))
+    .map(line => line.trim())
+    .filter(line => /risk|risks|风险|待确认|open questions?|unsupported|不确定/i.test(line))
+    .slice(0, 6);
+
+  if (riskLines.length === 0) {
+    return '- 未自动识别出单独风险项；以各 Agent 的最终消息为准。';
+  }
+
+  return riskLines.map(line => `- ${line.replace(/^[-*]\s*/, '')}`).join('\n');
+}
+
+function buildCompletionReport(room: DiscussionRoom): string {
+  const runMessages = latestRunMessages(room);
+  const workerMessages = runMessages.filter(message => message.agentRole === 'WORKER' && message.type !== 'system');
+  const firstWorker = workerMessages[0];
+  const lastWorker = workerMessages.at(-1);
+  const middleWorkers = workerMessages.length > 2
+    ? workerMessages.slice(1, -1)
+    : workerMessages.length === 2
+      ? [workerMessages[1]]
+      : [];
+
+  const planContent = firstWorker
+    ? `来自 ${firstWorker.agentName}：\n\n${truncateSection(firstWorker.content)}`
+    : '未产出单独计划。';
+
+  const copyPackageContent = middleWorkers.length > 0
+    ? middleWorkers
+        .map(message => `来自 ${message.agentName}：\n\n${truncateSection(message.content)}`)
+        .join('\n\n')
+    : firstWorker
+      ? `来自 ${firstWorker.agentName}：\n\n${truncateSection(firstWorker.content)}`
+      : '未产出单独交付内容。';
+
+  const reviewNotesContent = lastWorker && lastWorker.id !== firstWorker?.id
+    ? `来自 ${lastWorker.agentName}：\n\n${truncateSection(lastWorker.content)}`
+    : '未产出单独审查意见。';
+
+  return [
+    `# ${room.topic}`,
+    '',
+    '本轮任务完成，下面是自动整理的最终交付索引。',
+    '',
+    '## Plan',
+    planContent,
+    '',
+    '## Copy Package',
+    copyPackageContent,
+    '',
+    '## Review Notes',
+    reviewNotesContent,
+    '',
+    '## Open Risks',
+    buildOpenRisks(workerMessages),
+  ].join('\n');
+}
+
+export function completeRoomRun(roomId: string): DiscussionRoom | undefined {
+  const room = store.get(roomId);
+  if (!room || room.state === 'DONE') return room;
+
+  const busyAgent = room.agents.some(agent => agent.status === 'thinking' || agent.status === 'waiting');
+  if (busyAgent) return room;
+
+  const report = buildCompletionReport(room);
+  addMessage(roomId, {
+    agentRole: 'WORKER',
+    agentName: '系统',
+    content: report,
+    type: 'summary',
+  });
+
+  const nextRoom = store.get(roomId);
+  if (!nextRoom) return undefined;
+
+  const completed = store.update(roomId, {
+    state: 'DONE',
+    report,
+    agents: nextRoom.agents.map(agent => ({ ...agent, status: 'done' as const })),
+  });
+  roomsRepo.update(roomId, {
+    state: 'DONE',
+    report,
+    agents: completed?.agents ?? nextRoom.agents,
+  });
+  for (const agent of completed?.agents ?? []) {
+    emitAgentStatus(roomId, agent.id, agent.status);
+  }
+  return completed;
 }

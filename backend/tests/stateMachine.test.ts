@@ -713,6 +713,75 @@ describe('F004: 直接路由', () => {
       }));
     });
 
+    it('顶层任务的 A2A 接力全部结束后，生成最终汇总并标记房间完成', async () => {
+      const { routeToAgent } = await import('../src/services/stateMachine.js');
+      const { store } = await import('../src/store.js');
+      const { roomsRepo } = await import('../src/db/index.js');
+      const { getProvider } = await import('../src/services/providers/index.js');
+
+      let roomState = {
+        id: 'room-visible-handoff-complete',
+        topic: 'OpenCouncil homepage copy',
+        state: 'RUNNING' as const,
+        agents: [
+          { id: 'planner-1', role: 'WORKER' as const, name: 'Homepage Copy Planner', domainLabel: 'Copy plan', configId: 'planner-config', status: 'idle' as const },
+          { id: 'writer-1', role: 'WORKER' as const, name: 'Landing Page Copywriter', domainLabel: 'Copy writing', configId: 'writer-config', status: 'idle' as const },
+          { id: 'reviewer-1', role: 'WORKER' as const, name: 'Homepage Copy Reviewer', domainLabel: 'Copy review', configId: 'reviewer-config', status: 'idle' as const },
+        ],
+        messages: [],
+        sessionIds: {},
+        a2aDepth: 0,
+        a2aCallChain: [],
+        maxA2ADepth: 5,
+        teamId: 'custom-copy-team',
+        teamVersionId: 'custom-copy-team-v1',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      vi.mocked(store.get).mockImplementation(() => roomState);
+      vi.mocked(store.update).mockImplementation((_id, partial) => {
+        roomState = { ...roomState, ...partial, updatedAt: Date.now() };
+        return roomState;
+      });
+
+      const outputs = [
+        'Plan: keep the page compact.\n\n@Landing Page Copywriter please draft the copy package.',
+        'Copy Package: headline, subheadline, CTA.\n\n@Homepage Copy Reviewer please review risks.',
+        'Review Notes: ready with minor edits. Open Risks: avoid unsupported guarantees.',
+      ];
+      let providerCall = 0;
+      vi.mocked(getProvider).mockReturnValue(async function* () {
+        const text = outputs[providerCall++] ?? 'Done';
+        yield { type: 'delta', agentId: 'agent', text };
+        yield { type: 'end', agentId: 'agent', duration_ms: 100, total_cost_usd: 0, input_tokens: 10, output_tokens: 10 };
+      });
+
+      await routeToAgent(
+        roomState.id,
+        '@Homepage Copy Planner run visible workflow',
+        'planner-1',
+      );
+
+      expect(providerCall).toBe(3);
+      expect(roomState.state).toBe('DONE');
+      expect(roomState.report).toContain('Plan');
+      expect(roomState.report).toContain('Copy Package');
+      expect(roomState.report).toContain('Review Notes');
+      expect(roomState.report).toContain('Open Risks');
+      expect(roomState.messages.at(-1)).toMatchObject({
+        agentName: '系统',
+        type: 'summary',
+        content: expect.stringContaining('本轮任务完成'),
+      });
+      expect(roomsRepo.update).toHaveBeenCalledWith(
+        roomState.id,
+        expect.objectContaining({
+          state: 'DONE',
+          report: expect.stringContaining('Copy Package'),
+        }),
+      );
+    });
+
     it('新邀请专家第一次被调用时会拿到完整 room 历史', async () => {
       const { routeToAgent } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');

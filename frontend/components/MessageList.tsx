@@ -84,6 +84,8 @@ interface MessageListProps {
   messages: Message[]
   agents: Agent[]
   state: DiscussionState
+  teamId?: string
+  teamName?: string
   sending: boolean
   messageErrorMap: Record<string, AgentRunErrorEvent>
   orphanErrors: AgentRunErrorEvent[]
@@ -192,6 +194,8 @@ export const MessageList = memo(function MessageList({
   messages,
   agents,
   state,
+  teamId,
+  teamName,
   sending,
   messageErrorMap,
   orphanErrors,
@@ -295,7 +299,9 @@ export const MessageList = memo(function MessageList({
           <div className="space-y-1">
             <p className="text-sm font-semibold text-ink">从 @一位专家 开始</p>
             <p className="text-xs max-w-md leading-relaxed">
-              每条消息都需要明确收件人。软件开发任务建议先找主架构师出方案，再让挑战架构师找茬收敛；达成一致后交给实现工程师，最后由 Reviewer 做质量门禁。
+              {teamId === 'software-development'
+                ? '每条消息都需要明确收件人。软件开发任务建议先找主架构师出方案，再让挑战架构师找茬收敛；达成一致后交给实现工程师，最后由 Reviewer 做质量门禁。'
+                : `${teamName ?? '当前 Team'} 会按成员职责协作。先 @ 最适合启动任务的成员，说清目标、交付物和边界；后续接力会在房间里可见。`}
             </p>
           </div>
           {agents.length > 0 && (

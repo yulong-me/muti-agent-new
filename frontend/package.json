@@ -16,7 +16,8 @@
     "test:create-room-overall-ux": "node tests/create-room-overall-ux-regression.mjs",
     "test:design-refresh": "node tests/design-refresh-regression.mjs",
     "test:message-stats-zero": "rm -rf .tmp-tests/message-stats-zero && ./node_modules/.bin/tsc --target es2017 --lib dom,dom.iterable,esnext --skipLibCheck --module commonjs --moduleResolution node --jsx react-jsx --esModuleInterop --outDir .tmp-tests/message-stats-zero tests/message-stats-zero-regression.tsx && node .tmp-tests/message-stats-zero/tests/message-stats-zero-regression.js",
-    "test:message-media": "rm -rf .tmp-tests/message-media && ./node_modules/.bin/tsc --target es2017 --lib dom,dom.iterable,esnext --skipLibCheck --module commonjs --moduleResolution node --jsx react-jsx --esModuleInterop --outDir .tmp-tests/message-media tests/message-media-attachment-regression.tsx && node .tmp-tests/message-media/tests/message-media-attachment-regression.js"
+    "test:message-media": "rm -rf .tmp-tests/message-media && ./node_modules/.bin/tsc --target es2017 --lib dom,dom.iterable,esnext --skipLibCheck --module commonjs --moduleResolution node --jsx react-jsx --esModuleInterop --outDir .tmp-tests/message-media tests/message-media-attachment-regression.tsx && node .tmp-tests/message-media/tests/message-media-attachment-regression.js",
+    "test:message-empty-guidance": "node tests/message-empty-guidance-regression.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",

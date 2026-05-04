@@ -6,7 +6,7 @@ import {
 } from '../agentRuns.js';
 import { resetA2AContext, scanForA2AMentions } from '../routing/A2ARouter.js';
 import { streamingCallAgent } from './execution.js';
-import { addUserMessage, telemetry } from './shared.js';
+import { addUserMessage, completeRoomRun, telemetry } from './shared.js';
 
 export async function routeToAgent(
   roomId: string,
@@ -90,6 +90,8 @@ export async function routeToAgent(
     workerName: target.name,
     outputLength: workerOutput.length,
   });
+
+  completeRoomRun(roomId);
 }
 
 export function stopAgentRun(roomId: string, agentId: string) {
