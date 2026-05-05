@@ -95,6 +95,11 @@ function columnIsNotNull(database: Database.Database, table: string, column: str
   return tableColumns(database, table).some(col => col.name === column && col.notnull === 1);
 }
 
+function foreignKeyTargets(database: Database.Database, table: string): string[] {
+  return (database.prepare(`PRAGMA foreign_key_list(${table})`).all() as Array<{ table: string }>)
+    .map(row => row.table);
+}
+
 describe('F052: Team schema', () => {
   it('creates teams table', () => {
     expect(tableExists(db, 'teams')).toBe(true);
@@ -176,6 +181,78 @@ describe('F052: Team schema', () => {
 
     expect(columnIsNotNull(db, 'team_validation_cases', 'proposal_id')).toBe(false);
     expect(columnIsNotNull(db, 'team_validation_cases', 'source_room_id')).toBe(false);
+  });
+
+  it('repairs legacy mission evolution_proposals table before creating Team Evolution schema', async () => {
+    db.close();
+    db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    mockDbRef.db = db;
+
+    db.exec(`
+      CREATE TABLE rooms (
+        id TEXT PRIMARY KEY,
+        topic TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'RUNNING' CHECK (state IN ('RUNNING','DONE')),
+        report TEXT,
+        agent_ids TEXT NOT NULL DEFAULT '[]',
+        workspace TEXT,
+        max_a2a_depth INTEGER,
+        team_id TEXT,
+        team_version_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER
+      );
+      CREATE TABLE evolution_proposals (
+        id TEXT PRIMARY KEY,
+        mission_id TEXT NOT NULL,
+        publication_id TEXT,
+        metric_id TEXT,
+        status TEXT NOT NULL,
+        from_team_version INTEGER NOT NULL,
+        to_team_version INTEGER NOT NULL,
+        rationale TEXT NOT NULL,
+        changes_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO evolution_proposals (
+        id, mission_id, status, from_team_version, to_team_version,
+        rationale, changes_json, created_at, updated_at
+      )
+      VALUES (
+        'legacy-evo-1', 'mission-1', 'pending', 1, 2,
+        'legacy proposal', '[]', 1000, 1000
+      );
+      CREATE TABLE evolution_proposal_changes (
+        id TEXT PRIMARY KEY,
+        proposal_id TEXT NOT NULL,
+        ordinal INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        why TEXT NOT NULL,
+        evidence_message_ids_json TEXT NOT NULL DEFAULT '[]',
+        target_layer TEXT NOT NULL,
+        before_json TEXT NOT NULL DEFAULT 'null',
+        after_json TEXT NOT NULL DEFAULT 'null',
+        impact TEXT NOT NULL,
+        decision TEXT,
+        decided_at INTEGER,
+        FOREIGN KEY (proposal_id) REFERENCES evolution_proposals(id) ON DELETE CASCADE
+      );
+    `);
+
+    expect(columnExists(db, 'evolution_proposals', 'room_id')).toBe(false);
+
+    const { initSchema } = await import('../src/db/migrate.js');
+    initSchema();
+
+    expect(columnExists(db, 'evolution_proposals', 'room_id')).toBe(true);
+    expect(columnExists(db, 'evolution_proposals', 'base_version_id')).toBe(true);
+    expect(tableExists(db, 'legacy_mission_evolution_proposals')).toBe(true);
+    expect(db.prepare('SELECT COUNT(*) as cnt FROM legacy_mission_evolution_proposals').get()).toEqual({ cnt: 1 });
+    expect(foreignKeyTargets(db, 'evolution_proposal_changes')).toContain('evolution_proposals');
   });
 
   it('removes legacy collaboration tables and columns from existing databases', async () => {

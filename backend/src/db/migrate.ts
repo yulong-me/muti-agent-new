@@ -67,6 +67,32 @@ function removeLegacyCollaborationArtifacts(): void {
   }
 }
 
+function nextLegacyTableName(baseName: string): string {
+  if (!tableExists(baseName)) return baseName;
+  for (let suffix = 2; suffix < 1000; suffix++) {
+    const candidate = `${baseName}_${suffix}`;
+    if (!tableExists(candidate)) return candidate;
+  }
+  throw new Error(`Could not find available legacy table name for ${baseName}`);
+}
+
+function repairLegacyEvolutionProposalArtifacts(): void {
+  if (!tableExists('evolution_proposals')) return;
+  if (columnExists('evolution_proposals', 'room_id')) return;
+
+  const legacyTable = nextLegacyTableName('legacy_mission_evolution_proposals');
+  const legacyRows = (db.prepare('SELECT COUNT(*) as cnt FROM evolution_proposals').get() as { cnt: number }).cnt;
+
+  db.exec('DROP TABLE IF EXISTS team_validation_preflight_results');
+  db.exec('DROP TABLE IF EXISTS evolution_proposal_changes');
+  db.exec(`ALTER TABLE evolution_proposals RENAME TO ${quoteIdentifier(legacyTable)}`);
+
+  log('INFO', 'db:schema:migrate:evolution_proposals:legacy_mission_archived', {
+    legacyTable,
+    legacyRows,
+  });
+}
+
 function migrateTeamValidationCasesNullableSources(): void {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='team_validation_cases'")
     .get() as { sql: string } | undefined;
@@ -246,6 +272,8 @@ export function initSchema(): void {
   } catch {
     // Table already exists — safe to ignore
   }
+
+  repairLegacyEvolutionProposalArtifacts();
 
   // F052: add team_id and team_version_id to rooms table
   try {
