@@ -75,3 +75,66 @@ jobs:
 
       - name: Build backend and frontend
         run: pnpm build
+
+      - name: Start and verify HTTP responses
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        shell: bash
+        env:
+          GATEWAY_PORT: "7000"
+          OPENCOUNCIL_RUNTIME_ROOT: ${{ runner.temp }}/opencouncil-runtime
+        run: |
+          set -euo pipefail
+
+          log_file="${RUNNER_TEMP}/opencouncil-start.log"
+          pnpm start >"$log_file" 2>&1 &
+          app_pid=$!
+
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::group::pnpm start log"
+              cat "$log_file" || true
+              echo "::endgroup::"
+            fi
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          health_ready=0
+          for _ in {1..60}; do
+            if curl -fsS "http://127.0.0.1:${GATEWAY_PORT}/health" >/tmp/opencouncil-health.json 2>/dev/null; then
+              health_ready=1
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ "$health_ready" -ne 1 ]; then
+            echo "Timed out waiting for gateway health check"
+            exit 1
+          fi
+
+          home_ready=0
+          for _ in {1..60}; do
+            if curl -fsS -o /tmp/opencouncil-home.html "http://127.0.0.1:${GATEWAY_PORT}/" 2>/dev/null; then
+              home_ready=1
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ "$home_ready" -ne 1 ]; then
+            echo "Timed out waiting for gateway home page"
+            exit 1
+          fi
+
+          curl -fsS "http://127.0.0.1:${GATEWAY_PORT}/health"
+          test -s /tmp/opencouncil-home.html
