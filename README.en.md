@@ -20,7 +20,7 @@ The Chinese README is the primary document. This English README is a companion v
 ![Node](https://img.shields.io/badge/node-20.19%2B%20%7C%2022.12%2B--25.x-green)
 ![pnpm](https://img.shields.io/badge/pnpm-10.x-orange)
 
-https://github.com/user-attachments/assets/8ad8797a-482b-48b6-a13d-a17b2d858481
+https://github.com/yulong-me/OpenCouncil/releases/download/demo-assets-2026-05-06/opencouncil-product-demo.mp4
 
 ## Core Capabilities
 
