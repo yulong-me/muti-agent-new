@@ -2,6 +2,7 @@ import { db, DB_PATH } from './db.js';
 import { resolveBootstrapAction } from './bootstrapStrategy.js';
 import { initSchema, migrateFromJson } from './migrate.js';
 import { roomsRepo, messagesRepo } from './repositories/rooms.js';
+import { agentRunsRepo } from './repositories/agentRuns.js';
 import { sessionsRepo } from './repositories/sessions.js';
 import { auditRepo } from './repositories/audit.js';
 import { agentsRepo } from './repositories/agents.js';
@@ -268,6 +269,7 @@ export function initDB(): void {
 
 export { db, DB_PATH };
 export { roomsRepo, messagesRepo };
+export { agentRunsRepo };
 export { sessionsRepo };
 export { auditRepo };
 export { agentsRepo };

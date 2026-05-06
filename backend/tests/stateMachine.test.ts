@@ -22,6 +22,22 @@ vi.mock('../src/db/index.js', () => ({
   roomsRepo: { create: vi.fn(), update: vi.fn() },
   messagesRepo: { insert: vi.fn(), updateContent: vi.fn() },
   sessionsRepo: { upsert: vi.fn() },
+  agentRunsRepo: {
+    createRunning: vi.fn().mockReturnValue({
+      id: 'run-1',
+      roomId: 'room-1',
+      agentInstanceId: 'worker-1',
+      agentConfigId: 'worker-config',
+      agentName: '架构师',
+      agentRole: 'WORKER',
+      provider: 'claude-code',
+      status: 'running',
+      startedAt: 1,
+    }),
+    markSucceeded: vi.fn(),
+    markFailed: vi.fn(),
+    markStopped: vi.fn(),
+  },
   auditRepo: { log: vi.fn() },
   teamsRepo: { list: vi.fn(), get: vi.fn(), getActiveVersion: vi.fn(), getVersion: vi.fn(), ensureBuiltinTeams: vi.fn() },
   agentsRepo: { list: vi.fn(), get: vi.fn(), upsert: vi.fn(), delete: vi.fn() },
@@ -152,7 +168,7 @@ describe('F004: 直接路由', () => {
     it('专家执行失败时也应该结束 loading 并发出结构化错误事件', async () => {
       const { routeToAgent } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');
-      const { messagesRepo } = await import('../src/db/index.js');
+      const { agentRunsRepo, messagesRepo } = await import('../src/db/index.js');
       const { getProvider } = await import('../src/services/providers/index.js');
       const { emitStreamEnd, emitRoomErrorEvent } = await import('../src/services/socketEmitter.js');
 
@@ -200,12 +216,22 @@ describe('F004: 直接路由', () => {
           }),
         }),
       );
+      expect(agentRunsRepo.markFailed).toHaveBeenCalledWith(
+        'run-1',
+        expect.objectContaining({
+          outputMessageId: expect.any(String),
+          error: expect.objectContaining({
+            code: 'AGENT_PROCESS_EXIT',
+            originalUserContent: '@架构师 帮我看看这个方案',
+          }),
+        }),
+      );
     });
 
     it('专家工具调用应该随消息持久化，刷新后可回放', async () => {
       const { routeToAgent } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');
-      const { messagesRepo } = await import('../src/db/index.js');
+      const { agentRunsRepo, messagesRepo } = await import('../src/db/index.js');
       const { getProvider } = await import('../src/services/providers/index.js');
       const { emitToolUse } = await import('../src/services/socketEmitter.js');
 
@@ -238,11 +264,41 @@ describe('F004: 直接路由', () => {
 
       await routeToAgent('room-1', '@架构师 帮我看看这个方案', 'worker-1');
 
+      expect(agentRunsRepo.createRunning).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roomId: 'room-1',
+          agentInstanceId: 'worker-1',
+          agentConfigId: 'worker-config',
+          agentName: '架构师',
+          agentRole: 'WORKER',
+          triggerMessageId: expect.any(String),
+          provider: 'claude-code',
+          model: 'test-model',
+        }),
+      );
       expect(emitToolUse).toHaveBeenCalledWith('room-1', 'worker-1', 'Bash', { command: 'pwd' }, 'toolu_1', expect.any(Number));
       expect(messagesRepo.updateContent).toHaveBeenCalledWith(
         expect.any(String),
         '完成',
         expect.objectContaining({
+          toolCalls: [
+            expect.objectContaining({
+              toolName: 'Bash',
+              toolInput: { command: 'pwd' },
+              callId: 'toolu_1',
+            }),
+          ],
+        }),
+      );
+      expect(agentRunsRepo.markSucceeded).toHaveBeenCalledWith(
+        'run-1',
+        expect.objectContaining({
+          outputMessageId: expect.any(String),
+          sessionId: undefined,
+          durationMs: 100,
+          inputTokens: 100,
+          outputTokens: 50,
+          totalCostUsd: 0.01,
           toolCalls: [
             expect.objectContaining({
               toolName: 'Bash',
@@ -445,7 +501,7 @@ describe('F004: 直接路由', () => {
     it('用户停止回答时应该保留部分输出并发出 AGENT_STOPPED 事件', async () => {
       const { routeToAgent, stopAgentRun } = await import('../src/services/stateMachine.js');
       const { store } = await import('../src/store.js');
-      const { messagesRepo } = await import('../src/db/index.js');
+      const { agentRunsRepo, messagesRepo } = await import('../src/db/index.js');
       const { getProvider } = await import('../src/services/providers/index.js');
       const { emitRoomErrorEvent, emitStreamStart } = await import('../src/services/socketEmitter.js');
 
@@ -520,6 +576,15 @@ describe('F004: 直接路由', () => {
         '',
         expect.objectContaining({
           runError: expect.objectContaining({
+            code: 'AGENT_STOPPED',
+            title: '已停止回答',
+          }),
+        }),
+      );
+      expect(agentRunsRepo.markStopped).toHaveBeenCalledWith(
+        'run-1',
+        expect.objectContaining({
+          error: expect.objectContaining({
             code: 'AGENT_STOPPED',
             title: '已停止回答',
           }),

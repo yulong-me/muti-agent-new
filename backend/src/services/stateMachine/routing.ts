@@ -57,7 +57,7 @@ export async function routeToAgent(
     resetA2AContext(roomId);
   }
 
-  addUserMessage(roomId, content, target.id);
+  const triggerMessage = addUserMessage(roomId, content, target.id);
   info('msg.user', {
     roomId,
     contentLength: content.length,
@@ -82,6 +82,7 @@ export async function routeToAgent(
       originalUserContent: content,
       toAgentId: target.id,
       toAgentName: target.name,
+      triggerMessageId: triggerMessage?.id,
     },
   );
 

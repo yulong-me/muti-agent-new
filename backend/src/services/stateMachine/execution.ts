@@ -1,4 +1,4 @@
-import { messagesRepo, sessionsRepo } from '../../db/index.js';
+import { agentRunsRepo, messagesRepo, sessionsRepo } from '../../db/index.js';
 import { getAgent, type ProviderName } from '../../config/agentConfig.js';
 import { getProvider as getProviderConfig } from '../../config/providerConfig.js';
 import { debug, info, warn } from '../../lib/logger.js';
@@ -243,6 +243,9 @@ export async function streamingCallAgent(
   let returnedSessionId = '';
   let invocationUsage: InvocationUsage | undefined;
   let contextHealth: ContextHealth | undefined;
+  let configuredModel: string | undefined;
+  let runId: string | undefined;
+  let runStartedAt = 0;
   let activeRunController: AbortController | null = null;
   let activeRunRegistered = false;
   let deltaCount = 0;
@@ -258,6 +261,12 @@ export async function streamingCallAgent(
     providerName = memberSnapshot?.provider ?? agentConfig?.provider ?? 'claude-code';
     const providerOptsSource = memberSnapshot?.providerOpts ?? agentConfig?.providerOpts ?? {};
     const systemPrompt = memberSnapshot?.systemPrompt ?? agentConfig?.systemPrompt ?? ctx.systemPrompt;
+    const explicitModel = typeof providerOptsSource.model === 'string' && providerOptsSource.model.trim()
+      ? providerOptsSource.model.trim()
+      : undefined;
+    configuredModel = providerName === 'opencode'
+      ? explicitModel
+      : (explicitModel ?? getProviderConfig(providerName)?.defaultModel);
 
     activeRunController = new AbortController();
     registerActiveAgentRun({
@@ -267,6 +276,20 @@ export async function streamingCallAgent(
       abortController: activeRunController,
     });
     activeRunRegistered = true;
+    const run = agentRunsRepo.createRunning({
+      roomId,
+      agentInstanceId: agentId,
+      agentConfigId: configId,
+      agentName,
+      agentRole,
+      triggerMessageId: requestMeta?.triggerMessageId,
+      parentRunId: requestMeta?.parentRunId,
+      provider: providerName,
+      model: configuredModel,
+      startedAt: Date.now(),
+    });
+    runId = run.id;
+    runStartedAt = run.startedAt;
 
     const workspace = await ensureWorkspace(roomId, room?.workspace);
     const skillState = await resolveEffectiveSkills({
@@ -307,12 +330,6 @@ export async function streamingCallAgent(
 
     const existingSessionId = room?.sessionIds[sessionKey];
     returnedSessionId = existingSessionId ?? '';
-    const explicitModel = typeof providerOptsSource.model === 'string' && providerOptsSource.model.trim()
-      ? providerOptsSource.model.trim()
-      : undefined;
-    const configuredModel = providerName === 'opencode'
-      ? explicitModel
-      : (explicitModel ?? getProviderConfig(providerName)?.defaultModel);
     const providerOpts: Record<string, unknown> = {
       ...providerOptsSource,
       sessionId: existingSessionId,
@@ -407,7 +424,7 @@ export async function streamingCallAgent(
       workspaceChanges = summarizeWorkspaceChanges(implementerWorkspaceSnapshotBefore, workspaceSnapshotAfter);
     }
   } catch (err) {
-    handleAgentRunFailure({
+    const runError = handleAgentRunFailure({
       err,
       roomId,
       agentId,
@@ -421,6 +438,28 @@ export async function streamingCallAgent(
       accumulatedToolCalls,
       requestMeta,
     });
+    if (runId) {
+      const endedAt = Date.now();
+      const payload = {
+        outputMessageId: msgId || undefined,
+        sessionId: returnedSessionId || undefined,
+        endedAt,
+        durationMs: runStartedAt ? Math.max(0, endedAt - runStartedAt) : undefined,
+        inputTokens: input_tokens,
+        outputTokens: output_tokens,
+        totalCostUsd: total_cost_usd,
+        invocationUsage,
+        contextHealth,
+        toolCalls: accumulatedToolCalls,
+        workspaceChanges,
+        error: runError,
+      };
+      if (runError.code === 'AGENT_STOPPED') {
+        agentRunsRepo.markStopped(runId, payload);
+      } else {
+        agentRunsRepo.markFailed(runId, payload);
+      }
+    }
     throw err;
   } finally {
     if (activeRunRegistered) {
@@ -482,6 +521,22 @@ export async function streamingCallAgent(
     }
   }
 
+  if (runId) {
+    agentRunsRepo.markSucceeded(runId, {
+      outputMessageId: msgId || undefined,
+      sessionId: returnedSessionId || undefined,
+      endedAt: Date.now(),
+      durationMs: duration_ms,
+      inputTokens: input_tokens,
+      outputTokens: output_tokens,
+      totalCostUsd: total_cost_usd,
+      invocationUsage,
+      contextHealth,
+      toolCalls: accumulatedToolCalls,
+      workspaceChanges,
+    });
+  }
+
   info('ai:end', {
     roomId,
     agentName,
@@ -517,7 +572,7 @@ export async function streamingCallAgent(
     contextHealth,
   });
 
-  await a2aOrchestrate(roomId, agentId, agentName, accumulated, { workspaceChanges });
+  await a2aOrchestrate(roomId, agentId, agentName, accumulated, { workspaceChanges, parentRunId: runId });
   return accumulated;
 }
 
@@ -528,6 +583,7 @@ export async function a2aOrchestrate(
   outputText: string,
   meta: {
     workspaceChanges?: WorkspaceChangeSummary;
+    parentRunId?: string;
   } = {},
 ): Promise<void> {
   const room = store.get(roomId);
@@ -712,6 +768,7 @@ ${filteredOutput}
       targetAgent.name,
       'statement',
       'WORKER',
+      { parentRunId: meta.parentRunId },
     );
     routedCount++;
   }

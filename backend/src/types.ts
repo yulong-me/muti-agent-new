@@ -93,6 +93,48 @@ export interface SessionTelemetry {
   measuredAt: number;
 }
 
+export type AgentRunStatus = 'running' | 'succeeded' | 'failed' | 'stopped';
+
+export interface AgentRunWorkspaceChanges {
+  hasChanges: boolean;
+  created: string[];
+  modified: string[];
+  deleted: string[];
+}
+
+export interface AgentRun {
+  id: string;
+  roomId: string;
+  agentInstanceId: string;
+  agentConfigId: string;
+  agentName: string;
+  agentRole: AgentRole;
+  triggerMessageId?: string;
+  outputMessageId?: string;
+  parentRunId?: string;
+  sessionId?: string;
+  provider: string;
+  model?: string;
+  status: AgentRunStatus;
+  startedAt: number;
+  endedAt?: number;
+  durationMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalCostUsd?: number;
+  invocationUsage?: InvocationUsage;
+  contextHealth?: ContextHealth;
+  toolCalls?: ToolCall[];
+  workspaceChanges?: AgentRunWorkspaceChanges;
+  error?: AgentRunError | Record<string, unknown>;
+}
+
+export interface AgentRunDetail extends AgentRun {
+  triggerMessage?: Message;
+  outputMessage?: Message;
+  sessionTelemetry?: SessionTelemetry;
+}
+
 export interface Message {
   id: string;
   agentRole: AgentRole | 'USER';

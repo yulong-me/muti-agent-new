@@ -13,7 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { store } from '../store.js';
 import type { DiscussionRoom, TeamVersionConfig } from '../types.js';
 import { routeToAgent, generateTitleSuggestionsInline, stopAgentRun, isRoomBusy } from '../services/stateMachine.js';
-import { roomsRepo, sessionsRepo, messagesRepo, teamsRepo } from '../db/index.js';
+import { agentRunsRepo, roomsRepo, sessionsRepo, messagesRepo, teamsRepo } from '../db/index.js';
 import { auditRepo } from '../db/index.js';
 import { evolutionRepo } from '../db/index.js';
 import { archiveWorkspace, validateWorkspacePath } from '../services/workspace.js';
@@ -334,6 +334,22 @@ roomsRouter.get('/:id/evolution-proposals', (req, res) => {
     return res.status(404).json({ error: 'Room not found' });
   }
   res.json(evolutionRepo.listByRoom(req.params.id));
+});
+
+roomsRouter.get('/:id/runs', (req, res) => {
+  const room = store.get(req.params.id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ runs: agentRunsRepo.listByRoom(req.params.id) });
+});
+
+roomsRouter.get('/:id/runs/:runId', (req, res) => {
+  const room = store.get(req.params.id);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  const detail = agentRunsRepo.getDetail(req.params.id, req.params.runId);
+  if (!detail) return res.status(404).json({ error: 'Run not found' });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(detail);
 });
 
 function writeEvolutionStreamEvent(res: Response, event: Record<string, unknown>) {

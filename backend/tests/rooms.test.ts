@@ -20,6 +20,14 @@ vi.mock('../src/store.js', () => ({
 
 vi.mock('../src/db/index.js', () => ({
   roomsRepo: { create: vi.fn(), update: vi.fn() },
+  agentRunsRepo: {
+    createRunning: vi.fn(),
+    markSucceeded: vi.fn(),
+    markFailed: vi.fn(),
+    markStopped: vi.fn(),
+    listByRoom: vi.fn(),
+    getDetail: vi.fn(),
+  },
   auditRepo: { log: vi.fn() },
   teamsRepo: { list: vi.fn(), get: vi.fn(), getActiveVersion: vi.fn(), getVersion: vi.fn(), ensureBuiltinTeams: vi.fn() },
   agentsRepo: { list: vi.fn(), get: vi.fn(), upsert: vi.fn(), delete: vi.fn() },

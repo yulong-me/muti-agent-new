@@ -441,6 +441,49 @@ export function initSchema(): void {
     // Column already exists — safe to ignore
   }
 
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_runs (
+        id                      TEXT PRIMARY KEY,
+        room_id                 TEXT NOT NULL,
+        agent_instance_id       TEXT NOT NULL,
+        agent_config_id         TEXT NOT NULL,
+        agent_name              TEXT NOT NULL,
+        agent_role              TEXT NOT NULL
+                                CHECK (agent_role IN ('MANAGER','WORKER')),
+        trigger_message_id      TEXT,
+        output_message_id       TEXT,
+        parent_run_id           TEXT,
+        session_id              TEXT,
+        provider                TEXT NOT NULL,
+        model                   TEXT,
+        status                  TEXT NOT NULL
+                                CHECK (status IN ('running','succeeded','failed','stopped')),
+        started_at              INTEGER NOT NULL,
+        ended_at                INTEGER,
+        duration_ms             INTEGER,
+        input_tokens            INTEGER,
+        output_tokens           INTEGER,
+        total_cost_usd          REAL,
+        invocation_usage_json   TEXT,
+        context_health_json     TEXT,
+        tool_calls_json         TEXT,
+        workspace_changes_json  TEXT,
+        error_json              TEXT,
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (trigger_message_id) REFERENCES messages(id) ON DELETE SET NULL,
+        FOREIGN KEY (output_message_id) REFERENCES messages(id) ON DELETE SET NULL,
+        FOREIGN KEY (parent_run_id) REFERENCES agent_runs(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_room_id ON agent_runs(room_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_agent_config_id ON agent_runs(agent_config_id);
+    `);
+    log('INFO', 'db:schema:migrate:agent_runs');
+  } catch {
+    // Existing or partially initialized DBs are completed by the full schema exec below.
+  }
+
   // F004 Migration: INIT/RESEARCH/DEBATE/CONVERGING → RUNNING, HOST → MANAGER, AGENT → WORKER
   try {
     const roomsSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='rooms'").get() as { sql: string } | undefined;

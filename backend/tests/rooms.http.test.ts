@@ -24,6 +24,10 @@ vi.mock('../src/store.js', () => ({
 
 vi.mock('../src/db/index.js', () => ({
   roomsRepo: { create: vi.fn(), update: vi.fn(), listSidebar: vi.fn() },
+  agentRunsRepo: {
+    listByRoom: vi.fn(),
+    getDetail: vi.fn(),
+  },
   auditRepo: { log: vi.fn() },
   teamsRepo: {
     list: vi.fn(),
@@ -89,7 +93,7 @@ vi.mock('../src/services/teamEvolution.js', () => ({
 import { roomsRouter } from '../src/routes/rooms.js';
 import { teamsRouter } from '../src/routes/teams.js';
 import { store } from '../src/store.js';
-import { roomsRepo, teamsRepo, evolutionRepo } from '../src/db/index.js';
+import { agentRunsRepo, roomsRepo, teamsRepo, evolutionRepo } from '../src/db/index.js';
 import { generateTeamDraftFromGoal } from '../src/services/teamDrafts.js';
 import { createEvolutionProposalFromRoom } from '../src/services/teamEvolution.js';
 import { getAgent } from '../src/config/agentConfig.js';
@@ -390,6 +394,100 @@ describe('F015: HTTP POST /api/rooms/:id/messages — 409 ROOM_BUSY', () => {
       { id: 'room-open', activityState: 'open' },
       { id: 'room-done', activityState: 'done' },
     ]);
+  });
+
+  _skipIfNoPort('GET /api/rooms/:id/runs returns the room execution ledger', async () => {
+    vi.mocked(store.get).mockReturnValue({
+      id: 'room-runs',
+      topic: 'Test',
+      state: 'RUNNING' as const,
+      agents: [],
+      messages: [],
+      sessionIds: {},
+      a2aDepth: 0,
+      a2aCallChain: [],
+    });
+    vi.mocked(agentRunsRepo.listByRoom).mockReturnValueOnce([
+      {
+        id: 'run-1',
+        roomId: 'room-runs',
+        agentInstanceId: 'worker-runtime-1',
+        agentConfigId: 'worker-config',
+        agentName: '测试员',
+        agentRole: 'WORKER',
+        provider: 'opencode',
+        model: 'gpt-5.5',
+        status: 'succeeded',
+        startedAt: 1000,
+        endedAt: 1200,
+        durationMs: 200,
+      },
+    ]);
+
+    const result = await requestJson('GET', '/api/rooms/room-runs/runs');
+
+    expect(result.status).toBe(200);
+    expect(result.data).toEqual({
+      runs: [
+        expect.objectContaining({
+          id: 'run-1',
+          roomId: 'room-runs',
+          status: 'succeeded',
+          agentConfigId: 'worker-config',
+        }),
+      ],
+    });
+  });
+
+  _skipIfNoPort('GET /api/rooms/:id/runs/:runId returns run detail and enforces room scope', async () => {
+    vi.mocked(store.get).mockImplementation((id: string) => id === 'room-runs'
+      ? {
+          id: 'room-runs',
+          topic: 'Test',
+          state: 'RUNNING' as const,
+          agents: [],
+          messages: [],
+          sessionIds: {},
+          a2aDepth: 0,
+          a2aCallChain: [],
+        }
+      : undefined);
+    vi.mocked(agentRunsRepo.getDetail).mockImplementation((roomId: string, runId: string) => {
+      if (roomId !== 'room-runs' || runId !== 'run-1') return undefined;
+      return {
+        id: 'run-1',
+        roomId: 'room-runs',
+        agentInstanceId: 'worker-runtime-1',
+        agentConfigId: 'worker-config',
+        agentName: '测试员',
+        agentRole: 'WORKER',
+        provider: 'opencode',
+        status: 'failed',
+        startedAt: 1000,
+        endedAt: 1200,
+        durationMs: 200,
+        error: { code: 'AGENT_PROVIDER_ERROR', message: 'provider failed' },
+        triggerMessage: { id: 'trigger-1', content: '请执行' },
+        outputMessage: { id: 'output-1', content: '部分输出' },
+        sessionTelemetry: { sessionId: 'session-1', measuredAt: 1200 },
+      };
+    });
+
+    const detail = await requestJson('GET', '/api/rooms/room-runs/runs/run-1');
+    const crossRoom = await requestJson('GET', '/api/rooms/room-runs/runs/run-other');
+    const missingRoom = await requestJson('GET', '/api/rooms/missing/runs/run-1');
+
+    expect(detail.status).toBe(200);
+    expect(detail.data).toMatchObject({
+      id: 'run-1',
+      status: 'failed',
+      error: { code: 'AGENT_PROVIDER_ERROR' },
+      triggerMessage: { id: 'trigger-1' },
+      outputMessage: { id: 'output-1' },
+      sessionTelemetry: { sessionId: 'session-1' },
+    });
+    expect(crossRoom.status).toBe(404);
+    expect(missingRoom.status).toBe(404);
   });
 
   _skipIfNoPort('stops the currently running agent', async () => {

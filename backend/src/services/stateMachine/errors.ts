@@ -16,6 +16,8 @@ export interface AgentRequestMeta {
   originalUserContent?: string;
   toAgentId?: string;
   toAgentName?: string;
+  triggerMessageId?: string;
+  parentRunId?: string;
 }
 
 export function normalizeAgentExecutionError(err: unknown): {
