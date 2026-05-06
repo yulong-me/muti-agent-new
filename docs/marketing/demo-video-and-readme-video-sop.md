@@ -142,7 +142,7 @@ The comment does not need to be submitted after the URL is generated. Clear the 
 For the current OpenCouncil demo:
 
 ```text
-https://github.com/user-attachments/assets/8ad8797a-482b-48b6-a13d-a17b2d858481
+https://github.com/user-attachments/assets/930440d8-4971-4e92-8d35-a903b6d729b3
 ```
 
 ### Option C: Commit the Video
@@ -154,7 +154,7 @@ Avoid this for README demos. Video revisions make git history heavy, and normal 
 To render a video player in GitHub README, put the GitHub user-attachment URL on its own line:
 
 ```markdown
-https://github.com/user-attachments/assets/8ad8797a-482b-48b6-a13d-a17b2d858481
+https://github.com/user-attachments/assets/930440d8-4971-4e92-8d35-a903b6d729b3
 ```
 
 Do not use these if the goal is an inline player:
@@ -181,7 +181,7 @@ Use the GitHub Markdown API before merging:
 gh api /markdown \
   -f mode=gfm \
   -f context=yulong-me/OpenCouncil \
-  -f text=$'https://github.com/user-attachments/assets/8ad8797a-482b-48b6-a13d-a17b2d858481' \
+  -f text=$'https://github.com/user-attachments/assets/930440d8-4971-4e92-8d35-a903b6d729b3' \
   | rg '<video|user-attachments|details'
 ```
 
