@@ -241,4 +241,3 @@ Session label = round_k(contextUsedTokens)
 | OQ-1 | 是否要为不同模型维护更完整的 context window 映射表？ | ⬜ 未定 |
 | OQ-2 | 是否需要补历史消息的 sessionSnapshot 回填工具？ | ⬜ 未定 |
 | OQ-3 | UI 是否需要把 `SessionId` 默认折叠，只在点击后展示？ | ⬜ 未定 |
-
