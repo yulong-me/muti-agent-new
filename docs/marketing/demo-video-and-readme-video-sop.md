@@ -7,7 +7,7 @@ created: 2026-04-24
 
 # Demo Video and README Video SOP
 
-This is the lightweight workflow used for the OpenCouncil 30s product demo.
+This is the lightweight workflow used for the OpenCouncil short product demo.
 
 ## Goal
 
@@ -19,7 +19,7 @@ Make a short demo that lets a new visitor understand the product before reading 
 
 Target output:
 
-- 30 seconds
+- Around 45 seconds
 - 1920x1080
 - H.264 MP4
 - Prefer under 10MB for GitHub user-attachment compatibility
@@ -112,6 +112,12 @@ Example:
 
 ```text
 https://github.com/yulong-me/OpenCouncil/releases/download/demo-assets-2026-04-24/opencouncil-product-demo.mp4
+```
+
+Latest demo asset:
+
+```text
+https://github.com/yulong-me/OpenCouncil/releases/download/demo-assets-2026-05-06/opencouncil-product-demo.mp4
 ```
 
 Tradeoff: a naked Release `.mp4` URL usually renders as a normal link in README, not an inline video player.
